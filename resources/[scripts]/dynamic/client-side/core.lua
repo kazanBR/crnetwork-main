@@ -171,6 +171,7 @@ RegisterCommand("PlayerFunctions",function()
 
 		exports.dynamic:AddMenu("Outros","Todas as funções do personagem.","others")
 		exports.dynamic:AddButton("Lixeiro","Marcar/Desmarcar sacos no mapa.","farmer:Blips","","others",false)
+		exports.dynamic:AddButton("Caixa","Marcar/Desmarcar Caixas no mapa.","objects:Blips","","others",false)
 		exports.dynamic:AddButton("Propriedades","Marcar/Desmarcar propriedades no mapa.","propertys:Blips","","others",false)
 		exports.dynamic:AddButton("Ferimentos","Verificar ferimentos no corpo.","paramedic:Injuries","","others",false)
 		exports.dynamic:AddButton("Desbugar","Recarregar o personagem.","player:Debug","","others",true)
