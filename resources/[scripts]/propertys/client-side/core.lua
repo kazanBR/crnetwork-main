@@ -18,6 +18,56 @@ local Policed = false
 local Stealing = false
 local Interior = false
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- TAKE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("Take",function(Data,Callback)
+	if MumbleIsConnected() then
+		vSERVER.Take(Data.Slot,Data.Amount,Data.Target,Data.Name,Data.Mode)
+	end
+
+	Callback("Ok")
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- STORE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("Store",function(Data,Callback)
+	if MumbleIsConnected() then
+		vSERVER.Store(Data.Item,Data.Slot,Data.Amount,Data.Target,Data.Name,Data.Mode)
+	end
+
+	Callback("Ok")
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- UPDATE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("Update",function(Data,Callback)
+	if MumbleIsConnected() then
+		vSERVER.Update(Data.Slot,Data.Target,Data.Amount,Data.Name,Data.Mode)
+	end
+
+	Callback("Ok")
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- MOUNT
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("Mount",function(Data,Callback)
+	local Primary,Secondary,PrimaryWeight,SecondaryWeight,PrimarySlots = vSERVER.Mount(Data.Name,Data.Mode)
+	if Primary then
+		Callback({
+			Primary = {
+				Data = Primary,
+				MaxWeight = PrimaryWeight,
+				Slots = PrimarySlots or 25
+			},
+			Secondary = {
+				Data = Secondary,
+				MaxWeight = SecondaryWeight,
+				Slots = math.max(CountTable(Secondary),25)
+			}
+		})
+	end
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- THREADSYSTEM
 -----------------------------------------------------------------------------------------------------------------------------------------
 CreateThread(function()
@@ -123,17 +173,21 @@ CreateThread(function()
 
 							SetEntityCoords(Ped,Propertys[Inside].Coords,false,false,false,false)
 							vSERVER.Toggle(Inside,"Exit")
+							TriggerEvent("sounds:Private","outhouse.ogg",0.5)
 							Interior = false
 							Stealing = false
 							Policed = false
 							Inside = false
 						elseif not Stealing and (Line == "Vault" or Line == "Fridge") and IsControlJustPressed(1,38) and vSERVER.Permission(Inside) then
 							Opened = Line
+							vSERVER.Open(Inside,Line)
 							vRP.playAnim(false,{"amb@prop_human_bum_bin@base","base"},true)
 							TriggerEvent("inventory:Open",{
 								Type = "Chest",
 								Resource = "propertys",
-								Right = "Propriedade"
+								Right = "Propriedade",
+								Name = Inside,
+								Mode = Line
 							})
 						elseif not Stealing and Line == "Clothes" and IsControlJustPressed(1,38) then
 							exports.dynamic:AddMenu("Armário","Abrir lista com todas as vestimentas.","wardrobe")
@@ -198,6 +252,7 @@ AddEventHandler("propertys:Enter",function(Name,Theft)
 	local Ped = PlayerPedId()
 	TriggerEvent("dynamic:Close")
 	vSERVER.Toggle(Inside,"Enter")
+	TriggerEvent("sounds:Private","enterhouse.ogg",0.5)
 	SetEntityCoords(Ped,Internal[Interior].Exit,false,false,false,false)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -206,7 +261,18 @@ end)
 RegisterNUICallback("Mount",function(Data,Callback)
 	local Primary,Secondary,PrimaryWeight,SecondaryWeight = vSERVER.Mount(Inside,Opened)
 	if Primary then
-		Callback({ Primary = Primary, Secondary = Secondary, PrimaryMaxWeight = PrimaryWeight, SecondaryMaxWeight = SecondaryWeight, SecondarySlots = math.max(CountTable(Secondary),100) })
+		Callback({
+			Primary = {
+				Data = Primary,
+				MaxWeight = PrimaryWeight,
+				Slots = 100
+			},
+			Secondary = {
+				Data = Secondary,
+				MaxWeight = SecondaryWeight,
+				Slots = math.max(CountTable(Secondary),100)
+			}
+		})
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------

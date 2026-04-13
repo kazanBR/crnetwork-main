@@ -12,186 +12,92 @@ vSERVER = Tunnel.getInterface("markers")
 local Markers = {}
 local Players = {}
 local Pause = false
-local Active = false
+local ParentOfs = {}
+local Permissions = {}
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INFORMATION
+-- PARENTPAIRS
 -----------------------------------------------------------------------------------------------------------------------------------------
-local Information = {
-	LSPD = {
-		["Coronel"] = 1,
-    	["Tenente-Coronel"] = 2,
-    	["Major"] = 3,
-    	["Capitão"] = 4,
-    	["1º Tenente"] = 5,
-    	["2º Tenente"] = 6,
-    	["Aspirante"] = 7,
-   	 	["Subtenente"] = 8,
-    	["1º Sargento"] = 9,
-    	["2º Sargento"] = 10,
-    	["3º Sargento"] = 11,
-    	["Cabo"] = 12,
-    	["Soldado"] = 13,
-    	["Recruta"] = 14,
-    	["Delegada"] = 15
-	},
-	BCSO = {
-		["Coronel"] = 1,
-    	["Tenente-Coronel"] = 2,
-    	["Major"] = 3,
-    	["Capitão"] = 4,
-    	["1º Tenente"] = 5,
-    	["2º Tenente"] = 6,
-    	["Aspirante"] = 7,
-   	 	["Subtenente"] = 8,
-    	["1º Sargento"] = 9,
-    	["2º Sargento"] = 10,
-    	["3º Sargento"] = 11,
-    	["Cabo"] = 12,
-    	["Soldado"] = 13,
-    	["Recruta"] = 14,
-    	["Delegada"] = 15
-	},
-	BCPR = {
-		["Coronel"] = 1,
-    	["Tenente-Coronel"] = 2,
-    	["Major"] = 3,
-    	["Capitão"] = 4,
-    	["1º Tenente"] = 5,
-    	["2º Tenente"] = 6,
-    	["Aspirante"] = 7,
-   	 	["Subtenente"] = 8,
-    	["1º Sargento"] = 9,
-    	["2º Sargento"] = 10,
-    	["3º Sargento"] = 11,
-    	["Cabo"] = 12,
-    	["Soldado"] = 13,
-    	["Recruta"] = 14,
-    	["Delegada"] = 15
-	},
-	Paramedico = {
-    	["Diretor-Geral"] = 1,
-    	["Diretor Clínico"] = 2,
-    	["Diretor Técnico"] = 3,
-    	["Chefe de Corpo Clínico"] = 4,
-    	["Médico Supervisor"] = 5,
-   		["Médico Cirurgião"] = 6,
-    	["Médico Plantonista"] = 7,
-    	["Médico Especialista"] = 8,
-    	["Médico Clínico"] = 9,
-    	["Residente"] = 10,
-   	 	["Enfermeiro"] = 11,
-    	["Técnico de Enfermagem"] = 12,
-    	["Auxiliar de Enfermagem"] = 13,
-    	["Estagiário de Medicina"] = 14,
-    	["Estagiário de Enfermagem"] = 15
-	},
-	Corredor = {
-		["Corredor"] = 8
-	},
-	Boosting = {
-		["Boosting"] = 47
-	}
-}
+for Index,List in pairs(ParentGroups) do
+	for _,Permission in ipairs(List) do
+		ParentOfs[Permission] = Index
+	end
+end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- THREADMARKERS
+-- PARENTS
 -----------------------------------------------------------------------------------------------------------------------------------------
-CreateThread(function()
-	for Index,_ in pairs(Information) do
-		AddStateBagChangeHandler(Index,("player:%s"):format(LocalPlayer["state"]["Source"]),function(Name,Key,Value)
-			Active = Key
-
-			if not Value then
-				Active = false
-				CleanMarkers()
-			end
-		end)
+local function CheckParents(Permission)
+	local Group = ParentOfs[Permission]
+	if not Group then
+		return false
 	end
 
-	while true do
-		local TimeDistance = 999
-		if LocalPlayer["state"]["Active"] and Active and Information[Active] then
-			if IsPauseMenuActive() then
-				if not Pause then
-					CleanMarkers()
-					Pause = true
-				end
-
-				local Users = vSERVER.Users()
-				for Index,v in pairs(Users) do
-					if Information[v.Permission] and Information[v.Permission][v.Level] and ((LocalPlayer["state"]["Paramedico"] and v.Permission == "Paramedico") or (CheckPolice() and v.Permission ~= "Paramedico")) then
-						if Markers[Index] then
-							async(function()
-								MoveBlipSmooth(Markers[Index],v.Coords)
-							end)
-						else
-							Markers[Index] = AddBlipForCoord(v.Coords)
-							SetBlipSprite(Markers[Index],v.Vehicle ~= 0 and 225 or 1)
-							SetBlipDisplay(Markers[Index],4)
-							SetBlipAsShortRange(Markers[Index],false)
-							SetBlipColour(Markers[Index],Information[v.Permission][v.Level])
-							SetBlipScale(Markers[Index],0.5)
-							BeginTextCommandSetBlipName("STRING")
-							AddTextComponentString("! "..v.Permission.." : "..v.Level)
-							EndTextCommandSetBlipName(Markers[Index])
-						end
-					end
-				end
-			else
-				if Pause then
-					CleanMarkers()
-					Pause = false
-				end
-
-				local Ped = PlayerPedId()
-				if IsPedInAnyVehicle(Ped) then
-					TimeDistance = 100
-
-					local List = GetPlayers()
-					for Index,v in pairs(Players) do
-						if List[Index] then
-							if not Markers[Index] and Information[v.Permission] and Information[v.Permission][v.Level] and ((LocalPlayer["state"]["Paramedico"] and v.Permission == "Paramedico") or (CheckPolice() and v.Permission ~= "Paramedico")) then
-								local Source = GetPlayerFromServerId(Index)
-								local Ped = GetPlayerPed(Source)
-
-								Markers[Index] = AddBlipForEntity(Ped)
-								SetBlipSprite(Markers[Index],IsPedInAnyVehicle(Ped) and 225 or 1)
-								SetBlipDisplay(Markers[Index],4)
-								SetBlipAsShortRange(Markers[Index],false)
-								SetBlipColour(Markers[Index],Information[v.Permission][v.Level])
-								SetBlipScale(Markers[Index],0.5)
-								BeginTextCommandSetBlipName("STRING")
-								AddTextComponentString("! "..v.Permission.." : "..v.Level)
-								EndTextCommandSetBlipName(Markers[Index])
-							end
-						else
-							if Markers[Index] then
-								if DoesBlipExist(Markers[Index]) then
-									RemoveBlip(Markers[Index])
-								end
-
-								Markers[Index] = nil
-							end
-						end
-					end
-				end
-			end
+	for _,Index in ipairs(ParentGroups[Group]) do
+		if Permissions[Index] then
+			return true
 		end
-
-		Wait(1000)
 	end
-end)
+
+	return false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CREATEORUPDATEBLIP
+-----------------------------------------------------------------------------------------------------------------------------------------
+local function CreateOrUpdateBlip(Index,Coords,Permission,Level,Ped)
+	if not Groups[Permission] then
+		return false
+	end
+
+	if not Markers[Index] then
+		if Ped and Ped ~= 0 then
+			Markers[Index] = AddBlipForEntity(Ped)
+		elseif Coords then
+			Markers[Index] = AddBlipForCoord(Coords)
+		else
+			return false
+		end
+	end
+
+	local Blip = Markers[Index]
+	if not DoesBlipExist(Blip) then
+		Markers[Index] = nil
+		return false
+	end
+
+	SetBlipSprite(Blip,1)
+	SetBlipDisplay(Blip,4)
+	SetBlipAsShortRange(Blip,false)
+	SetBlipScale(Blip,0.65)
+
+	local GroupData = Groups[Permission]
+	local LevelName = GroupData.Hierarchy and GroupData.Hierarchy[Level] or "Membro"
+
+	SetBlipColour(Blip,GroupData.Markers or 1)
+
+	BeginTextCommandSetBlipName("STRING")
+	AddTextComponentString("! "..Permission.." : "..LevelName)
+	EndTextCommandSetBlipName(Blip)
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- REMOVEMARKER
+-----------------------------------------------------------------------------------------------------------------------------------------
+local function RemoveMarker(Index)
+	local Blip = Markers[Index]
+	if Blip and DoesBlipExist(Blip) then
+		RemoveBlip(Blip)
+	end
+
+	Markers[Index] = nil
+end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GETPLAYERS
 -----------------------------------------------------------------------------------------------------------------------------------------
-function GetPlayers()
+local function GetPlayers()
 	local Selected = {}
-	local GamePool = GetGamePool("CPed")
-
-	for _,Entity in ipairs(GamePool) do
-		if IsPedAPlayer(Entity) then
-			local Index = NetworkGetPlayerIndexFromPed(Entity)
+	for _,Ped in ipairs(GetGamePool("CPed")) do
+		if IsPedAPlayer(Ped) then
+			local Index = NetworkGetPlayerIndexFromPed(Ped)
 			if Index and NetworkIsPlayerConnected(Index) then
-				Selected[GetPlayerServerId(Index)] = Entity
+				Selected[GetPlayerServerId(Index)] = Ped
 			end
 		end
 	end
@@ -202,9 +108,9 @@ end
 -- CLEANMARKERS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function CleanMarkers()
-	for _,v in pairs(Markers) do
-		if DoesBlipExist(v) then
-			RemoveBlip(v)
+	for _,Blip in pairs(Markers) do
+		if DoesBlipExist(Blip) then
+			RemoveBlip(Blip)
 		end
 	end
 
@@ -214,8 +120,8 @@ end
 -- MOVEBLIPSMOOTH
 -----------------------------------------------------------------------------------------------------------------------------------------
 function MoveBlipSmooth(Blip,Coords)
-	if not DoesBlipExist(Blip) then
-		return false
+	if not DoesBlipExist(Blip) or not Coords then
+		return
 	end
 
 	local Timer = 0.0
@@ -223,11 +129,10 @@ function MoveBlipSmooth(Blip,Coords)
 	local LastUpdate = GetGameTimer()
 
 	while Timer < 1.0 do
-		local CurrentTime = GetGameTimer()
-		if CurrentTime - LastUpdate > 10 then
-			LastUpdate = CurrentTime
-			Timer = Timer + 0.01
-
+		local CurrentTimer = GetGameTimer()
+		if CurrentTimer - LastUpdate >= 10 then
+			Timer = Timer + 0.02
+			LastUpdate = CurrentTimer
 			SetBlipCoords(Blip,Init + (Coords - Init) * Timer)
 		end
 
@@ -235,33 +140,96 @@ function MoveBlipSmooth(Blip,Coords)
 	end
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- THREADMARKERS
+-----------------------------------------------------------------------------------------------------------------------------------------
+CreateThread(function()
+	for Permission,v in pairs(Groups) do
+		if v.Markers then
+			AddStateBagChangeHandler(Permission,("player:%s"):format(LocalPlayer.state.Source),function(_,Key,Value)
+				if Value then
+					Permissions[Permission] = true
+				else
+					if Permissions[Permission] then
+						Permissions[Permission] = nil
+						CleanMarkers()
+					end
+				end
+			end)
+		end
+	end
+
+	while true do
+		local TimeDistance = 999
+		if LocalPlayer.state.Active and LocalPlayer.state.Markers and next(Permissions) then
+			if IsPauseMenuActive() then
+				if not Pause then
+					Pause = true
+					CleanMarkers()
+				end
+
+				local Users = vSERVER.Users()
+				for Index,v in pairs(Users) do
+					if Groups[v.Permission] and Groups[v.Permission].Markers and (Permissions[v.Permission] or CheckParents(v.Permission)) then
+						if Markers[Index] then
+							async(function()
+								MoveBlipSmooth(Markers[Index],v.Coords)
+							end)
+						else
+							CreateOrUpdateBlip(Index,v.Coords,v.Permission,v.Level)
+						end
+					end
+				end
+			else
+				if Pause then
+					Pause = false
+					CleanMarkers()
+				end
+
+				if IsMinimapRendering() then
+					TimeDistance = 100
+
+					local List = GetPlayers()
+					for Index,v in pairs(Players) do
+						if List[Index] then
+							if Groups[v.Permission] and Groups[v.Permission].Markers and not Markers[Index] and (Permissions[v.Permission] or CheckParents(v.Permission)) then
+								local TargetPlayer = GetPlayerFromServerId(Index)
+								local TargetPed = GetPlayerPed(TargetPlayer)
+
+								CreateOrUpdateBlip(Index,nil,v.Permission,v.Level,TargetPed)
+							end
+						else
+							RemoveMarker(Index)
+						end
+					end
+				end
+			end
+		end
+
+		Wait(TimeDistance)
+	end
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- MARKERS:ADD
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("markers:Add")
-AddEventHandler("markers:Add",function(Source,Table)
-	Players[Source] = Table
+AddEventHandler("markers:Add",function(Source,Data)
+	if Source and Data then
+		Players[Source] = Data
+	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MARKERS:FULL
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("markers:Full")
-AddEventHandler("markers:Full",function(Table)
-	Players = Table
+AddEventHandler("markers:Full",function(Data)
+	Players = Data or {}
+	CleanMarkers()
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MARKERS:REMOVE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("markers:Remove")
 AddEventHandler("markers:Remove",function(Source)
-	if Players[Source] then
-		if Markers[Source] then
-			if DoesBlipExist(Markers[Source]) then
-				RemoveBlip(Markers[Source])
-			end
-
-			Markers[Source] = nil
-		end
-
-		Players[Source] = nil
-	end
+	Players[Source] = nil
+	RemoveMarker(Source)
 end)

@@ -2,8 +2,6 @@
 -- VRP
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Tunnel = module("vrp","lib/Tunnel")
-local Proxy = module("vrp","lib/Proxy")
-vRP = Proxy.getInterface("vRP")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CONNECTION
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -49,7 +47,7 @@ AddEventHandler("Bank",function()
 		SetNuiFocus(true,true)
 		TransitionToBlurred(1000)
 		TriggerEvent("hud:Active",false)
-		SendNUIMessage({ Action = "Open", name = LocalPlayer["state"]["Name"] })
+		SendNUIMessage({ Action = "Open", Payload = { Name = LocalPlayer.state.Name, Passport = LocalPlayer.state.Passport } })
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -59,9 +57,27 @@ RegisterNUICallback("Close",function(Data,Callback)
 	SetNuiFocus(false,false)
 	TransitionFromBlurred(1000)
 	TriggerEvent("hud:Active",true)
-	SendNUIMessage({ Action = "Hide" })
 
-	Callback(true)
+	Callback("Ok")
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- BANK:NOTIFY
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNetEvent("bank:Notify")
+AddEventHandler("bank:Notify",function(Title,Message,Type)
+	SendNUIMessage({ Action = "Notify", Payload = { Title = Title, Message = Message, Type = Type } })
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- TRANSACTIONS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("Transactions",function(Data,Callback)
+	Callback(vSERVER.Transactions())
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- LOADTRANSACTIONS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("LoadTransactions",function(Data,Callback)
+	Callback(vSERVER.Transactions(Data.Before))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- HOME
@@ -73,131 +89,83 @@ end)
 -- DEPOSIT
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Deposit",function(Data,Callback)
-	if MumbleIsConnected() then
-		Callback(vSERVER.Deposit(Data["value"]))
-	end
+	Callback(vSERVER.Deposit(Data.Value))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- WITHDRAW
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Withdraw",function(Data,Callback)
-	if MumbleIsConnected() then
-		Callback(vSERVER.Withdraw(Data["value"]))
-	end
+	Callback(vSERVER.Withdraw(Data.Value))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- TRANSFER
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Transfer",function(Data,Callback)
-	if Data["targetId"] and Data["value"] and MumbleIsConnected() then
-		Callback(vSERVER.Transfer(Data["targetId"],Data["value"]))
-	else
-		Callback(false)
-	end
+	Callback(vSERVER.Transfer(Data.Passport,Data.Value))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- ADDDEPENDENTS
+-- INVOICES
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("AddDependents",function(Data,Callback)
-	if Data["passport"] then
-		Callback(vSERVER.AddDependents(Data["passport"]))
-	else
-		Callback(false)
-	end
+RegisterNUICallback("Invoices",function(Data,Callback)
+	Callback(vSERVER.Invoices())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- REMOVEDEPENDENTS
+-- CREATEINVOICE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("RemoveDependents",function(Data,Callback)
-	Callback(vSERVER.RemoveDependents(Data["passport"]))
+RegisterNUICallback("CreateInvoice",function(Data,Callback)
+	Callback(vSERVER.CreateInvoice(Data.Passport,Data.Value,Data.Reason))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INVESTMENTS
+-- PAYINVOICE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Investments",function(Data,Callback)
-	Callback(vSERVER.Investments())
+RegisterNUICallback("PayInvoice",function(Data,Callback)
+	Callback(vSERVER.PayInvoice(Data.Id))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INVEST
+-- CANCELINVOICE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Invest",function(Data,Callback)
-	if Data["value"] and MumbleIsConnected() then
-		Callback(vSERVER.Invest(Data["value"]))
-	else
-		Callback(false)
-	end
+RegisterNUICallback("CancelInvoice",function(Data,Callback)
+	Callback(vSERVER.CancelInvoice(Data.Id))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INVESTRESCUE
+-- FINES
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("InvestRescue",function(Data,Callback)
-	if MumbleIsConnected() then
-		Callback(vSERVER.InvestRescue())
-	end
+RegisterNUICallback("Fines",function(Data,Callback)
+	Callback(vSERVER.Fines())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- TRANSACTIONHISTORY
+-- GETFINE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("TransactionHistory",function(Data,Callback)
-	Callback(vSERVER.TransactionHistory())
+RegisterNUICallback("GetFine",function(Data,Callback)
+	Callback(vSERVER.GetFine(Data.Id))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- MAKEINVOICE
+-- PAYFINE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("MakeInvoice",function(Data,Callback)
-	if Data["passport"] and Data["value"] and Data["reason"] and MumbleIsConnected() then
-		Callback(vSERVER.MakeInvoice(Data["passport"],Data["value"],Data["reason"]))
-	else
-		Callback(false)
-	end
+RegisterNUICallback("PayFine",function(Data,Callback)
+	Callback(vSERVER.PayFine(Data.Id))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INVOICEPAYMENT
+-- PAYALLFINES
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("InvoicePayment",function(Data,Callback)
-	if MumbleIsConnected() then
-		Callback(vSERVER.InvoicePayment(Data["id"]))
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- INVOICELIST
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("InvoiceList",function(Data,Callback)
-	Callback(vSERVER.InvoiceList())
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- FINELIST
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("FineList",function(Data,Callback)
-	Callback(vSERVER.FineList())
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- FINEPAYMENT
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("FinePayment",function(Data,Callback)
-	if MumbleIsConnected() then
-		Callback(vSERVER.FinePayment(Data["id"]))
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- FINEPAYMENTALL
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("FinePaymentAll",function(Data,Callback)
-	if MumbleIsConnected() then
-		Callback(vSERVER.FinePaymentAll())
-	end
+RegisterNUICallback("PayAllFines",function(Data,Callback)
+	Callback(vSERVER.PayAllFines())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- TAXES
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Taxes",function(Data,Callback)
-	Callback(vSERVER.TaxList())
+	Callback(vSERVER.Taxes())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- TAXPAYMENT
+-- PAYTAX
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("TaxPayment",function(Data,Callback)
-	if MumbleIsConnected() then
-		Callback(vSERVER.TaxPayment(Data["id"]))
-	end
+RegisterNUICallback("PayTax",function(Data,Callback)
+	Callback(vSERVER.PayTax(Data.Id))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PAYALLTAXES
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("PayAllTaxes",function(Data,Callback)
+	Callback(vSERVER.PayAllTaxes())
 end)

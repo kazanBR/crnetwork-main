@@ -1104,6 +1104,30 @@ RegisterCommand("ban",function(source,Message)
 	TriggerClientEvent("Notify",source,"Sucesso","Banimento aplicado ao passaporte <b>"..OtherPassport.."</b>.","verde",5000)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- BANR
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterCommand("banr",function(source,Message)
+	local Passport = vRP.Passport(source)
+	if not Passport or not vRP.HasGroup(Passport,"Admin") then
+		return false
+	end
+
+	local Keyboard = vKEYBOARD.Secondary(source,"Passaporte","Minutos")
+	if not Keyboard then
+		return false
+	end
+
+	local Duration = Keyboard[2]
+	local OtherPassport = Keyboard[1]
+	if not vRP.Identity(OtherPassport) then
+		return false
+	end
+
+	vRP.UpdateBanned(OtherPassport,Duration)
+	TriggerClientEvent("Notify",source,"Sucesso","Banimento reduzido ao passaporte <b>"..OtherPassport.."</b>.","verde",5000)
+	exports.discord:Embed("Ban","**[ADMIN]:** "..Passport.."\n**[PASSAPORTE]:** "..OtherPassport.."\n**[NOVA DURAÇÃO]:** "..Duration.." minutos\n**[MODO]:** Ban Reduzido")
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- UNBAN
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterCommand("unban",function(source,Message)

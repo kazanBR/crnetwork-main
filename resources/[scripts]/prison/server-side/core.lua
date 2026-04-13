@@ -89,5 +89,5 @@ AddEventHandler("prison:Service",function()
 	end
 
 	Cooldown[Passport] = CurrentTimer + 60
-	vRP.UpdatePrison(Passport)
+	vRP.UpdatePrison(Passport,1)
 end)

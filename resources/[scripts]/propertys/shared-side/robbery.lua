@@ -87,6 +87,8 @@ OtherItens = {
 	{ Item = "gauze", Chance = 100, Min = 2, Max = 4 },
 	{ Item = "soap", Chance = 50, Min = 1, Max = 1 },
 	{ Item = "alliance", Chance = 50, Min = 1, Max = 1 },
+	{ Item = "WEAPON_PISTOL_AMMO", Chance = 10, Min = 25, Max = 50 },
+	{ Item = "blueprint_WEAPON_SNSPISTOL", Chance = 2, Min = 1, Max = 1 },
 	{ Item = "scotchtape", Chance = 25, Min = 1, Max = 1 },
 	{ Item = "insulatingtape", Chance = 25, Min = 1, Max = 1 },
 	{ Item = "rammemory", Chance = 12, Min = 1, Max = 1 },

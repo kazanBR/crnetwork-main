@@ -19,7 +19,7 @@ function Creative.Permission(Name)
         return false
     end
 
-    if exports.bank:CheckTaxs(Passport) or exports.bank:CheckFines(Passport) then
+    if exports.bank:CheckTaxes(Passport) or exports.bank:CheckFines(Passport) then
         return false
     end
 

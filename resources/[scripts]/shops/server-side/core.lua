@@ -20,7 +20,7 @@ function Creative.Permission(Name)
 		return false
 	end
 
-	if Name ~= "Banned" and (exports.bank:CheckTaxs(Passport) or exports.bank:CheckFines(Passport)) then
+	if Name ~= "Banned" and (exports.bank:CheckTaxes(Passport) or exports.bank:CheckFines(Passport)) then
 		return false
 	end
 

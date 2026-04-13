@@ -18,6 +18,7 @@ local Lock = {}
 local Saved = {}
 local Inside = {}
 local Active = {}
+local Opened = {}
 local Robbery = {}
 local Markers = {}
 local CountClothes = {}
@@ -232,7 +233,7 @@ AddEventHandler("propertys:Buy",function(Name)
 	local Split = splitString(Name)
 	local Passport = vRP.Passport(source)
 
-	if not Passport or exports.bank:CheckTaxs(Passport) or exports.bank:CheckFines(Passport) then
+	if not Passport or exports.bank:CheckTaxes(Passport) or exports.bank:CheckFines(Passport) then
 		return false
 	end
 
@@ -269,7 +270,7 @@ AddEventHandler("propertys:Buy",function(Name)
 	TriggerClientEvent("Notify",source,"Propriedades","Compra concluída.","verde",10000)
 
 	if Mode == "Dollar" then
-		exports.bank:AddTaxs(Passport,source,"Propriedades",Informations[Interior].Price,"Compra de propriedade.")
+		exports.bank:AddTaxes(Passport,"Propriedades",Informations[Interior].Price,"Compra de propriedade.")
 	end
 
 	vRP.Query("propertys/Buy",{
@@ -465,9 +466,11 @@ function Creative.Clothes()
 
 	CountClothes[Passport] = 2
 
-	for Permission,Multiplier in pairs({ Ouro = 6, Prata = 4, Bronze = 2 }) do
-		if vRP.HasService(Passport,Permission) then
-			CountClothes[Passport] = CountClothes[Passport] + Multiplier
+	for GroupName,GroupData in pairs(Groups) do
+		if GroupData.Multiplier and GroupData.Multiplier.Dynamic then
+			if vRP.HasGroup(Passport,GroupName) then
+				CountClothes[Passport] = CountClothes[Passport] + GroupData.Multiplier.Dynamic
+			end
 		end
 	end
 
@@ -562,12 +565,27 @@ function Creative.Permission(Name)
 	return false
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- OPEN
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Open(Name,Mode)
+	local source = source
+	local Passport = vRP.Passport(source)
+	if Passport then
+		Opened[Passport] = { Name = Name, Mode = Mode }
+	end
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- MOUNT
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Mount(Name,Mode)
 	local Weight = 25
 	local source = source
 	local Passport = vRP.Passport(source)
+	
+	if not Name and Opened[Passport] then
+		Name = Opened[Passport].Name
+		Mode = Opened[Passport].Mode
+	end
 
 	if not Passport or not Name or not Mode then
 		return false
@@ -575,10 +593,15 @@ function Creative.Mount(Name,Mode)
 
 	if Name == "Hotel" then
 		Name = "Hotel:"..Passport
+		Weight = 50
 	else
 		local Consult = vRP.SingleQuery("propertys/Exist",{ Name = Name })
-		if Consult and Consult[Mode] then
+		if Consult and Consult[Mode] and Consult[Mode] > 0 then
 			Weight = Consult[Mode]
+		else
+			if Consult and Informations[Consult.Interior] and Informations[Consult.Interior][Mode] then
+				Weight = Informations[Consult.Interior][Mode]
+			end
 		end
 	end
 
@@ -614,6 +637,11 @@ function Creative.Mount(Name,Mode)
 					v.desc = "Passaporte: <rare>"..Dotted(Split[2]).."</rare><br>Nome: <rare>"..vRP.FullName(Split[2]).."</rare><br>Telefone: <rare>"..vRP.Phone(Split[2]).."</rare>"
 				else
 					v.desc = "Proprietário: <common>"..vRP.FullName(Split[2]).."</common>"
+				end
+			elseif ItemNamed(Item) and Split[2] and Item == "cellphone" then
+				local InfoPhone = exports.oxmysql:single_async("SELECT * from phone_phones WHERE phone_number = ? LIMIT 1",{ Split[2] })
+				if InfoPhone then
+					v.desc = "Passaporte: <rare>"..InfoPhone.owner_id.."</rare><br>Nome: <rare>"..vRP.FullName(InfoPhone.owner_id).."</rare><br>Telefone: <rare>"..exports["lb-phone"]:FormatNumber(Split[2]).."</rare>"
 				end
 			end
 		end
@@ -661,6 +689,11 @@ function Creative.Store(Item,Slot,Amount,Target,Name,Mode)
 	local source = source
 	local Amount = parseInt(Amount,true)
 	local Passport = vRP.Passport(source)
+	
+	if not Name and Opened[Passport] then
+		Name = Opened[Passport].Name
+		Mode = Opened[Passport].Mode
+	end
 
 	if not Passport then
 		return false
@@ -673,24 +706,29 @@ function Creative.Store(Item,Slot,Amount,Target,Name,Mode)
 	end
 
 	if Name == "Hotel" then
-		if vRP.StoreChest(Passport,Mode..":Hotel:"..Passport,Amount,25,Slot,Target,true) then
-			TriggerClientEvent("inventory:Update",source)
-		end
+		vRP.StoreChest(Passport,Mode..":Hotel:"..Passport,Amount,50,Slot,Target,true)
+		TriggerClientEvent("inventory:Update",source)
 
 		return false
 	end
 
 	local Consult = vRP.SingleQuery("propertys/Exist",{ Name = Name })
 	if Consult then
+		local Weight = 25
+		if Consult[Mode] and Consult[Mode] > 0 then
+			Weight = Consult[Mode]
+		elseif Informations[Consult.Interior] and Informations[Consult.Interior][Mode] then
+			Weight = Informations[Consult.Interior][Mode]
+		end
+
 		if Item == "diagram" then
 			if vRP.TakeItem(Passport,Item,Amount,false,Slot) then
 				vRP.Update("propertys/"..Mode,{ Name = Name, Weight = 10 * Amount })
 				TriggerClientEvent("inventory:Update",source)
 			end
 		else
-			if vRP.StoreChest(Passport,Mode..":"..Name,Amount,Consult[Mode],Slot,Target,true) then
-				TriggerClientEvent("inventory:Update",source)
-			end
+			vRP.StoreChest(Passport,Mode..":"..Name,Amount,Weight,Slot,Target,true)
+			TriggerClientEvent("inventory:Update",source)
 		end
 	end
 end
@@ -702,13 +740,17 @@ function Creative.Take(Slot,Amount,Target,Name,Mode)
 	local Amount = parseInt(Amount,true)
 	local Passport = vRP.Passport(source)
 
+	if not Name and Opened[Passport] then
+		Name = Opened[Passport].Name
+		Mode = Opened[Passport].Mode
+	end
+
 	if not Passport then
 		return false
 	end
 
-	if vRP.TakeChest(Passport,(Name == "Hotel") and Mode..":Hotel:"..Passport or Mode..":"..Name,Amount,Slot,Target,true) then
-		TriggerClientEvent("inventory:Update",source)
-	end
+	vRP.TakeChest(Passport,(Name == "Hotel") and Mode..":Hotel:"..Passport or Mode..":"..Name,Amount,Slot,Target,true)
+	TriggerClientEvent("inventory:Update",source)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- UPDATE
@@ -718,13 +760,17 @@ function Creative.Update(Slot,Target,Amount,Name,Mode)
 	local Amount = parseInt(Amount,true)
 	local Passport = vRP.Passport(source)
 
+	if not Name and Opened[Passport] then
+		Name = Opened[Passport].Name
+		Mode = Opened[Passport].Mode
+	end
+
 	if not Passport then
 		return false
 	end
 
-	if vRP.UpdateChest(Passport,(Name == "Hotel") and Mode..":Hotel:"..Passport or Mode..":"..Name,Slot,Target,Amount,true) then
-		TriggerClientEvent("inventory:Update",source)
-	end
+	vRP.UpdateChest(Passport,(Name == "Hotel") and Mode..":Hotel:"..Passport or Mode..":"..Name,Slot,Target,Amount,true)
+	TriggerClientEvent("inventory:Update",source)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DISCONNECT
@@ -733,6 +779,10 @@ AddEventHandler("Disconnect",function(Passport)
 	if Inside[Passport] then
 		vRP.InsidePropertys(Passport,Inside[Passport])
 		Inside[Passport] = nil
+	end
+
+	if Opened[Passport] then
+		Opened[Passport] = nil
 	end
 
 	CountClothes[Passport] = nil
@@ -785,3 +835,29 @@ end)
 function Creative.Markers()
 	return Markers
 end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PROPERTYS:INSIDE
+-----------------------------------------------------------------------------------------------------------------------------------------
+exports("Inside",function(Passport)
+	if Inside[Passport] then
+		for Name,v in pairs(Propertys) do
+			if v.Coords == Inside[Passport] then
+				return Name
+			end
+		end
+	end
+
+	return false
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PROPERTYS:GETLOCKSTATE
+-----------------------------------------------------------------------------------------------------------------------------------------
+exports("GetLockState",function(Name)
+	return Lock[Name] or false
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PROPERTYS:OBJECTS
+-----------------------------------------------------------------------------------------------------------------------------------------
+exports("Objects",function(Name)
+	return vRP.GetSrvData("Objects:"..Name)
+end)

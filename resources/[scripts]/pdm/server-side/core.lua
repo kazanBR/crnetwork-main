@@ -48,7 +48,7 @@ function Creative.Buy(Model)
 					else
 						TriggerClientEvent("Notify",source,"Aviso","Diamante insuficiente.","amarelo",5000)
 					end
-				elseif VehicleClass(Model) ~= "Races" and not exports.bank:CheckTaxs(Passport) and not exports.bank:CheckFines(Passport) then
+				elseif VehicleClass(Model) ~= "Races" and not exports.bank:CheckTaxes(Passport) and not exports.bank:CheckFines(Passport) then
 					local VehiclePrice = VehiclePrice(Model)
 					if VehiclePrice and vRP.PaymentFull(Passport,VehiclePrice) then
 						vRP.Query("vehicles/addVehicles",{ Passport = Passport, Vehicle = Model, Plate = vRP.GeneratePlate(), Weight = VehicleWeight(Model), Work = 0 })

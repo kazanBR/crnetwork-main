@@ -944,7 +944,7 @@ local List = {
 		Economy = 500000,
 		Rarity = "legendary"
 	},
-	["skinshop"] = {
+	Skinshop = {
 		Index = "skinshop",
 		Name = "Loja de Roupas",
 		Type = "Consumível",
@@ -3783,6 +3783,26 @@ local List = {
 		["Charges"] = 5,
 		Rarity = "epic"
 	},
+	["mdttablet"] = {
+		Index = "mdttablet",
+		Name = "Tablet Policial",
+		Description = "Tablet de acesso ao sistema policial.",
+		Type = "Consumível",
+		Rarity = "legendary",
+		Durability = 168,
+		Economy = 2275,
+		Weight = 0.35,
+	},
+	["emstablet"] = {
+		Index = "emstablet",
+		Name = "Tablet Médico",
+		Description = "Tablet de acesso ao sistema Médico.",
+		Type = "Consumível",
+		Rarity = "legendary",
+		Durability = 168,
+		Economy = 2275,
+		Weight = 0.35,
+	},
 	["postit"] = {
 		Index = "postit",
 		Name = "Post-It",
@@ -4184,56 +4204,157 @@ Clones = {
 	{ Clone = "coke", Name = "Cocaína", Min = 3, Max = 6, Hash = "bkr_prop_weed_med_01a" }
 }
 -----------------------------------------------------------------------------------------------------------------------------------------
--- CLONESYSTEM
+-- FURNITURE
 -----------------------------------------------------------------------------------------------------------------------------------------
-for _,v in ipairs(Clones) do
-	List[v.Clone] = {
-		Index = v.Clone,
-		Name = v.Name,
-		Type = "Comum",
-		LostWater = true,
-		Weight = 0.15,
-		Market = true,
-		Economy = 15,
-		Fridge = true
+Furniture = {
+	{
+		Item = "halloween_pumpkin",
+		Name = "Abóbora de Halloween",
+		Rarity = "legendary",
+		Hash = "tfx-summer_abroba"
+	},{
+		Item = "halloween_ghost",
+		Name = "Fantasma de Halloween",
+		Rarity = "legendary",
+		Hash = "tfx-summer_ghost"
+	},{
+		Item = "largebed",
+		Name = "Cama",
+		Hash = "hei_heist_bed_double_08"
+	},{
+		Item = "browncloset",
+		Name = "Guarda-Roupas",
+		Rarity = "epic",
+		Hash = "v_res_m_armoire"
+	},{
+		Item = "simplebox",
+		Name = "Cofre Básico",
+		Hash = "prop_ld_int_safe_01",
+		Description = "Este objeto pode ser posicionado dentro de propriedades, permitindo guardar <legendary>100KG</legendary> dentro de seu compartimento.",
+		Delete = true
+	},{
+		Item = "safebox",
+		Name = "Cofre Reforçado",
+		Rarity = "rare",
+		Hash = "p_v_43_safe_s",
+		Description = "Este objeto pode ser posicionado dentro de propriedades, permitindo guardar <legendary>200KG</legendary> dentro de seu compartimento.",
+		Delete = true
+	},{
+		Item = "officebox",
+		Name = "Cofre Blindado",
+		Rarity = "epic",
+		Hash = "sf_prop_v_43_safe_s_bk_01a",
+		Description = "Este objeto pode ser posicionado dentro de propriedades, permitindo guardar <legendary>500KG</legendary> dentro de seu compartimento.",
+		Delete = true
+	},{
+		Item = "industrialbox",
+		Name = "Cofre Industrial",
+		Rarity = "epic",
+		Hash = "xm3_prop_xm3_safe_01a",
+		Description = "Este objeto pode ser posicionado dentro de propriedades, permitindo guardar <legendary>1000KG</legendary> dentro de seu compartimento.",
+		Delete = true
+	},{
+		Item = "ornamentbox",
+		Name = "Cofre Corporativo",
+		Rarity = "legendary",
+		Hash = "h4_prop_h4_safe_01a",
+		Description = "Este objeto pode ser posicionado dentro de propriedades, permitindo guardar <legendary>1500KG</legendary> dentro de seu compartimento.",
+		Delete = true
+	},{
+		Item = "goldenbox",
+		Name = "Cofre Executivo",
+		Rarity = "legendary",
+		Hash = "sf_prop_v_43_safe_s_gd_01a",
+		Description = "Este objeto pode ser posicionado dentro de propriedades, permitindo guardar <legendary>2500KG</legendary> dentro de seu compartimento.",
+		Delete = true
 	}
-
-	for _,w in ipairs(Puritys) do
-		List[v.Clone.."clone_"..w.Percent] = {
-			Index = "clone",
-			Name = "Clonagem de "..v.Name,
-			Description = "Pureza dos frutos: <common>"..w.Percent.."%</common>",
-			Type = "Consumível",
-			Purity = w.Percent,
-			LostWater = true,
-			Weight = 0.05,
-			Market = true
-		}
-	end
-end
+}
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ADDITEM
+-----------------------------------------------------------------------------------------------------------------------------------------
+AddEventHandler("AddItem",function(Name,Data)
+	List[Name] = Data
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- BLUEPRINTS
 -----------------------------------------------------------------------------------------------------------------------------------------
-for Item,v in pairs(List) do
-	local AmountBlueprint = v.Blueprint
-	if AmountBlueprint then
-		List["blueprint_"..Item] = {
-			Index = "blueprint",
-			Name = ("Aprendizado: %s"):format(v.Name),
-			Description = "Ao consumir você aprende a receita necessária para produzi-lo sempre que desejar.",
-			Type = "Consumível",
-			Weight = 0.0,
-			Recycle = {
-				blueprint_fragment = AmountBlueprint
+CreateThread(function()
+	for Item,v in pairs(List) do
+		local AmountBlueprint = v.Blueprint
+		if AmountBlueprint then
+			List["blueprint_"..Item] = {
+				Name = v.Name,
+				Index = "blueprint",
+				Description = "Ao consumir você aprende a receita necessária para produzi-lo sempre que desejar.",
+				Type = "Consumível",
+				Weight = 0.0,
+				Recycle = {
+					blueprint_fragment = AmountBlueprint
+				}
 			}
+		end
+	end
+
+	for _,v in pairs(Clones) do
+		List[v.Clone] = {
+			Index = v.Clone,
+			Name = v.Name,
+			Type = "Comum",
+			LostWater = true,
+			Weight = 0.15,
+			Market = true,
+			Economy = 15
+		}
+
+		for _,w in pairs(Puritys) do
+			List[v.Clone.."clone_"..w.Percent] = {
+				Index = "clone",
+				Name = "Clonagem de "..v.Name,
+				Description = "Pureza dos frutos: <common>"..w.Percent.."%</common>",
+				Type = "Consumível",
+				Purity = w.Percent,
+				LostWater = true,
+				Weight = 0.05,
+				Market = true
+			}
+		end
+	end
+
+	for _,v in pairs(Furniture) do
+		List["furniture_"..v.Item] = {
+			Name = v.Name,
+			Delete = v.Delete,
+			Type = "Consumível",
+			Weight = v.Weight or 2.0,
+			Index = "furniture_"..v.Item,
+			Rarity = v.Rarity or "common",
+			Description = v.Description or "Este objeto pode ser posicionado dentro de propriedades, permitindo personalizar e organizar o ambiente."
 		}
 	end
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ITEMLIST
 -----------------------------------------------------------------------------------------------------------------------------------------
 function ItemList()
 	return List
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ITEMCLONES
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ItemClones()
+	return Clones
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ITEMPURITYS
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ItemPuritys()
+	return Puritys
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ITEMFURNITURE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ItemFurniture()
+	return Furniture
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ITEMEXIST
@@ -4396,13 +4517,6 @@ function ItemRecycle(Item)
 	return List[Item] and List[Item].Recycle or false
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- ITEMFRIDGE
------------------------------------------------------------------------------------------------------------------------------------------
-function ItemFridge(Item)
-	local Item = SplitOne(Item)
-	return List[Item] and List[Item].Fridge or false
-end
------------------------------------------------------------------------------------------------------------------------------------------
 -- ITEMFISHING
 -----------------------------------------------------------------------------------------------------------------------------------------
 function ItemFishing(Item)
@@ -4429,6 +4543,27 @@ end
 function ItemSkinshop(Item)
 	local Item = SplitOne(Item)
 	return List[Item] and List[Item].Skinshop or false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ITEMLOCKED
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ItemLocked(Item)
+	local Item = SplitOne(Item)
+	return List[Item] and List[Item].Locked or false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ITEMMARKERS
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ItemMarkers(Item)
+	local Item = SplitOne(Item)
+	return List[Item] and List[Item].Markers or false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ITEMADMIN
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ItemAdmin(Item)
+	local Item = SplitOne(Item)
+	return List[Item] and List[Item].AdminLevel or false
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- BLOCKDELETE
@@ -4458,3 +4593,21 @@ function WeaponAttach(Item,Weapon)
 	local Item = SplitOne(Item)
 	return List[Weapon] and List[Weapon].Attachs and List[Weapon].Attachs[Item] or false
 end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ITEMPHONE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ItemPhone(Item)
+    local Item = SplitOne(Item)
+    return List[Item] and List[Item]["Phone"] or false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ITEMFRIDGE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ItemFridge(Item)
+	local Item = SplitOne(Item)
+	return List[Item] and List[Item].Fridge or false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- VARIABLES
+-----------------------------------------------------------------------------------------------------------------------------------------
+ListItem = List

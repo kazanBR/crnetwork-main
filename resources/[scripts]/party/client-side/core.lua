@@ -2,46 +2,148 @@
 -- VRP
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Tunnel = module("vrp","lib/Tunnel")
-local Proxy = module("vrp","lib/Proxy")
-vRP = Proxy.getInterface("vRP")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CONNECTION
 -----------------------------------------------------------------------------------------------------------------------------------------
-vSERVER = Tunnel.getInterface("party")
+local vSERVER = Tunnel.getInterface("party")
 -----------------------------------------------------------------------------------------------------------------------------------------
--- VARIABLES
+-- STATE
 -----------------------------------------------------------------------------------------------------------------------------------------
-local List = {}
-local Open = false
-local Display = false
+local Markers = {}
+local Opened = false
+local LastMarker = 0
+local MaxScale = 0.012
+local MinScale = 0.006
+local Rendering = false
+local ScaleDistance = 100.0
+local MarkerCooldown = 1000
+local RenderDistance = 500.0
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CANINTERACT
+-----------------------------------------------------------------------------------------------------------------------------------------
+local function CanInteract()
+	return LocalPlayer.state.Active and not IsPauseMenuActive()
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- OPENNUI
+-----------------------------------------------------------------------------------------------------------------------------------------
+local function OpenNUI()
+	if Opened then return end
+
+	Opened = true
+	SetNuiFocus(true,true)
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CLOSENUI
+-----------------------------------------------------------------------------------------------------------------------------------------
+local function CloseNUI()
+	if not Opened then return end
+
+	Opened = false
+	SetNuiFocus(false,false)
+	SendNUIMessage({ Action = "Close" })
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- GETCOORDSFROMCAM
+-----------------------------------------------------------------------------------------------------------------------------------------
+local function GetCoordsFromCam(Distance)
+	local Rotation = GetGameplayCamRot()
+	local Position = GetGameplayCamCoord()
+
+	local x = Rotation.x * math.pi / 180
+	local z = Rotation.z * math.pi / 180
+
+	local Direction = vec3(-math.sin(z) * math.abs(math.cos(x)),math.cos(z) * math.abs(math.cos(x)),math.sin(x))
+
+	return Position + (Direction * Distance)
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- RAYCASTFROMCAMERA
+-----------------------------------------------------------------------------------------------------------------------------------------
+local function RaycastFromCamera(Distance)
+	local Ped = PlayerPedId()
+	local Position = GetGameplayCamCoord()
+	local Target = GetCoordsFromCam(Distance)
+
+	local Handle = StartExpensiveSynchronousShapeTestLosProbe(Position,Target,-1,Ped,4)
+	local _,Hit,Coords = GetShapeTestResult(Handle)
+
+	return Hit == 1 and Coords or nil
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- STARTRENDERING
+-----------------------------------------------------------------------------------------------------------------------------------------
+function StartRendering()
+	if Rendering then return end
+	Rendering = true
+	CreateThread(function()
+		while true do
+			if not next(Markers) then
+				Rendering = false
+				break
+			end
+
+			local TimeDistance = 500
+
+			if CanInteract() then
+				local Ped = PlayerPedId()
+				local Coords = GetEntityCoords(Ped)
+				local Aspect = GetAspectRatio(false)
+
+				for _,v in next,Markers do
+					if v and v.Coords and type(v.Coords) == "vector3" then
+						local Distance = #(Coords - v.Coords)
+						if Distance <= RenderDistance then
+							TimeDistance = 1
+
+							local Factor = 1.0 - math.min(Distance / ScaleDistance,1.0)
+							local Scale = MinScale + (Factor * (MaxScale - MinScale))
+							local Color = v.Color or {}
+
+							SetDrawOrigin(v.Coords.x,v.Coords.y,v.Coords.z)
+							DrawSprite("Textures","Marker",0.0,0.0,Scale,Scale * Aspect,0.0,Color.r or 255,Color.g or 255,Color.b or 255,255)
+							ClearDrawOrigin()
+						end
+					end
+				end
+			end
+
+			Wait(TimeDistance)
+		end
+	end)
+end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PARTYS
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterCommand("Partys",function()
 	local Ped = PlayerPedId()
-	if not Open and not IsPedInAnyVehicle(Ped) then
-		Open = true
-		SetNuiFocus(true,true)
-		SendNUIMessage({ Action = "Open", Payload = { LocalPlayer["state"]["Passport"],vSERVER.GetRooms() } })
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- DISPLAYS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterCommand("Displays",function()
-	Display = not Display
+	if Opened or IsPedInAnyVehicle(Ped) then return end
 
-	if Display then
-		TriggerEvent("Notify","Grupos","Nome dos participantes ativado.","verde",5000)
-	else
-		TriggerEvent("Notify","Grupos","Nome dos participantes desativado.","vermelho",5000)
-	end
+	OpenNUI()
+	SendNUIMessage({ Action = "Open", Payload = { LocalPlayer.state.Passport, vSERVER.GetRooms() } })
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- KEYMAPPING
+-- MARKERS
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterKeyMapping("Partys","Abrir os grupos","keyboard","G")
-RegisterKeyMapping("Displays","Mostrar/Esconder membros do grupo","keyboard","I")
+RegisterCommand("Markers",function()
+	local Ped = PlayerPedId()
+	local Timer = GetGameTimer()
+	if GetEntityHealth(Ped) <= 100 then
+		return false
+	end
+
+	if (Timer - LastMarker) < MarkerCooldown then
+		return false
+	end
+
+	local Coords = RaycastFromCamera(300.0)
+	if not Coords then
+		return false
+	end
+
+	LastMarker = Timer
+	TriggerServerEvent("party:MarkerAdd",Coords)
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GETROOMS
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -52,132 +154,64 @@ end)
 -- GETMEMBERS
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("GetMembers",function(Data,Callback)
-	Callback(vSERVER.GetMembers(Data["Id"]))
+	Callback(vSERVER.GetMembers(Data.Id))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- LEAVEROOM
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("LeaveRoom",function(Data,Callback)
+RegisterNUICallback("LeaveRoom",function(_,Callback)
 	Callback(vSERVER.LeaveRoom())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CREATEROOM
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("CreateRoom",function(Data,Callback)
-	Callback(vSERVER.CreateRoom(Data["Name"],Data["Password"]))
+	Callback(vSERVER.CreateRoom(Data.Name,Data.Password))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- KICKROOM
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("KickRoom",function(Data,Callback)
-	Callback(vSERVER.KickRoom(Data["Room"],Data["Passport"]))
+	Callback(vSERVER.KickRoom(Data.Room,Data.Passport))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ENTERROOM
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("EnterRoom",function(Data,Callback)
-	Callback(vSERVER.EnterRoom(Data["Room"],Data["Password"]))
+	Callback(vSERVER.EnterRoom(Data.Room,Data.Password))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CLOSE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Close",function(Data,Callback)
-	SetNuiFocus(false,false)
-	Open = false
+	CloseNUI()
 
 	Callback("Ok")
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- PARTY:RESETNUI
+-- PARTY:CLOSE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("party:ResetNui")
-AddEventHandler("party:ResetNui",function()
-	if Open then
-		Open = false
-		SetNuiFocus(false,false)
-		SendNUIMessage({ Action = "Close" })
-	end
-end)
+RegisterNetEvent("party:Close",CloseNUI)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- PARTY:INVITE
+-- PARTY:MARKERADD
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("party:Invite")
-AddEventHandler("party:Invite",function(Source,Name)
-	List[Source] = Name
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- PARTY:DISMISS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("party:Dismiss")
-AddEventHandler("party:Dismiss",function(Source)
-	if List[Source] then
-		List[Source] = nil
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- PARTY:CLEAR
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("party:Clear")
-AddEventHandler("party:Clear",function()
-	List = {}
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- GETPLAYERS
------------------------------------------------------------------------------------------------------------------------------------------
-function GetPlayers()
-	local Selected = {}
-	for _,Entity in pairs(GetGamePool("CPed")) do
-		local Index = NetworkGetPlayerIndexFromPed(Entity)
-
-		if Entity ~= PlayerPedId() and Index and IsPedAPlayer(Entity) and NetworkIsPlayerConnected(Index) then
-			Selected[GetPlayerServerId(Index)] = Entity
-		end
+RegisterNetEvent("party:MarkerAdd",function(Passport,Data)
+	if not Passport or not Data or not Data.Coords then
+		return false
 	end
 
-	return Selected
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- THREADACTIVE
------------------------------------------------------------------------------------------------------------------------------------------
-CreateThread(function()
-	while true do
-		local TimeDistance = 999
-		if LocalPlayer["state"]["Active"] and not IsPauseMenuActive() and Display then
-			local Ped = PlayerPedId()
-			local Players = GetPlayers()
-			local Coords = GetEntityCoords(Ped)
-
-			for Source,v in pairs(Players) do
-				if List[Source] then
-					local OtherCoords = GetEntityCoords(v)
-
-					if #(Coords - OtherCoords) <= 25 then
-						TimeDistance = 1
-						DrawText3D(OtherCoords,"~w~"..List[Source],0.45)
-					end
-				end
-			end
-		end
-
-		Wait(TimeDistance)
-	end
+	PlaySoundFrontend(-1,"ATM_WINDOW","HUD_FRONTEND_DEFAULT_SOUNDSET",false)
+	Markers[Passport] = Data
+	StartRendering()
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- DRAWTEXT3D
+-- PARTY:MARKERDELETE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function DrawText3D(Coords,Text,Weight)
-	local onScreen,x,y = World3dToScreen2d(Coords["x"],Coords["y"],Coords["z"] + 1.25)
-
-	if onScreen then
-		SetTextFont(4)
-		SetTextCentre(true)
-		SetTextDropShadow()
-		SetTextProportional(1)
-		SetTextScale(0.35,0.35)
-		SetTextColour(255,255,255,200)
-
-		SetTextEntry("STRING")
-		AddTextComponentString(Text)
-		EndTextCommandDisplayText(x,y)
-	end
-end
+RegisterNetEvent("party:MarkerDelete",function(Passport)
+	Markers[Passport] = nil
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- KEYMAPPING
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterKeyMapping("Partys","Abrir grupos","keyboard","G")
+RegisterKeyMapping("Markers","Marcar/Desmarcar local","mouse_button","mouse_middle")

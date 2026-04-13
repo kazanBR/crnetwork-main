@@ -28,7 +28,7 @@ function Creative.Permission(Index)
 		return false
 	end
 
-	if not exports.bank:CheckTaxs(Passport) and not exports.bank:CheckFines(Passport) then
+	if not exports.bank:CheckTaxes(Passport) or exports.bank:CheckFines(Passport) then
 		return true
 	end
 

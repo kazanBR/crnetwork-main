@@ -418,7 +418,7 @@ AddEventHandler("farmer:Prison",function(Number)
 
 	if GlobalState.Work >= FarmerState then
 		GlobalState[FarmerKey] = GlobalState.Work + 60
-		vRP.UpdatePrison(Passport)
+		vRP.UpdatePrison(Passport,1)
 	end
 
 	Player(source).state.Buttons = false

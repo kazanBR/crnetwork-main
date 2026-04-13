@@ -78,7 +78,17 @@ Groups = {
 		Salary = { 3750 },
 		Backpack = { 25 },
 		Service = true,
-		Block = true
+		Block = true,
+		Multiplier = {
+			Dynamic = 2, -- Bônus de roupas no Dynamic
+			Target = 20, -- Bônus de peso no Target
+			Weight = 5, -- Redução de peso no inventário
+			Work = 10, -- Bônus em trabalhos (Trucker, Bus, Towed, Throwing, Grime, Taxi) - em porcentagem
+			Bank = 15, -- Desconto em taxas bancárias - em porcentagem
+			PDM = 10, -- Desconto em veículos PDM - em porcentagem
+			Garage = 10, -- Desconto em garagens - em porcentagem
+			Farmer = { 20, 15 } -- Bônus no Farmer (primeiro valor para venda, segundo para colheita) - em porcentagem
+		}
 	},
 	Prata = {
 		Permission = {
@@ -88,7 +98,17 @@ Groups = {
 		Salary = { 2500 },
 		Backpack = { 15 },
 		Service = true,
-		Block = true
+		Block = true,
+		Multiplier = {
+			Dynamic = 2, -- Bônus de roupas no Dynamic
+			Target = 20, -- Bônus de peso no Target
+			Weight = 5, -- Redução de peso no inventário
+			Work = 7.5, -- Bônus em trabalhos (Trucker, Bus, Towed, Throwing, Grime, Taxi) - em porcentagem
+			Bank = 15, -- Desconto em taxas bancárias - em porcentagem
+			PDM = 10, -- Desconto em veículos PDM - em porcentagem
+			Garage = 10, -- Desconto em garagens - em porcentagem
+			Farmer = { 20, 15 } -- Bônus no Farmer (primeiro valor para venda, segundo para colheita) - em porcentagem
+		}
 	},
 	Bronze = {
 		Permission = {
@@ -98,7 +118,17 @@ Groups = {
 		Salary = { 1250 },
 		Backpack = { 5 },
 		Service = true,
-		Block = true
+		Block = true,
+		Multiplier = {
+			Dynamic = 2, -- Bônus de roupas no Dynamic
+			Target = 20, -- Bônus de peso no Target
+			Weight = 5, -- Redução de peso no inventário
+			Work = 5, -- Bônus em trabalhos (Trucker, Bus, Towed, Throwing, Grime, Taxi) - em porcentagem
+			Bank = 15, -- Desconto em taxas bancárias - em porcentagem
+			PDM = 10, -- Desconto em veículos PDM - em porcentagem
+			Garage = 10, -- Desconto em garagens - em porcentagem
+			Farmer = { 20, 15 } -- Bônus no Farmer (primeiro valor para venda, segundo para colheita) - em porcentagem
+		}
 	},
 	LSPD = {
 		Permission = {
@@ -655,8 +685,8 @@ SkinshopInit = {
 -- BARBERSHOPINIT
 -----------------------------------------------------------------------------------------------------------------------------------------
 BarbershopInit = {
-	mp_m_freemode_01 = { 13,25,0,3,0,-1,-1,-1,-1,13,38,38,0,0,0,0,0.5,0,0,1,0,10,1,0,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,38 },
-	mp_f_freemode_01 = { 13,25,1,3,0,-1,-1,-1,-1,1,38,38,0,0,0,0,1,0,0,1,0,0,0,0,1,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,38 }
+    mp_m_freemode_01 = { 0,25,0,0,0,-1,-1,-1,-1,3,0,0,0,0,0,0,0,0,0,1,0,3,0.5,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0 },
+    mp_f_freemode_01 = { 13,25,1,3,0,-1,-1,-1,-1,42,0,0,0,0,0,0,1,0,0,1,0,0,0,0,1,0.5,0,0,0,0,0,0,0,0,0,0,-0.5,0,-0.7,0,0,0,0,0,0,-0.49,0,0,0}
 }
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- THEME
@@ -782,5 +812,16 @@ Theme = {
 			main = "#efcf2f",
 			mainText = "#120b02"
 		}
-	}
+	},
+	inventory = {
+		missions = true,
+		blueprint = true,
+		slots = {
+			max = 500,
+			default = 25,
+			gemstone = { 1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1,1 },
+			bank = { 100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000,100000 }
+		}
+	},
+	eyeColorAtBarbershop = true
 }

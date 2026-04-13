@@ -1031,6 +1031,7 @@ function vRP.ServiceEnter(source,Passport,Permission,Silenced)
 	Player(source).state[Permission] = Level
 
 	if Groups[Permission].Markers then
+		Player(source).state:set("Markers",true,true)
 		exports.markers:Enter(source,Permission,Level)
 	end
 
@@ -1069,6 +1070,7 @@ function vRP.ServiceLeave(source,Passport,Permission,Silenced)
 	Player(source).state[Permission] = nil
 
 	if Groups[Permission].Markers then
+		Player(source).state:set("Markers",false,true)
 		exports.markers:Exit(source,Passport)
 		TriggerClientEvent("radio:RadioClean",source)
 	end
@@ -2630,7 +2632,6 @@ function vRP.GiveBank(Passport,Amount,Notify)
 		return false
 	end
 
-	exports.bank:AddTransactions(Passport,"entry",Amount)
 	vRP.Query("characters/AddBank",{ Passport = Passport, Bank = Amount })
 
 	local source = vRP.Source(Passport)
@@ -2653,7 +2654,6 @@ function vRP.RemoveBank(Passport,Amount)
 		return false
 	end
 
-	exports.bank:AddTransactions(Passport,"exit",Amount)
 	vRP.Query("characters/RemBank",{ Passport = Passport, Bank = Amount })
 
 	local source = vRP.Source(Passport)

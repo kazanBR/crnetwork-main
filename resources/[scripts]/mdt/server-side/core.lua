@@ -304,13 +304,13 @@ function Creative.User(Passport)
   end
 
   local Total, Records = 0, {}
-  local Consult = exports.oxmysql:execute_async([[ SELECT id, "fine" as Type, Timestamp, Officer, Fine, Arrest, Description, Infractions, Paid, Hour FROM mdt_creative_fines WHERE Passport = ? UNION ALL SELECT id, "arrest" as Type, Timestamp, Officer, Fine, Arrest, Description, Infractions, 0 as Paid, NULL as Hour FROM mdt_creative_arrest WHERE Passport = ? UNION ALL SELECT id, "warning" as Type, Timestamp, Officer, 0 as Fine, 0 as Arrest, Description, NULL as Infractions, 0 as Paid, NULL as Hour FROM mdt_creative_warning WHERE Passport = ? ORDER BY Timestamp DESC ]], { Passport, Passport, Passport })
+  local Consult = exports.oxmysql:execute_async([[ SELECT id, "fine" as Type, Timestamp, Officer, Fine, Arrest, Description, Infractions, Paid FROM mdt_creative_fines WHERE Passport = ? UNION ALL SELECT id, "arrest" as Type, Timestamp, Officer, Fine, Arrest, Description, Infractions, 0 as Paid FROM mdt_creative_arrest WHERE Passport = ? UNION ALL SELECT id, "warning" as Type, Timestamp, Officer, 0 as Fine, 0 as Arrest, Description, NULL as Infractions, 0 as Paid FROM mdt_creative_warning WHERE Passport = ? ORDER BY Timestamp DESC ]], { Passport, Passport, Passport })
 
   for k, v in ipairs(Consult) do
     if not v.Paid or v.Paid == 0 and v.Type == "fine" then
       Total = Total + v.Fine
     end
-    Records[#Records + 1] = { Id = v.id, Type = v.Type, Date = v.Timestamp, Officer = v.Officer, Fine = v.Fine, Arrest = v.Arrest, Description = v.Description, Infractions = v.Infractions, Paid = v.Paid, Hour = v.Hour }
+    Records[#Records + 1] = { Id = v.id, Type = v.Type, Date = v.Timestamp, Officer = v.Officer, Fine = v.Fine, Arrest = v.Arrest, Description = v.Description, Infractions = v.Infractions, Paid = v.Paid }
   end
 
   local Wanted = exports.oxmysql:scalar_async([[ SELECT COUNT(*) FROM mdt_creative_wanted WHERE Passport = ? ]], { Passport })
@@ -453,7 +453,7 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Record(Data)
   local Records = {
-      ["fine"] = "SELECT id, 'fine' as Type, Timestamp, Officer, Fine, Arrest, Description, Paid, Hour, Infractions FROM mdt_creative_fines WHERE id = ?",
+      ["fine"] = "SELECT id, 'fine' as Type, Timestamp, Officer, Fine, Arrest, Description, Paid, Infractions FROM mdt_creative_fines WHERE id = ?",
       ["arrest"] = "SELECT id, 'arrest' as Type, Timestamp, Officer, Officers, Fine, Arrest, Description, Infractions FROM mdt_creative_arrest WHERE id = ?",
       ["warning"] = "SELECT id, 'warning' as Type, Timestamp, Officer, Description FROM mdt_creative_warning WHERE id = ?"
   }
@@ -480,7 +480,7 @@ function Creative.Record(Data)
       Result.Infractions = table.concat(Labels, ", ")
   end
 
-  return { Id = Result.id, Type = Result.Type, Date = Result.Timestamp, Officer = Result.Officer, Officers = Result.Officers, Fine = Result.Fine, Arrest = Result.Arrest, Description = Result.Description, Infractions = Result.Infractions, Paid = Result.Paid, Hour = Result.Hour } 
+  return { Id = Result.id, Type = Result.Type, Date = Result.Timestamp, Officer = Result.Officer, Officers = Result.Officers, Fine = Result.Fine, Arrest = Result.Arrest, Description = Result.Description, Infractions = Result.Infractions, Paid = Result.Paid } 
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PATROL
@@ -632,52 +632,58 @@ end
 -- ARREST
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Arrest(Data)
-  local Passport = Data.Offender
-  local Officer = vRP.Passport(source)
-  local Timestamp = os.time()
+    local source = source
+    local Passport = Data.Offender
+    local Officer = vRP.Passport(source)
+    local Timestamp = os.time()
 
-  if not Data.Infractions or #Data.Infractions == 0 then
-      return
-  end
+    if not Data.Infractions or #Data.Infractions == 0 then
+        return
+    end
 
-  local Articles = exports.oxmysql:query_async(("SELECT Article, `Fine`, `Arrest` FROM `mdt_creative_penalcode_articles` WHERE `id` IN (%s)"):format(string.rep("?,", #Data.Infractions):sub(1, -2)), Data.Infractions)
-  
-  local Fine, Services = 0, 0
-  for _, Article in ipairs(Articles) do
-      Fine = Fine + (Article.Fine or 0)
-      Services = Services + (Article.Arrest or 0)
-  end
+    local Articles = exports.oxmysql:query_async(("SELECT Article, `Fine`, `Arrest` FROM `mdt_creative_penalcode_articles` WHERE `id` IN (%s)"):format(string.rep("?,", #Data.Infractions):sub(1, -2)), Data.Infractions)
+    
+    local Fine, Services = 0, 0
+    for _, Article in ipairs(Articles) do
+        Fine = Fine + (Article.Fine or 0)
+        Services = Services + (Article.Arrest or 0)
+    end
 
-  if Data.ReductionFine and Data.ReductionFine > 0 then
-      Fine = math.floor(Fine * (1 - (Data.ReductionFine / 100)))
-  end
-  if Data.ReductionArrest and Data.ReductionArrest > 0 then
-      Services = math.floor(Services * (1 - (Data.ReductionArrest / 100)))
-  end
+    if Data.ReductionFine and Data.ReductionFine > 0 then
+        Fine = math.floor(Fine * (1 - (Data.ReductionFine / 100)))
+    end
+    if Data.ReductionArrest and Data.ReductionArrest > 0 then
+        Services = math.floor(Services * (1 - (Data.ReductionArrest / 100)))
+    end
 
-  local Description = Data.Description
-  Description = Description:gsub("<script>.-</script>", "")
-  Description = Description:gsub("on%w+=", "data-removed=")
+    local Description = Data.Description
+    Description = Description:gsub("<script>.-</script>", "")
+    Description = Description:gsub("on%w+=", "data-removed=")
 
-  local Infractions = {}
-  for i = 1, #Articles do Infractions[i] = Articles[i].Article end
-  local Arrest = exports.oxmysql:insert_async("INSERT INTO `mdt_creative_arrest` (`Passport`, `Officer`, `Officers`, `Timestamp`, `Infractions`, `Arrest`, `Fine`, `Description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ", { Passport, Officer, Data.OfficersInvolved, Timestamp, table.concat(Infractions, ", "), Services, Fine, Description })
+    local Infractions = {}
+    for i = 1, #Articles do Infractions[i] = Articles[i].Article end
+    local Arrest = exports.oxmysql:insert_async("INSERT INTO `mdt_creative_arrest` (`Passport`, `Officer`, `Officers`, `Timestamp`, `Infractions`, `Arrest`, `Fine`, `Description`) VALUES (?, ?, ?, ?, ?, ?, ?, ?) ", { Passport, Officer, Data.OfficersInvolved, Timestamp, table.concat(Infractions, ", "), Services, Fine, Description })
 
-  if Arrest then
-      if Services > 0 then
-          vRP.InsertPrison(Passport, Services)
+    if Arrest then
+        if Fine > 0 then
+            exports.oxmysql:insert_async("INSERT INTO `mdt_creative_fines` (`Passport`, `Officer`, `Timestamp`, `Infractions`, `Fine`, `Description`, `Paid`, `Arrest`) VALUES (?, ?, ?, ?, ?, ?, 0, NULL)", 
+            { Passport, Officer, Timestamp, json.encode(Data.Infractions), Fine, Description or "" })
+        end
 
-          local Target = vRP.Source(Passport)
-          if Target then
-              Player(Target)["state"]["Prison"] = true
-              TriggerClientEvent("Notify", Target, "Boolingbroke", "Todas as lixeiras do pátio estão disponíveis para <b>vasculhar</b> em troca de redução penal.", "amarelo", 30000)
-          end
-      end
+        if Services > 0 then
+            vRP.InsertPrison(Passport, Services)
 
-      TriggerClientEvent("mdt:Notify", source, "Sucesso", "Prisão efetuada com sucesso.", "verde")
-  end
+            local Target = vRP.Source(Passport)
+            if Target then
+                Player(Target)["state"]["Prison"] = true
+                TriggerClientEvent("Notify", Target, "Boolingbroke", "Todas as lixeiras do pátio estão disponíveis para <b>vasculhar</b> em troca de redução penal.", "amarelo", 30000)
+            end
+        end
 
-  return true
+        TriggerClientEvent("mdt:Notify", source, "Sucesso", "Prisão efetuada com sucesso.", "verde")
+    end
+
+    return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- FINE
@@ -691,8 +697,6 @@ function Creative.Fine(Data)
   local Passport = Data.Offender
   local Officer = vRP.Passport(source)
   local Timestamp = os.time()
-  local Date = os.date("%d/%m/%Y", Timestamp)
-  local Hour = os.date("%H:%M:%S", Timestamp)
 
   local Articles = exports.oxmysql:query_async( ("SELECT `Fine` FROM `mdt_creative_penalcode_articles` WHERE `id` IN (%s)"):format(table.concat(Data.Infractions, ","):gsub("[^,]", "?")), Data.Infractions)
 
@@ -709,7 +713,7 @@ function Creative.Fine(Data)
     Description = Description:gsub("<script>.-</script>", "")
     Description = Description:gsub("on%w+=", "data-removed=")
 
-  exports.oxmysql:insert_async( "INSERT INTO `mdt_creative_fines` (`Passport`, `Officer`, `Timestamp`, `Infractions`, `Fine`, `Description`, `Paid`, `Arrest`, `Date`, `Hour`) VALUES (?, ?, ?, ?, ?, ?, 0, NULL, ?, ?)", { Passport, Officer, Timestamp, json.encode(Data.Infractions), Fine, Description or "", Date, Hour } )
+  exports.oxmysql:insert_async( "INSERT INTO `mdt_creative_fines` (`Passport`, `Officer`, `Timestamp`, `Infractions`, `Fine`, `Description`, `Paid`, `Arrest`) VALUES (?, ?, ?, ?, ?, ?, 0, NULL)", { Passport, Officer, Timestamp, json.encode(Data.Infractions), Fine, Description or "" } )
 
   TriggerClientEvent("mdt:Notify", source, "Sucesso", "Multa aplicada com sucesso.", "verde")
 

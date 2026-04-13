@@ -2,8 +2,6 @@
 -- VRP
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Tunnel = module("vrp","lib/Tunnel")
-local Proxy = module("vrp","lib/Proxy")
-vRP = Proxy.getInterface("vRP")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CONNECTION
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -12,107 +10,79 @@ Tunnel.bindInterface("markers",Creative)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
-local Timers = {}
 local Players = {}
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- USERS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Users()
-    local Markers = {}
+	local Markers = {}
+	for TargetSource,v in pairs(Players) do
+		local Ped = GetPlayerPed(TargetSource)
+		if Ped and DoesEntityExist(Ped) then
+			Markers[TargetSource] = {
+				Level = v.Level,
+				Permission = v.Permission,
+				Coords = GetEntityCoords(Ped)
+			}
+		else
+			Players[TargetSource] = nil
+		end
+	end
 
-    for Source,v in pairs(Players) do
-        local playerTimer = Timers[v.Passport]
-        if playerTimer and not playerTimer.Stop and os.time() >= playerTimer.Timer then
-            exports.markers:Exit(Source,v.Passport)
-        else
-            local Ped = GetPlayerPed(Source)
-            if DoesEntityExist(Ped) then
-                Markers[Source] = {
-                    Vehicle = GetVehiclePedIsIn(Ped),
-                    Coords = GetEntityCoords(Ped),
-                    Permission = v.Permission,
-                    Level = v.Level
-                }
-            end
-        end
-    end
-
-    return Markers
+	return Markers
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ENTER
 -----------------------------------------------------------------------------------------------------------------------------------------
-exports("Enter",function(source,Permission,Level,Passport,Timed)
-	if not Players[source] then
-		Players[source] = {
-			Passport = Passport,
-			Permission = Permission,
-			Level = vRP.NameHierarchy(Permission,Level)
-		}
+exports("Enter",function(source,Permission,Level)
+	if not source or not Permission then
+		return false
+	end
 
-		if Timed then
-			Timers[Passport] = {
-				Permission = Permission,
-				Timer = os.time() + Timed,
-				Level = Level or 1,
-				Stop = false
-			}
-		end
+	if Players[source] then
+		Players[source].Level = Level or Players[source].Level
+		return true
+	end
 
-		local Service = vRP.NumPermission("Policia")
-		for _,Sources in pairs(Service) do
-			TriggerClientEvent("markers:Add",Sources,source,Players[source])
-		end
+	Players[source] = {
+		Permission = Permission,
+		Level = Level or 1
+	}
 
-		TriggerClientEvent("markers:Full",source,Players)
-	else
-		local Data = Timers[Passport]
-		if Timed and Data then
-			local CurrentTimer = os.time()
-			if CurrentTimer > Data.Timer then
-				Data.Timer = CurrentTimer + Timed
-			else
-				Data.Timer = Data.Timer + Timed
-			end
+	for TargetSource in pairs(Players) do
+		if TargetSource ~= source then
+			TriggerClientEvent("markers:Add",TargetSource,source,Players[source])
 		end
 	end
+
+	TriggerClientEvent("markers:Full",source,Players)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- EXIT
 -----------------------------------------------------------------------------------------------------------------------------------------
-exports("Exit",function(source,Passport)
-	if Players[source] then
+exports("Exit",function(source)
+	if source and Players[source] then
 		Players[source] = nil
 
-		local Service = vRP.NumPermission("Policia")
-		for _,Sources in pairs(Service) do
-			TriggerClientEvent("markers:Remove",Sources,source)
+		for TargetSource in pairs(Players) do
+			TriggerClientEvent("markers:Remove",TargetSource,source)
 		end
 	end
-
-	local Data = Timers[Passport]
-	if Data then
-		local CurrentTimer = os.time()
-		if Data.Timer > CurrentTimer then
-			Data.Stop = true
-			Data.Timer = Data.Timer - CurrentTimer
-		else
-			Timers[Passport] = nil
-		end
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- MARKERS:EXIT
+-----------------------------------------------------------------------------------------------------------------------------------------
+AddEventHandler("markers:Exit",function(source)
+	local User = source and Player(source)
+	if User and User.state.Markers then
+		User.state.Markers = nil
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DISCONNECT
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("Disconnect",function(Passport,source)
-	exports.markers:Exit(source,Passport)
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- CONNECT
------------------------------------------------------------------------------------------------------------------------------------------
-AddEventHandler("Connect",function(Passport,source)
-	local Data = Timers[Passport]
-	if Data then
-		exports.markers:Enter(source,Data.Permission,Data.Level,Passport,Data.Timer)
+	if source and Players[source] then
+		exports.markers:Exit(source)
 	end
 end)

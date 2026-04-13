@@ -13,535 +13,651 @@ Tunnel.bindInterface("bank",Creative)
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Active = {}
-local Cooldown = 0
 -----------------------------------------------------------------------------------------------------------------------------------------
--- THREADACTIVES
+-- TRANSACTIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
-CreateThread(function()
-	while true do
-		if os.time() >= Cooldown then
-			Cooldown = os.time() + 3600
-			vRP.Update("investments/Actives")
+function Transactions(Passport,Limit,Before)
+	if not Passport then
+		return {}
+	end
+
+	local Params = { Passport }
+	local Query = "SELECT id,Type,Price,Timestamp,Reference FROM transactions WHERE Passport = ?"
+
+	if Before then
+		Query = Query.." AND Timestamp < ?"
+		Params[#Params + 1] = Before
+	end
+
+	Query = Query.." ORDER BY Timestamp DESC LIMIT ?"
+	Params[#Params + 1] = tonumber(Limit) or 6
+
+	local Consult = exports.oxmysql:query_async(Query,Params)
+	if not Consult or #Consult <= 0 then
+		return {}
+	end
+
+	local Result = {}
+	for _,Row in ipairs(Consult) do
+		local Reference = Row.Reference
+		if Row.Type == "Invoice" and type(Reference) == "string" then
+			local Ok,Decoded = pcall(json.decode,Reference)
+			if Ok and Decoded then
+				Reference = Decoded
+			end
 		end
 
-		Wait(1000)
+		Result[#Result + 1] = {
+			Id = Row.id,
+			Type = Row.Type,
+			Value = Row.Price,
+			Date = Row.Timestamp,
+			Reference = Reference
+		}
 	end
-end)
+
+	return Result
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- TRANSACTIONS
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Transactions(Before)
+	local source = source
+	local Passport = vRP.Passport(source)
+	return Passport and Transactions(Passport,10,Before) or {}
+end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- HOME
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Home()
 	local source = source
 	local Passport = vRP.Passport(source)
-	if Passport then
-		local Yield = 0
-		local Identity = vRP.Identity(Passport)
-
-		local InvestmentCheck = vRP.Query("investments/Check",{ Passport = Passport })
-		if InvestmentCheck[1] then
-			Yield = InvestmentCheck[1].Monthly
-		end
-
-		return {
-			yield = Yield,
-			balance = Identity.Bank,
-			cardnumber = "0000 0000 0000 "..1000 + Passport,
-			transactions = Transactions(Passport),
-			dependents = Dependents(Passport)
-		}
-	end
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- ADDDEPENDENTS
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.AddDependents(OtherPassport)
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] and OtherPassport ~= Passport then
-		Active[Passport] = true
-
-		local Check = vRP.Query("dependents/Check",{ Passport = Passport, Dependent = OtherPassport })
-		if not Check[1] then
-			local OtherSource = vRP.Source(OtherPassport)
-			if OtherSource then
-				if vRP.Request(OtherSource,"Banco","<b>"..vRP.FullName(Passport).."</b> deseja convida-lo para sua lista de dependentes bancário, você aceita esse convite?") then
-					vRP.Query("dependents/Add",{ Passport = Passport, Dependent = OtherPassport, Name = vRP.FullName(OtherPassport) })
-					vRP.GiveItem(OtherPassport,"creditcard-"..Passport,1,true)
-					Active[Passport] = nil
-
-					return vRP.FullName(OtherPassport)
-				end
-			end
-		end
-
-		Active[Passport] = nil
+	if not Passport then
+		return false
 	end
 
-	return false
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- REMOVEDEPENDENTS
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.RemoveDependents(OtherPassport)
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] then
-		Active[Passport] = true
-
-		local Consult = vRP.Query("dependents/Check",{ Passport = Passport, Dependent = OtherPassport })
-		if Consult[1] then
-			vRP.Query("dependents/Remove",{ Passport = Passport, Dependent = OtherPassport })
-			Active[Passport] = nil
-
-			return true
-		end
-
-		Active[Passport] = nil
-	end
-
-	return false
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- TRANSACTIONHISTORIY
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.TransactionHistory()
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport then
-		return Transactions(Passport,50)
-	end
+	return {
+		Balance = vRP.GetBank(Passport) or 0,
+		Transactions = Transactions(Passport),
+		CardNumber = string.format("0000 0000 0000 %04d",1000 + Passport)
+	}
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DEPOSIT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Deposit(Valuation)
+function Creative.Deposit(Value)
 	local source = source
+	local Valuation = parseInt(Value)
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] and parseInt(Valuation) > 0 then
-		Active[Passport] = true
-
-		if vRP.ConsultItem(Passport,"dollar",Valuation) and vRP.TakeItem(Passport,"dollar",Valuation) then
-			vRP.GiveBank(Passport,Valuation)
-		end
-
-		Active[Passport] = nil
-
-		return {
-			balance = vRP.Identity(Passport).Bank,
-			transactions = Transactions(Passport)
-		}
+	if not Passport or Valuation <= 0 or Active[Passport] then
+		return false
 	end
+
+	Active[Passport] = true
+
+	local Item = "dollar"
+	local HasItem = vRP.ConsultItem(Passport,Item,Valuation)
+	if HasItem and vRP.TakeItem(Passport,Item,Valuation) then
+		vRP.GiveBank(Passport,Valuation)
+		exports.bank:AddTransactions(Passport,"Deposit",Valuation)
+	end
+
+	Active[Passport] = nil
+
+	return {
+		Balance = vRP.GetBank(Passport) or 0,
+		Transactions = Transactions(Passport)
+	}
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- WITHDRAW
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Withdraw(Valuation)
+function Creative.Withdraw(Value)
 	local source = source
+	local Valuation = parseInt(Value)
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] and vRP.GetBank(Passport) >= Valuation then
-		Active[Passport] = true
-
-		if not exports.bank:CheckTaxs(Passport) and not exports.bank:CheckFines(Passport) and vRP.WithdrawCash(Passport,Valuation) then
-			Active[Passport] = nil
-		end
-
-		return {
-			balance = vRP.Identity(Passport).Bank,
-			transactions = Transactions(Passport)
-		}
+	if not Passport or Valuation <= 0 or Active[Passport] then
+		return false
 	end
+
+	Active[Passport] = true
+
+	if exports.bank:CheckTaxes(Passport) or exports.bank:CheckFines(Passport) then
+		Active[Passport] = nil
+		return false
+	end
+
+	local Bank = vRP.GetBank(Passport) or 0
+	if Bank < Valuation then
+		Active[Passport] = nil
+		return false
+	end
+
+	if not vRP.WithdrawCash(Passport,Valuation) then
+		Active[Passport] = nil
+		return false
+	end
+
+	exports.bank:AddTransactions(Passport,"Withdraw",Valuation)
+	Active[Passport] = nil
+
+	return {
+		Balance = Bank - Valuation,
+		Transactions = Transactions(Passport)
+	}
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- TRANSFER
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Transfer(OtherPassport,Valuation)
+function Creative.Transfer(TargetPassport,Value)
 	local source = source
+	local Valuation = parseInt(Value)
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] and OtherPassport ~= Passport and parseInt(Valuation) > 0 and not exports.bank:CheckTaxs(Passport) and not exports.bank:CheckFines(Passport) then
-		Active[Passport] = true
-
-		if vRP.Identity(OtherPassport) and vRP.PaymentBank(Passport,Valuation,true) then
-			vRP.GiveBank(OtherPassport,Valuation)
-		end
-
-		Active[Passport] = nil
+	local TargetPassport = parseInt(TargetPassport)
+	if not Passport or Passport == TargetPassport or Valuation <= 0 or Active[Passport] then
+		return false
 	end
+
+	Active[Passport] = true
+
+	if exports.bank:CheckTaxes(Passport) or exports.bank:CheckFines(Passport) then
+		Active[Passport] = nil
+		return false
+	end
+
+	if vRP.PaymentBank(Passport,Valuation) then
+		vRP.GiveBank(TargetPassport,Valuation)
+
+		local FromName = vRP.FullName(Passport)
+		local ToName = vRP.FullName(TargetPassport)
+
+		exports.bank:AddTransactions(Passport,"TransferTo",Valuation,("#%s - %s"):format(TargetPassport,ToName))
+		exports.bank:AddTransactions(TargetPassport,"TransferMe",Valuation,("#%s - %s"):format(Passport,FromName))
+	end
+
+	Active[Passport] = nil
 
 	return {
-		balance = vRP.Identity(Passport).Bank,
-		transactions = Transactions(Passport)
+		Balance = vRP.GetBank(Passport) or 0,
+		Transactions = Transactions(Passport)
 	}
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- TRANSACTIONS
------------------------------------------------------------------------------------------------------------------------------------------
-function Transactions(Passport,Limit)
-	local Transaction = {}
-	local TransactionList = vRP.Query("transactions/List",{ Passport = Passport, Limit = Limit or 4 })
-	if #TransactionList > 0 then
-		for _,v in pairs(TransactionList) do
-			Transaction[#Transaction + 1] = {
-				type = v.Type,
-				date = v.Date,
-				value = v.Price,
-				balance = v.Balance
-			}
-		end
-	end
-
-	return Transaction
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- DEPENDENTS
------------------------------------------------------------------------------------------------------------------------------------------
-function Dependents(Passport)
-	local Dependents = {}
-	local DependentList = vRP.Query("dependents/List",{ Passport = Passport })
-	if #DependentList > 0 then
-		for _,v in pairs(DependentList) do
-			Dependents[#Dependents + 1] = {
-				name = v.Name,
-				passport = v.Dependent
-			}
-		end
-	end
-
-	return Dependents
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- FINES
------------------------------------------------------------------------------------------------------------------------------------------
-function Fines(Passport)
-	local Table = {}
-	local Consult = exports.oxmysql:query_async("SELECT id,Officer,Fine,Date,Hour,Description FROM mdt_creative_fines WHERE Passport = ? AND Paid = 0",{ Passport })
-	if Consult[1] then
-		for _,v in ipairs(Consult) do
-			table.insert(Table,{
-				id = v.id,
-				name = ("Multa recebida por %s"):format(vRP.FullName(v.Officer)),
-				value = v.Fine,
-				date = v.Date,
-				hour = v.Hour,
-				message = v.Description
-			})
-		end
-	end
-
-	return Table
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- FINELIST
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.FineList()
-	local source = source
-	local Passport = vRP.Passport(source)
-	if not Passport then
-		return {}
-	end
-
-	return Fines(Passport)
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- FINEPAYMENT
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.FinePayment(Number)
-	local source = source
-	local Passport = vRP.Passport(source)
-	if not Passport or Active[Passport] then
-		return false
-	end
-
-	Active[Passport] = true
-
-	local Success = false
-	local Consult = exports.oxmysql:single_async("SELECT id,Fine FROM mdt_creative_fines WHERE Passport = @Passport AND Paid = 0 AND id = @Number LIMIT 1",{ Passport = Passport, Number = Number })
-	if Consult and vRP.PaymentBank(Passport,Consult.Fine) then
-		exports.oxmysql:update_async("UPDATE mdt_creative_fines SET Paid = 1 WHERE Passport = @Passport AND id = @Number",{ Passport = Passport, Number = Number })
-		Success = true
-	end
-
-	Active[Passport] = nil
-
-	return Success
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- FINEPAYMENTALL
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.FinePaymentAll()
-	local source = source
-	local Passport = vRP.Passport(source)
-	if not Passport or Active[Passport] then
-		return {}
-	end
-
-	Active[Passport] = true
-
-	local Consult = exports.oxmysql:query_async("SELECT id, Fine FROM mdt_creative_fines WHERE Passport = @Passport AND Paid = 0",{ Passport = Passport })
-	for _,v in ipairs(Consult or {}) do
-		if vRP.PaymentBank(Passport,v.Fine) then
-			exports.oxmysql:update_async("UPDATE mdt_creative_fines SET Paid = 1 WHERE Passport = @Passport AND id = @id",{ Passport = Passport, id = v.id })
-		end
-	end
-
-	Active[Passport] = nil
-
-	return Fines(Passport)
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- TAXS
------------------------------------------------------------------------------------------------------------------------------------------
-function Taxs(Passport)
-	local Taxs = {}
-	local TaxList = vRP.Query("taxs/List",{ Passport = Passport })
-	for _,v in ipairs(TaxList or {}) do
-		table.insert(Taxs,{
-			id = v.id,
-			name = v.Name,
-			value = v.Price,
-			date = v.Date,
-			hour = v.Hour,
-			message = v.Message
-		})
-	end
-
-	return Taxs
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- TAXLIST
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.TaxList()
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport then
-		return Taxs(Passport)
-	end
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- TAXPAYMENT
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.TaxPayment(Number)
-	local source = source
-	local Passport = vRP.Passport(source)
-	if not Passport or Active[Passport] then
-		return false
-	end
-
-	Active[Passport] = true
-
-	local Success = false
-	local Consult = vRP.SingleQuery("taxs/Check",{ Passport = Passport, id = Number })
-	if Consult and vRP.PaymentBank(Passport,Consult.Price) then
-		vRP.Query("taxs/Remove",{ Passport = Passport, id = Number })
-		Success = true
-	end
-
-	Active[Passport] = nil
-
-	return Success
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- INVOICELIST
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.InvoiceList()
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport then
-		return Invoices(Passport)
-	end
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- MAKEINVOICE
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.MakeInvoice(OtherPassport,Valuation,Reason)
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] and OtherPassport ~= Passport and parseInt(Valuation) > 0 then
-		Active[Passport] = true
-
-		local OtherSource = vRP.Source(OtherPassport)
-		if OtherSource then
-			if vRP.Request(OtherSource,"Banco","<b>"..vRP.FullName(Passport).."</b> lhe enviou uma fatura de <b>R$"..Dotted(Valuation).."</b>, deseja aceita-la?") then
-				vRP.Query("invoices/Add",{ Passport = OtherPassport, Received = Passport, Type = "received", Reason = Reason, Holder = vRP.FullName(Passport), Price = Valuation })
-				vRP.Query("invoices/Add",{ Passport = Passport, Received = OtherPassport, Type = "sent", Reason = Reason, Holder = "Você", Price = Valuation })
-				Active[Passport] = nil
-
-				return Invoices(Passport)
-			end
-		end
-
-		Active[Passport] = nil
-	end
-
-	return false
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- INVOICEPAYMENT
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.InvoicePayment(Number)
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] then
-		Active[Passport] = true
-
-		local Invoice = vRP.Query("invoices/Check",{ id = Number })
-		if Invoice[1] then
-			if vRP.PaymentBank(Passport,Invoice[1].Price) then
-				vRP.GiveBank(Invoice[1].Received,Invoice[1].Price)
-				vRP.Query("invoices/Remove",{ id = Number })
-				Active[Passport] = nil
-
-				return true
-			end
-		end
-
-		Active[Passport] = nil
-	end
-
-	return false
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- INVOICES
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Invoices(Passport)
-	local Invoices = {}
-	local InvoiceList = vRP.Query("invoices/List",{ Passport = Passport })
-	if #InvoiceList > 0 then
-		for _,v in pairs(InvoiceList) do
-			local Type = v.Type
-
-			if not Invoices[Type] then
-				Invoices[Type] = {}
-			end
-
-			Invoices[Type][#Invoices[Type] + 1] = {
-				id = v.id,
-				reason = v.Reason,
-				holder = v.Holder,
-				value = v.Price
-			}
-		end
+	if not Passport then
+		return {}
 	end
 
-	return Invoices
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- INVESTMENTS
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Investments()
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport then
-		local Total,Brute,Liquid,Deposit = 0,0,0,0
-		local InvestmentCheck = vRP.Query("investments/Check",{ Passport = Passport })
-		if InvestmentCheck[1] then
-			Total = InvestmentCheck[1].Deposit + InvestmentCheck[1].Liquid
-			Brute = InvestmentCheck[1].Deposit
-			Liquid = InvestmentCheck[1].Liquid
-			Deposit = InvestmentCheck[1].Deposit
-		end
+	local Result = {}
+	local Consult = exports.oxmysql:query_async("SELECT id,Passport,Received,Reason,Price,Timestamp FROM invoices WHERE Passport = ? OR Received = ? ORDER BY Timestamp DESC",{ Passport,Passport })
+	if not Consult or #Consult == 0 then
+		return Result
+	end
 
-		return {
-			total = Total,
-			brute = Brute,
-			liquid = Liquid,
-			deposit = Deposit
+	for Number = 1,#Consult do
+		local Row = Consult[Number]
+		local IsSender = Row.Passport == Passport
+		local OtherPassport = IsSender and Row.Received or Row.Passport
+
+		Result[#Result + 1] = {
+			Id = Row.id,
+			Date = Row.Timestamp,
+			Reason = Row.Reason,
+			Holder = {
+				Passport = OtherPassport,
+				Name = vRP.FullName(OtherPassport)
+			},
+			Value = Row.Price,
+			Mode = IsSender and "Sent" or "Received"
 		}
 	end
+
+	return Result
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INVEST
+-- INVOICES
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Invest(Valuation)
+function Creative.Invoices()
 	local source = source
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] and parseInt(Valuation) > 0 then
-		Active[Passport] = true
-
-		if vRP.PaymentBank(Passport,Valuation,true) then
-			local InvestmentCheck = vRP.Query("investments/Check",{ Passport = Passport })
-			if InvestmentCheck[1] then
-				vRP.Update("investments/Invest",{ Passport = Passport, Price = Valuation })
-			else
-				vRP.Query("investments/Add",{ Passport = Passport, Deposit = Valuation })
-			end
-
-			Active[Passport] = nil
-
-			return true
-		end
-
-		Active[Passport] = nil
-	end
-
-	return false
+	return Passport and Invoices(Passport) or {}
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INVESTRESCUE
+-- CREATEINVOICE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.InvestRescue()
+function Creative.CreateInvoice(TargetPassport,Value,Reason)
 	local source = source
+	local Valuation = parseInt(Value)
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] then
-		Active[Passport] = true
-
-		local InvestmentCheck = vRP.Query("investments/Check",{ Passport = Passport })
-		if InvestmentCheck[1] then
-			local Valuation = InvestmentCheck[1].Deposit + InvestmentCheck[1].Liquid
-			vRP.Query("investments/Remove",{ Passport = Passport })
-			vRP.GiveBank(Passport,Valuation)
-		end
-
-		Active[Passport] = nil
+	local TargetPassport = parseInt(TargetPassport)
+	if not Passport or not TargetPassport or Passport == TargetPassport or Valuation <= 0 or Active[Passport] then
+		return false
 	end
+
+	local TargetSource = vRP.Source(TargetPassport)
+	if not TargetSource then
+		return false
+	end
+
+	Active[Passport] = true
+
+	local FullName = vRP.FullName(Passport)
+	local Message = ("<b>%s</b> lhe enviou uma fatura de <b>R$%s</b>, deseja aceitá-la?"):format(FullName,Dotted(Valuation))
+	if not vRP.Request(TargetSource,"Banco",Message) then
+		Active[Passport] = nil
+		return false
+	end
+
+	local InvoiceId = exports.oxmysql:insert_async("INSERT INTO invoices (Passport,Received,Reason,Price,Timestamp) VALUES (?,?,?,?,?)",{ Passport,TargetPassport,Reason or "Sem descrição",Valuation,os.time() })
+
+	Active[Passport] = nil
+
+	return {
+		Id = InvoiceId,
+		Holder = {
+			Passport = TargetPassport,
+			Name = vRP.FullName(TargetPassport)
+		}
+	}
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PAYINVOICE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.PayInvoice(Number)
+	local source = source
+	local Number = parseInt(Number)
+	local Passport = vRP.Passport(source)
+	if not Passport or Active[Passport] then
+		return false
+	end
+
+	Active[Passport] = true
+
+	local Invoice = exports.oxmysql:single_async("SELECT id,Passport,Received,Price FROM invoices WHERE id = ? LIMIT 1",{ Number })
+	if not Invoice then
+		Active[Passport] = nil
+		return false
+	end
+
+	if Invoice.Received ~= Passport then
+		Active[Passport] = nil
+		return false
+	end
+
+	if not vRP.PaymentBank(Passport,Invoice.Price) then
+		Active[Passport] = nil
+		return false
+	end
+
+	exports.bank:AddTransactions(Passport,"InvoiceTo",Invoice.Price,("#%s - %s"):format(Invoice.Passport,vRP.FullName(Invoice.Passport)))
+	exports.bank:AddTransactions(Invoice.Passport,"InvoiceMe",Invoice.Price,("#%s - %s"):format(Passport,vRP.FullName(Passport)))
+	exports.oxmysql:query_async("DELETE FROM invoices WHERE id = ?",{ Number })
+	vRP.GiveBank(Invoice.Passport,Invoice.Price)
+	Active[Passport] = nil
 
 	return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- ADDTAXS
+-- CANCELINVOICE
 -----------------------------------------------------------------------------------------------------------------------------------------
-exports("AddTaxs",function(Passport,source,Name,Valuation,Message)
-	local Valuation = Valuation * 0.1
-	for Permission,Multiplier in pairs({ Ouro = 0.65, Prata = 0.75, Bronze = 0.85 }) do
-		if vRP.HasService(Passport,Permission) then
-			Valuation = Valuation * Multiplier
+function Creative.CancelInvoice(Number)
+	local source = source
+	local Number = parseInt(Number)
+	local Passport = vRP.Passport(source)
+	if not Passport or Active[Passport] then
+		return false
+	end
+
+	Active[Passport] = true
+
+	local Invoice = exports.oxmysql:single_async("SELECT id,Passport,Received FROM invoices WHERE id = ? LIMIT 1",{ Number })
+	if not Invoice then
+		Active[Passport] = nil
+		return false
+	end
+
+	if Invoice.Passport ~= Passport then
+		Active[Passport] = nil
+		return false
+	end
+
+	exports.oxmysql:query_async("DELETE FROM invoices WHERE id = ?",{ Number })
+	Active[Passport] = nil
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- FINES
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Fines(Passport)
+	if not Passport then
+		return {}
+	end
+
+	local Result = {}
+	local Consult = exports.oxmysql:query_async("SELECT id,Officer,Fine,Timestamp,Description,Infractions FROM mdt_creative_fines WHERE Passport = ? AND Paid = 0 ORDER BY Timestamp DESC",{ Passport })
+	if not Consult or #Consult == 0 then
+		return Result
+	end
+
+	for Number = 1,#Consult do
+		local Row = Consult[Number]
+
+		Result[#Result + 1] = {
+			Id = Row.id,
+			Officer = {
+				Passport = Row.Officer,
+				Name = vRP.FullName(Row.Officer)
+			},
+			Value = Row.Fine,
+			Date = Row.Timestamp,
+			Description = Row.Description,
+			Infractions = Row.Infractions
+		}
+	end
+
+	return Result
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- FINES
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Fines()
+	local source = source
+	local Passport = vRP.Passport(source)
+	return Passport and Fines(Passport) or {}
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- GETFINE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.GetFine(Number)
+	local source = source
+	local Number = parseInt(Number)
+	local Passport = vRP.Passport(source)
+	if not Passport then
+		return false
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT id,Passport,Officer,Fine,Timestamp,Description,Infractions FROM mdt_creative_fines WHERE id = ? LIMIT 1",{ Number })
+	if not Consult or Consult.Passport ~= Passport then
+		return false
+	end
+
+	return {
+		Id = Consult.id,
+		Officer = {
+			Passport = Consult.Officer,
+			Name = vRP.FullName(Consult.Officer)
+		},
+		Value = Consult.Fine,
+		Date = Consult.Timestamp,
+		Description = Consult.Description,
+		Infractions = Consult.Infractions
+	}
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PAYFINE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.PayFine(Number)
+	local source = source
+	local Number = parseInt(Number)
+	local Passport = vRP.Passport(source)
+	if not Passport or Active[Passport] then
+		return false
+	end
+
+	Active[Passport] = true
+
+	local Consult = exports.oxmysql:single_async("SELECT id,Fine FROM mdt_creative_fines WHERE id = ? AND Passport = ? AND Paid = 0 LIMIT 1",{ Number,Passport })
+	if not Consult then
+		Active[Passport] = nil
+		return false
+	end
+
+	if not vRP.PaymentBank(Passport,Consult.Fine) then
+		Active[Passport] = nil
+		return false
+	end
+
+	exports.oxmysql:update_async("UPDATE mdt_creative_fines SET Paid = 1 WHERE id = ? AND Passport = ?",{ Number,Passport })
+	exports.bank:AddTransactions(Passport,"Fine",Consult.Fine,Number)
+
+	local ConsultFine = exports.oxmysql:single_async("SELECT Permission FROM mdt_creative_fines WHERE id = ?",{ Number })
+	if ConsultFine and ConsultFine.Permission then
+		local TargetPermission = ConsultFine.Permission
+		if TargetPermission == "Policia" then
+			TargetPermission = "DPD"
+		end
+		vRP.PermissionsUpdate(TargetPermission,"Bank","+",Consult.Fine)
+	end
+
+	Active[Passport] = nil
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PAYALLFINES
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.PayAllFines()
+	local Passport = vRP.Passport(source)
+	if not Passport or Active[Passport] then
+		return false
+	end
+
+	Active[Passport] = true
+
+	local Consult = exports.oxmysql:query_async("SELECT id,Fine FROM mdt_creative_fines WHERE Passport = ? AND Paid = 0 ORDER BY Timestamp ASC",{ Passport })
+	if not Consult or #Consult == 0 then
+		Active[Passport] = nil
+		return false
+	end
+
+	for Number = 1,#Consult do
+		local Row = Consult[Number]
+		if not vRP.PaymentBank(Passport,Row.Fine) then
+			break
+		end
+
+		exports.oxmysql:update_async("UPDATE mdt_creative_fines SET Paid = 1 WHERE id = ? AND Passport = ?",{ Row.id,Passport })
+		exports.bank:AddTransactions(Passport,"Fine",Row.Fine,Row.id)
+
+		local ConsultFine = exports.oxmysql:single_async("SELECT Permission FROM mdt_creative_fines WHERE id = ?",{ Row.id })
+		if ConsultFine and ConsultFine.Permission then
+			local TargetPermission = ConsultFine.Permission
+			if TargetPermission == "Policia" then
+				TargetPermission = "DPD"
+			end
+			vRP.PermissionsUpdate(TargetPermission,"Bank","+",Row.Fine)
 		end
 	end
 
-	if Valuation > 1 then
-		vRP.Query("taxs/Add",{ Passport = Passport, Name = Name, Date = os.date("%d/%m/%Y"), Hour = os.date("%H:%M"), Price = Valuation, Message = Message })
+	Active[Passport] = nil
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- TAXS
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Taxes(Passport)
+	if not Passport then
+		return {}
 	end
+
+	local Result = {}
+	local Consult = exports.oxmysql:query_async("SELECT id,Name,Price,Timestamp,Description FROM taxes WHERE Passport = ? ORDER BY Timestamp DESC",{ Passport })
+	if not Consult or #Consult == 0 then
+		return Result
+	end
+
+	for Number = 1,#Consult do
+		local Row = Consult[Number]
+
+		Result[#Result + 1] = {
+			Id = Row.id,
+			Name = Row.Name,
+			Value = Row.Price,
+			Date = Row.Timestamp,
+			Description = Row.Description
+		}
+	end
+
+	return Result
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- TAXES
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Taxes()
+	local source = source
+	local Passport = vRP.Passport(source)
+	return Passport and Taxes(Passport) or {}
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PAYTAX
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.PayTax(Number)
+	local source = source
+	local Number = parseInt(Number)
+	local Passport = vRP.Passport(source)
+	if not Passport or Active[Passport] then
+		return false
+	end
+
+	Active[Passport] = true
+
+	local Consult = exports.oxmysql:single_async("SELECT id,Name,Price FROM taxes WHERE id = ? AND Passport = ? LIMIT 1",{ Number,Passport })
+	if not Consult then
+		Active[Passport] = nil
+		return false
+	end
+
+	if not vRP.PaymentBank(Passport,Consult.Price) then
+		Active[Passport] = nil
+		return false
+	end
+
+	exports.oxmysql:query_async("DELETE FROM taxes WHERE id = ? AND Passport = ?",{ Number,Passport })
+	exports.bank:AddTransactions(Passport,"Tax",Consult.Price,Consult.Name)
+	Active[Passport] = nil
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- PAYALLTAXES
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.PayAllTaxes()
+	local source = source
+	local Passport = vRP.Passport(source)
+	if not Passport or Active[Passport] then
+		return false
+	end
+
+	Active[Passport] = true
+
+	local Consult = exports.oxmysql:query_async("SELECT id,Name,Price FROM taxes WHERE Passport = ?",{ Passport })
+	if not Consult or #Consult == 0 then
+		Active[Passport] = nil
+		return false
+	end
+
+	local Total = 0
+	for _,v in ipairs(Consult) do
+		Total = Total + v.Price
+	end
+
+	if not vRP.PaymentBank(Passport,Total) then
+		Active[Passport] = nil
+		return false
+	end
+
+	exports.oxmysql:query_async("DELETE FROM taxes WHERE Passport = ?",{ Passport })
+
+	for _,v in ipairs(Consult) do
+		exports.bank:AddTransactions(Passport,"Tax",v.Price,v.Name)
+	end
+
+	Active[Passport] = nil
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ADDTAXES
+-----------------------------------------------------------------------------------------------------------------------------------------
+exports("AddTaxes",function(Passport,Name,Valuation,Description)
+	if not Passport or not Valuation or Valuation <= 0 then
+		return false
+	end
+
+	local Price = Valuation * 0.1
+	local Discount = 1.0
+
+	for GroupName,GroupData in pairs(Groups) do
+		if GroupData.Multiplier and GroupData.Multiplier.Bank then
+			if vRP.HasGroup(Passport,GroupName) then
+				Discount = math.min(Discount,1 - (GroupData.Multiplier.Bank / 100))
+			end
+		end
+	end
+
+	Price = Price * Discount
+
+	if Price < 1 then
+		return false
+	end
+
+	exports.oxmysql:insert_async("INSERT INTO taxes (Passport,Name,Timestamp,Price,Description) VALUES (?,?,?,?,?)",{ Passport,Name,os.time(),math.floor(Price),Description })
+
+	return true
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- CHECKTAXS
+-- CHECKTAXES
 -----------------------------------------------------------------------------------------------------------------------------------------
-exports("CheckTaxs",function(Passport)
-	local Passport = Passport
+exports("CheckTaxes",function(Passport)
+	if not Passport then
+		return false
+	end
+
 	local source = vRP.Source(Passport)
-	if Passport and source and exports.oxmysql:single_async("SELECT * FROM taxs WHERE Passport = ? AND CURDATE() >= DATE_ADD(STR_TO_DATE(`Date`,'%d/%m/%Y'),INTERVAL 1 DAY) LIMIT 1",{ Passport }) then
+	if not source then
+		return false
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT 1 FROM taxes WHERE Passport = ? AND (Timestamp + 86400) < UNIX_TIMESTAMP() LIMIT 1",{ Passport })
+	if Consult then
 		TriggerClientEvent("Notify",source,"Impostos","Você possui débitos bancários.","amarelo",5000)
 		return true
 	end
 
 	return false
 end)
+
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CHECKFINES
 -----------------------------------------------------------------------------------------------------------------------------------------
 exports("CheckFines",function(Passport)
-	local Passport = Passport
+	if not Passport then
+		return false
+	end
+
 	local source = vRP.Source(Passport)
-	if Passport and source and exports.oxmysql:single_async("SELECT * FROM mdt_creative_fines WHERE Passport = ? AND (Timestamp + 86400) < UNIX_TIMESTAMP() AND Paid = 0 LIMIT 1",{ Passport }) then
+	if not source then
+		return false
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT 1 FROM mdt_creative_fines WHERE Passport = ? AND Paid = 0 AND (Timestamp + 86400) < UNIX_TIMESTAMP() LIMIT 1",{ Passport })
+	if Consult then
 		TriggerClientEvent("Notify",source,"Multas","Você possui débitos bancários.","amarelo",5000)
 		return true
 	end
 
 	return false
 end)
+
 -----------------------------------------------------------------------------------------------------------------------------------------
--- ADDTAXS
+-- ADDTRANSACTIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
-exports("AddTransactions",function(Passport,Type,Valuation)
-	vRP.Query("transactions/Add",{ Passport = Passport, Type = Type, Date = os.date("%d/%m/%Y"), Price = Valuation, Balance = vRP.GetBank(Passport) })
+exports("AddTransactions",function(Passport,Type,Price,Reference)
+	exports.oxmysql:insert_async("INSERT INTO transactions (Passport,Type,Price,Timestamp,Reference) VALUES (@Passport,@Type,@Price,@Timestamp,@Reference)",{ Passport = Passport, Type = Type, Price = Price, Timestamp = os.time(), Reference = Reference })
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DISCONNECT
@@ -557,5 +673,4 @@ end)
 exports("Taxs",Taxs)
 exports("Fines",Fines)
 exports("Invoices",Invoices)
-exports("Dependents",Dependents)
 exports("Transactions",Transactions)
