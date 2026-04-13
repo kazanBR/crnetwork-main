@@ -6,8 +6,8 @@ vRP = Proxy.getInterface("vRP")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GLOBALSTATE
 -----------------------------------------------------------------------------------------------------------------------------------------
-GlobalState["Hallobox"] = 0
-GlobalState["Halloween"] = false
+GlobalState.Hallobox = 0
+GlobalState.Halloween = false
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GLOBALSTATE
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -17,47 +17,43 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- HALLOWEEN
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterCommand("halloween",function(source,Args)
+RegisterCommand("halloween",function(source)
 	local Passport = vRP.Passport(source)
-	if not Passport or not vRP.HasGroup(Passport,"Admin") or GlobalState["Halloween"] then
+	if not Passport or not vRP.HasGroup(Passport,"Admin") then
 		return false
 	end
 
-	local Multiplier = { 1, 2 }
-	
-	for Index in pairs(Locations) do
-		local LootRandom = math.random(Multiplier[1],Multiplier[2])
-		if vRP.MountContainer(1,"Halloween:"..Index,Loots,LootRandom) then
-			GlobalState["Halloween:"..Index] = true
-		end
-	end
+	local Starting = not GlobalState.Halloween
+	GlobalState.Hallobox = #Locations
+	GlobalState.Halloween = Starting
 
-	TriggerClientEvent("Notify",-1,"Doces ou Travessuras","Começou a caça as abóboras.","halloween",30000)
-	GlobalState["Hallobox"] = CountTable(Locations)
-	GlobalState["Halloween"] = true
+	if Starting then
+		GlobalState.Hallobox = #Locations
 
-	local EventDuration = 30 * 60000
-	SetTimeout(EventDuration,function()
-		if GlobalState["Halloween"] then
-			TriggerClientEvent("Notify",-1,"Doces ou Travessuras","Terminou a caça as abóboras.","halloween",10000)
-			GlobalState["Halloween"] = false
-			
-			for Index in pairs(Locations) do
-				GlobalState["Halloween:"..Index] = false
+		for Index in pairs(Locations) do
+			local Multiplier = math.random(1,2)
+			if vRP.MountContainer(Passport,"Halloween:"..Index,Loots,Multiplier) then
+				GlobalState["Halloween:"..Index] = true
 			end
 		end
-	end)
+	else
+		GlobalState.Hallobox = 0
+	end
+
+	local Message = Starting and "Começou a caça as abóboras." or "Terminou a caça as abóboras."
+	TriggerClientEvent("Notify",-1,"Doces ou Travessuras",Message,"halloween",30000)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ADDSTATEBAGCHANGEHANDLER
 -----------------------------------------------------------------------------------------------------------------------------------------
-AddStateBagChangeHandler("Hallobox",nil,function(Name,Key,Value)
-	if Value <= 0 and GlobalState["Halloween"] then
-		TriggerClientEvent("Notify",-1,"Doces ou Travessuras","Terminou a caça as abóboras.","halloween",10000)
-		GlobalState["Halloween"] = false
-		
+AddStateBagChangeHandler("Hallobox",nil,function(_,_,Value)
+	if Value <= 0 then
 		for Index in pairs(Locations) do
 			GlobalState["Halloween:"..Index] = false
+			vRP.RemSrvData("Halloween:"..Index,true)
 		end
+
+		TriggerClientEvent("Notify",-1,"Doces ou Travessuras","Terminou a caça as abóboras.","halloween",30000)
+		GlobalState.Halloween = false
 	end
 end)

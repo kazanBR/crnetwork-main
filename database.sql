@@ -98,6 +98,7 @@ CREATE TABLE IF NOT EXISTS `entitydata` (
   `Name` varchar(100) NOT NULL,
   `Information` longtext DEFAULT NULL,
   PRIMARY KEY (`Name`),
+  UNIQUE KEY `unique_name` (`Name`),
   KEY `Information` (`Name`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -125,25 +126,13 @@ CREATE TABLE IF NOT EXISTS `hwid` (
   PRIMARY KEY (`id`) USING BTREE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-CREATE TABLE IF NOT EXISTS `investments` (
-  `id` bigint(19) NOT NULL AUTO_INCREMENT,
-  `Passport` bigint(19) NOT NULL DEFAULT 0,
-  `Liquid` bigint(19) NOT NULL DEFAULT 0,
-  `Monthly` bigint(19) NOT NULL DEFAULT 0,
-  `Deposit` bigint(19) NOT NULL DEFAULT 0,
-  `Last` bigint(19) NOT NULL DEFAULT 0,
-  PRIMARY KEY (`id`),
-  KEY `Passport` (`Passport`)
-) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
-
 CREATE TABLE IF NOT EXISTS `invoices` (
   `id` bigint(19) NOT NULL AUTO_INCREMENT,
   `Passport` bigint(19) NOT NULL DEFAULT 0,
   `Received` bigint(19) NOT NULL DEFAULT 0,
-  `Type` varchar(50) NOT NULL,
   `Reason` longtext NOT NULL,
-  `Holder` varchar(50) NOT NULL,
   `Price` bigint(19) NOT NULL DEFAULT 0,
+  `Timestamp` bigint(19) NOT NULL DEFAULT 0,
   PRIMARY KEY (`id`),
   KEY `Passport` (`Passport`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -179,8 +168,7 @@ CREATE TABLE IF NOT EXISTS `mdt_creative_fines` (
   `Description` longtext DEFAULT NULL,
   `Paid` tinyint(1) NOT NULL DEFAULT 0,
   `Arrest` bigint(19) DEFAULT NULL,
-  `Date` varchar(10) NOT NULL DEFAULT '',
-  `Hour` varchar(10) NOT NULL DEFAULT '',
+  `Permission` varchar(50) NOT NULL DEFAULT 'Policia',
   PRIMARY KEY (`id`),
   KEY `MDT_Arrest` (`Arrest`),
   CONSTRAINT `MDT_Arrest` FOREIGN KEY (`Arrest`) REFERENCES `mdt_creative_arrest` (`id`) ON DELETE CASCADE
@@ -190,7 +178,7 @@ CREATE TABLE IF NOT EXISTS `mdt_creative_internalaffairs` (
   `id` bigint(19) NOT NULL AUTO_INCREMENT,
   `Passport` bigint(19) NOT NULL DEFAULT 0,
   `Title` text DEFAULT NULL,
-  `Suspect` bigint(19) NOT NULL DEFAULT 0,
+  `Accused` bigint(19) NOT NULL DEFAULT 0,
   `Officer` bigint(19) NOT NULL DEFAULT 0,
   `Timestamp` bigint(19) NOT NULL DEFAULT 0,
   `Description` longtext DEFAULT NULL,
@@ -203,6 +191,7 @@ CREATE TABLE IF NOT EXISTS `mdt_creative_medals` (
   `Image` text NOT NULL DEFAULT '',
   `Name` varchar(150) NOT NULL DEFAULT 'Honra ao Mérito',
   `Officers` longtext NOT NULL DEFAULT '[]',
+  `Permission` varchar(100) NOT NULL DEFAULT '',
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
@@ -348,14 +337,12 @@ CREATE TABLE IF NOT EXISTS `playerdata` (
 
 CREATE TABLE IF NOT EXISTS `propertys` (
   `id` bigint(19) NOT NULL AUTO_INCREMENT,
-  `Name` varchar(20) NOT NULL DEFAULT 'Homes0001',
-  `Interior` varchar(20) NOT NULL DEFAULT 'Middle',
+  `Name` varchar(20) NOT NULL DEFAULT 'Propertys0001',
+  `Interior` varchar(20) NOT NULL DEFAULT 'Amethyst',
   `Item` bigint(19) NOT NULL DEFAULT 3,
   `Tax` bigint(19) NOT NULL DEFAULT 0,
   `Passport` bigint(19) NOT NULL DEFAULT 0,
   `Serial` varchar(10) NOT NULL,
-  `Vault` bigint(19) NOT NULL DEFAULT 1,
-  `Fridge` bigint(19) NOT NULL DEFAULT 1,
   `Garage` longtext DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `Passport` (`Passport`),
@@ -381,14 +368,13 @@ CREATE TABLE IF NOT EXISTS `races` (
   KEY `idx_races_race_points` (`Race`,`Points`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 
-CREATE TABLE IF NOT EXISTS `taxs` (
+CREATE TABLE IF NOT EXISTS `taxes` (
   `id` bigint(19) NOT NULL AUTO_INCREMENT,
   `Passport` bigint(19) NOT NULL DEFAULT 0,
   `Name` varchar(50) NOT NULL,
-  `Date` varchar(50) NOT NULL,
-  `Hour` varchar(50) NOT NULL,
+  `Timestamp` bigint(19) NOT NULL DEFAULT 0,
   `Price` bigint(19) NOT NULL,
-  `Message` longtext DEFAULT NULL,
+  `Description` longtext DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `Passport` (`Passport`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -397,10 +383,9 @@ CREATE TABLE IF NOT EXISTS `transactions` (
   `id` bigint(19) NOT NULL AUTO_INCREMENT,
   `Passport` bigint(19) NOT NULL DEFAULT 0,
   `Type` varchar(50) NOT NULL,
-  `Date` varchar(50) NOT NULL,
-  `Price` bigint(19) NOT NULL,
-  `Balance` bigint(19) NOT NULL,
-  `Timeset` bigint(19) NOT NULL DEFAULT 0,
+  `Price` bigint(19) NOT NULL DEFAULT 0,
+  `Timestamp` bigint(19) NOT NULL DEFAULT 0,
+  `Reference` varchar(255) DEFAULT NULL,
   PRIMARY KEY (`id`),
   KEY `Passport` (`Passport`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
@@ -442,7 +427,6 @@ CREATE TABLE IF NOT EXISTS `tickets_creative` (
   `ClosedAt` bigint(19) DEFAULT NULL,
   `Author` bigint(19) NOT NULL DEFAULT 0,
   `Members` longtext DEFAULT NULL,
-  `MessageAdmin` tinyint(1) DEFAULT 0,
   PRIMARY KEY (`id`)
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_general_ci;
 

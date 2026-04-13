@@ -28,7 +28,7 @@ CreateThread(function()
 				local Name = "Halloween:"..Index
 				local Distance = #(Coords - OtherCoords.xyz)
 
-				if Distance <= 5 and GlobalState[Name] then
+				if Distance <= 100 and GlobalState[Name] then
 					if not Objects[Index] then
 						Objects[Index] = CreateObjectNoOffset("tfx-summer_abroba",OtherCoords.xyz,false,false,false)
 						SetEntityLodDist(Objects[Index],0xFFFF)
