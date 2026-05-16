@@ -459,7 +459,7 @@ AddEventHandler("garages:Spawn",function(Name,Number)
 
 					vRP.Query("vehicles/addVehicles",{ Passport = Passport, Vehicle = Name, Plate = vRP.GeneratePlate(), Weight = VehicleWeight(Name), Work = 1 })
 					exports.discord:Embed("Vehicles","**[PASSAPORTE]:** "..Passport.."\n**[COMPROU]:** "..Name.."\n**[VALOR]:** "..Currency..Dotted(Price))
-					exports.bank:AddTaxs(Passport,source,"Concessionária",Price,"Compra do veículo "..VehicleName(Name)..".")
+					exports.bank:AddTaxes(Passport,source,"Concessionária",Price,"Compra do veículo "..VehicleName(Name)..".")
 					Vehicle = vRP.SelectVehicle(Passport,Name)
 				else
 					return CancelProcess("Processo cancelado.")
@@ -532,7 +532,7 @@ AddEventHandler("garages:Spawn",function(Name,Number)
 				end
 
 				vRP.Update("vehicles/PaymentArrest",{ Passport = Passport, Vehicle = Name })
-				exports.bank:AddTaxs(Passport,source,"Garagem",Price,"Liberação do veículo.")
+				exports.bank:AddTaxes(Passport,source,"Garagem",Price,"Liberação do veículo.")
 				TriggerClientEvent("Notify",source,"Sucesso","Veículo liberado.","policia",10000)
 			else
 				return CancelProcess("Processo cancelado.")
