@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@500;600;700;800;900&family=Source+Serif+4:ital,wght@0,400;0,600;0,700;1,400&family=Inter:wght@400;500;600;700&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="styles.css" />
+
+    <title>Phone Weazel</title>
+  </head>
+  <body>
+    <section id="phone-weazel">
+      <div class="app" id="content">
+        <div id="main" style="display: none">
+          <header class="main-header">
+            <img class="app-icon" src="assets/icon.png" alt="Weazel News" />
+            <h1>Weazel News</h1>
+          </header>
+          <ul id="list-weazel"></ul>
+
+          <button id="main-create" title="Criar Post" style="display: none;">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M12 20h9" />
+              <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+            </svg>
+          </button>
+        </div>
+
+        <div id="create" style="display: none">
+          <header>
+            <button id="create-back" class="icon-btn" aria-label="Voltar">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <img class="header-app-icon" src="assets/icon.png" alt="Weazel News" />
+            <h1>Criar Notícia</h1>
+          </header>
+
+          <form id="form">
+            <div class="input-wrapper">
+              <label for="input-title">Título</label>
+              <input id="input-title" type="text" required />
+            </div>
+
+            <div class="input-wrapper">
+              <label for="input-author">Autor</label>
+              <input id="input-author" type="text" required />
+            </div>
+
+            <div class="input-wrapper">
+              <label for="input-category">Categoria</label>
+              <select id="input-category">
+                <option value="Notícia">Notícia</option>
+                <option value="Anúncio">Anúncio</option>
+                <option value="Evento">Evento</option>
+                <option value="Urgente">Urgente</option>
+              </select>
+            </div>
+
+            <div class="input-wrapper">
+              <label for="input-desc">Descrição</label>
+              <textarea id="input-desc" required></textarea>
+            </div>
+
+            <div class="input-wrapper">
+              <label for="input-video">Vídeo</label>
+              <input
+                id="input-video"
+                type="url"
+                placeholder="https://www.youtube.com/watch?v=U9pEWkb9_Gc"
+              />
+            </div>
+
+            <div class="input-wrapper">
+              <label for="input-photo">Foto</label>
+              <input
+                id="input-photo"
+                type="url"
+                placeholder="Link de imagem (imgur não funciona!)"
+                required
+              />
+            </div>
+
+            <div class="input-wrapper checkbox-row">
+              <label for="input-featured">Destacar no topo</label>
+              <input id="input-featured" type="checkbox" />
+            </div>
+
+            <button id="publish">Publicar</button>
+          </form>
+        </div>
+
+        <div id="post" style="display: none">
+          <header>
+            <button id="post-back" class="icon-btn" aria-label="Voltar">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M15 18l-6-6 6-6" />
+              </svg>
+            </button>
+            <img class="header-app-icon" src="assets/icon.png" alt="Weazel News" />
+            <h1>Notícia</h1>
+          </header>
+
+          <div class="post"></div>
+        </div>
+      </div>
+    </section>
+    <script
+      src="https://code.jquery.com/jquery-3.6.1.min.js"
+      crossorigin="anonymous"
+    ></script>
+    <script src="script.js"></script>
+    <script src="dev.js"></script>
+  </body>
+</html>

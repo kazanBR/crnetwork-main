@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>VIP Store</title>
+  </head>
+  <body>
+    <main class="app-shell">
+      <header class="hero">
+        <div>
+          <span class="eyebrow">CIDADE BELA</span>
+          <h1>VIP Store</h1>
+          <p>Compre por diamantes e resgate direto no inventario quando tiver espaco.</p>
+        </div>
+        <div class="balance-card">
+          <i class="fa-solid fa-gem"></i>
+          <strong id="balance">0</strong>
+          <span>diamantes</span>
+        </div>
+      </header>
+
+      <nav class="main-tabs">
+        <button class="tab active" data-view="store"><i class="fa-solid fa-store"></i> Loja</button>
+        <button class="tab" data-view="pending"><i class="fa-solid fa-box-open"></i> Pendentes <b id="pending-count">0</b></button>
+        <button class="tab" data-view="history"><i class="fa-solid fa-clock-rotate-left"></i> Historico</button>
+      </nav>
+
+      <section class="view active" id="store-view">
+        <div class="section-row">
+          <div>
+            <span class="eyebrow small">catalogo</span>
+            <h2>Itens VIP</h2>
+          </div>
+          <button id="refresh" class="ghost-btn"><i class="fa-solid fa-rotate"></i></button>
+        </div>
+        <div id="categories" class="categories"></div>
+        <div id="products" class="item-grid"></div>
+      </section>
+
+      <section class="view" id="pending-view">
+        <div class="section-row">
+          <div>
+            <span class="eyebrow small">resgate</span>
+            <h2>Itens Pendentes</h2>
+          </div>
+          <button id="redeem-all" class="primary-mini">Resgatar tudo</button>
+        </div>
+        <div id="pending-list" class="list"></div>
+      </section>
+
+      <section class="view" id="history-view">
+        <div class="section-row">
+          <div>
+            <span class="eyebrow small">compras</span>
+            <h2>Historico</h2>
+          </div>
+        </div>
+        <div id="history-list" class="list"></div>
+      </section>
+
+      <section id="toast" class="toast hidden"></section>
+    </main>
+
+    <script src="https://code.jquery.com/jquery-3.6.1.min.js" crossorigin="anonymous"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
+

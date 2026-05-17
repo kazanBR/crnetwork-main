@@ -1,0 +1,156 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Syne:wght@700;800&display=swap" rel="stylesheet" />
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" crossorigin="anonymous" />
+    <link rel="stylesheet" href="styles.css" />
+    <title>Spotfy</title>
+  </head>
+  <body>
+    <main id="spotfly" class="app-shell">
+      <audio id="audio" preload="metadata"></audio>
+
+      <section class="screen active" id="home-screen">
+        <header class="hero">
+          <div>
+            <span class="eyebrow">Spotfy</span>
+            <h1>Sua trilha na cidade</h1>
+            <p>Toque, curta, salve playlists e adicione musicas por URL.</p>
+          </div>
+          <button type="button" class="round-btn" id="open-add-track" title="Adicionar musica">
+            <i class="fa-solid fa-plus"></i>
+          </button>
+        </header>
+
+        <div class="search-card">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input id="search" type="text" placeholder="Buscar musica, artista, album..." />
+        </div>
+
+        <nav class="tabs">
+          <button type="button" class="tab active" data-view="all">Inicio</button>
+          <button type="button" class="tab" data-view="liked">Curtidas</button>
+          <button type="button" class="tab" data-view="recent">Recentes</button>
+          <button type="button" class="tab" data-view="playlists">Playlists</button>
+        </nav>
+
+        <section class="featured-card" id="featured-card">
+          <img id="featured-cover" src="assets/icon.svg" alt="Capa" />
+          <div>
+            <span id="featured-label">Tocando agora</span>
+            <h2 id="featured-title">Escolha uma faixa</h2>
+            <p id="featured-artist">Spotfy esta pronto</p>
+          </div>
+        </section>
+
+        <section id="playlist-panel" class="playlist-panel hidden">
+          <div class="section-title">
+            <h2>Playlists</h2>
+            <button type="button" id="new-playlist"><i class="fa-solid fa-folder-plus"></i></button>
+          </div>
+          <div id="playlist-list" class="playlist-list"></div>
+        </section>
+
+        <section class="track-section">
+          <div class="section-title">
+            <h2 id="track-section-title">Musicas</h2>
+            <span id="track-count">0</span>
+          </div>
+          <div id="track-list" class="track-list"></div>
+        </section>
+      </section>
+
+      <section class="screen" id="add-screen">
+        <header class="page-header">
+          <button type="button" class="back-btn" data-back="home-screen"><i class="fa-solid fa-chevron-left"></i></button>
+          <h2>Adicionar musica</h2>
+        </header>
+
+        <form id="track-form" class="form-card">
+          <label>Titulo<input id="track-title" type="text" required maxlength="120" /></label>
+          <label>Artista<input id="track-artist" type="text" required maxlength="120" /></label>
+          <label>Album<input id="track-album" type="text" maxlength="120" /></label>
+          <label>Genero<input id="track-genre" type="text" maxlength="80" /></label>
+          <label>URL direta do audio<input id="track-url" type="url" required placeholder="https://site.com/musica.mp3" /></label>
+          <label>Capa<input id="track-cover" type="url" placeholder="https://site.com/capa.png" /></label>
+          <button type="submit" class="primary-btn">Salvar musica</button>
+        </form>
+      </section>
+
+      <section class="screen" id="playlist-screen">
+        <header class="page-header">
+          <button type="button" class="back-btn" data-back="home-screen"><i class="fa-solid fa-chevron-left"></i></button>
+          <div>
+            <span class="eyebrow">Playlist</span>
+            <h2 id="playlist-title">Playlist</h2>
+          </div>
+          <button type="button" class="round-btn danger" id="delete-playlist"><i class="fa-solid fa-trash"></i></button>
+        </header>
+        <div id="playlist-track-list" class="track-list"></div>
+      </section>
+
+      <section class="modal hidden" id="playlist-modal">
+        <div class="modal-card">
+          <h2>Nova playlist</h2>
+          <input id="playlist-name" type="text" placeholder="Nome da playlist" maxlength="80" />
+          <input id="playlist-cover" type="url" placeholder="Capa opcional" />
+          <div class="modal-actions">
+            <button type="button" id="cancel-playlist">Cancelar</button>
+            <button type="button" id="save-playlist">Criar</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="modal hidden" id="track-menu-modal">
+        <div class="modal-card compact">
+          <h2 id="menu-track-title">Musica</h2>
+          <button type="button" id="menu-like"><i class="fa-regular fa-heart"></i> Curtir/descurtir</button>
+          <div id="menu-playlists"></div>
+          <button type="button" id="close-track-menu">Fechar</button>
+        </div>
+      </section>
+
+      <section class="modal hidden" id="output-modal">
+        <div class="modal-card compact">
+          <h2>Saida de audio</h2>
+          <button type="button" class="output-choice" data-output="phone"><i class="fa-solid fa-mobile-screen"></i> Celular</button>
+          <button type="button" class="output-choice" data-output="vehicle"><i class="fa-solid fa-car-side"></i> Veiculo</button>
+          <span id="output-hint" class="hint"></span>
+          <button type="button" id="close-output-menu">Fechar</button>
+        </div>
+      </section>
+
+      <footer class="player">
+        <img id="player-cover" src="assets/icon.svg" alt="Capa atual" />
+        <div class="player-info">
+          <strong id="player-title">Spotfy</strong>
+          <span id="player-artist">Nenhuma musica tocando</span>
+          <div class="progress-row">
+            <span id="current-time">0:00</span>
+            <input id="progress" type="range" min="0" max="100" value="0" />
+            <span id="duration">0:00</span>
+          </div>
+        </div>
+        <div class="controls">
+          <button type="button" id="shuffle"><i class="fa-solid fa-shuffle"></i></button>
+          <button type="button" id="prev"><i class="fa-solid fa-backward-step"></i></button>
+          <button type="button" id="play" class="play-btn"><i class="fa-solid fa-play"></i></button>
+          <button type="button" id="next"><i class="fa-solid fa-forward-step"></i></button>
+          <button type="button" id="repeat"><i class="fa-solid fa-repeat"></i></button>
+          <button type="button" id="output"><i class="fa-brands fa-bluetooth-b"></i></button>
+        </div>
+        <div class="volume-row">
+          <i class="fa-solid fa-volume-high"></i>
+          <input id="volume" type="range" min="0" max="100" value="80" />
+        </div>
+      </footer>
+    </main>
+
+    <script src="https://code.jquery.com/jquery-3.6.1.min.js" crossorigin="anonymous"></script>
+    <script src="script.js"></script>
+  </body>
+</html>
