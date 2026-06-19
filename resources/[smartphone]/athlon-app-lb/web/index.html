@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Athlon ECU</title>
+    
+    <!-- Bibliotecas (React + Tailwind) -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://unpkg.com/react@18/umd/react.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/react-dom@18/umd/react-dom.production.min.js" crossorigin></script>
+    <script src="https://unpkg.com/@babel/standalone/babel.min.js"></script>
+    <script src="https://unpkg.com/lucide@latest"></script>
+    <audio id="pipoco" src="sounds/pipoco.ogg" preload="auto"></audio>
+
+    
+    <!-- Seu CSS Separado -->
+    <link rel="stylesheet" href="index-BNmR9Au9.css">
+
+    <!-- Tratamento de Erro (Debug) -->
+    <script>
+        window.onerror = function(message, source, lineno, colno, error) {
+            const errDiv = document.getElementById('error-display');
+            if(errDiv) {
+                errDiv.style.display = 'block';
+                errDiv.innerHTML += `<div>Erro: ${message} (Linha: ${lineno})</div>`;
+            }
+        };
+    </script>
+</head>
+<body>
+    <div id="error-display" style="display:none; position:absolute; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.9); color:red; padding:20px; z-index:9999;"></div>
+    <div id="root" class="w-full h-full"></div>
+
+    <!-- Sua Lógica JS Separada -->
+    <script type="text/babel" src="index-jiv_-Rjl.js"></script>
+</body>
+</html>
+

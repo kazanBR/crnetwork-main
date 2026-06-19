@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="pt-br">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Rifa App - Pro (Vanilla)</title>
+
+  <script src="https://code.jquery.com/jquery-1.12.4.js"></script>
+  <script src="https://code.jquery.com/ui/1.12.1/jquery-ui.js"></script>
+
+  <link rel="stylesheet" href="style.css" />
+</head>
+
+<body>
+  <div id="app" class="app">
+
+
+   <header class="header">
+  <div class="header-left">
+    <button id="btnBack" class="btn btn-icon hidden" title="Voltar">
+      <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+        stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="t-orange">
+        <path d="m15 18-6-6 6-6"/>
+      </svg>
+    </button>
+
+    <div id="brandIcon" class="badge-icon">
+      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="black"
+        stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <path d="M2 9a3 3 0 0 1 0 6v2a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-2a3 3 0 0 1 0-6V7a2 2 0 0 0-2-2H4a2 2 0 0 0-2 2Z"/>
+        <path d="M13 5v2"/><path d="M13 17v2"/><path d="M13 11v2"/>
+      </svg>
+    </div>
+
+    <h1 id="headerTitle" class="brand">RIFAS PRO</h1>
+  </div>
+
+  <button id="btnProfile" class="btn btn-icon" title="Perfil">
+    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none"
+      stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="t-muted2">
+      <path d="M19 21v-2a4 4 0 0 0-4-4H9a4 4 0 0 0-4 4v2"/>
+      <circle cx="12" cy="7" r="4"/>
+    </svg>
+  </button>
+</header>
+
+
+
+    <main id="view-home" class="view">
+      <div class="content pb-24">
+        <div class="row mb-6">
+          <h2 class="h2">Rifas Ativas</h2>
+          <div class="pill pill-live">LIVE</div>
+        </div>
+
+        <div id="activeRafflesList"></div>
+        <div id="activeRafflesEmpty" class="center note hidden">Nenhuma rifa ativa no momento.</div>
+      </div>
+    </main>
+
+ 
+    <main id="view-settings" class="view hidden">
+      <div class="content pb-10" style="display:flex;flex-direction:column;gap:24px;">
+        <div id="detranCardWrap"></div>
+
+        <div class="grid">
+          <button class="action orange" data-go="create_raffle">
+            <div class="action-left">
+              <span id="icoCar1"></span>
+              <span class="action-title">Criar Nova Rifa</span>
+            </div>
+          </button>
+
+          <button class="action" data-go="my_tickets">
+            <div class="action-left">
+              <span class="t-orange" id="icoTicket2"></span>
+              <span class="action-title">Meus Números</span>
+            </div>
+          </button>
+
+          <button class="action" data-go="winners">
+            <div class="action-left">
+              <span class="t-orange" id="icoAward1"></span>
+              <span class="action-title">Ganhadores</span>
+            </div>
+          </button>
+        </div>
+      </div>
+    </main>
+
+
+    <main id="view-create_raffle" class="view hidden">
+      <div class="content">
+        <div class="tiny mb-4">Apenas veículos regulares no Detran podem ser rifados</div>
+        <div id="myVehiclesList"></div>
+        <div id="myVehiclesEmpty" class="center note hidden">Nenhum veículo encontrado.</div>
+      </div>
+    </main>
+
+   
+    <main id="view-form_raffle" class="view hidden">
+      <div class="content" style="display:flex;flex-direction:column;gap:16px;">
+        <div class="info-box">
+          <span style="color:var(--green)" id="icoShield1"></span>
+          <p class="info-text">Veículo verificado pelo sistema do Detran e liberado para transferência.</p>
+        </div>
+
+        <div class="field">
+          <label>Link da Imagem</label>
+          <input id="raffle-image" class="input" type="text" placeholder="https://imgur.com/..." />
+        </div>
+
+        <div class="two">
+          <div class="field">
+            <label>Valor p/ Cota</label>
+            <input id="raffle-price" class="input" type="number" placeholder="500" />
+          </div>
+          <div class="field">
+            <label>Qtd Cotas</label>
+            <input id="raffle-total" class="input" type="number" placeholder="1000" />
+          </div>
+        </div>
+
+        <button id="btnPublish" class="cta">Publicar Rifa</button>
+
+        <div id="selectedVehicleInfo" class="tiny" style="opacity:.8"></div>
+      </div>
+    </main>
+
+
+
+
+<main id="view-my_tickets" class="view hidden">
+  <div class="content pb-24">
+    <div class="row mb-6">
+      <h2 class="h2">Meus Números</h2>
+      <div class="pill pill-live" id="myTicketsCount">0</div>
+    </div>
+
+    <div class="field">
+      <label>Pesquisar</label>
+      <input id="ticketsSearch" class="input" type="text" placeholder="Placa, veículo, número..." />
+    </div>
+
+    <div style="height:12px;"></div>
+
+    <div id="myTicketsList"></div>
+    <div id="myTicketsEmpty" class="center note hidden">Você ainda não comprou nenhuma cota.</div>
+  </div>
+</main>
+
+
+<main id="view-winners" class="view hidden">
+  <div class="content pb-24">
+    <div class="row mb-6">
+      <h2 class="h2">Ganhadores</h2>
+      <div class="pill pill-live" id="winnersCount">0</div>
+    </div>
+
+    <div id="winnersList"></div>
+    <div id="winnersEmpty" class="center note hidden">Ainda não houve ganhadores.</div>
+  </div>
+</main>
+
+
+  
+    <main id="view-placeholder" class="view hidden">
+      <div class="content">
+        <div class="center note" id="placeholderText">Tela em breve.</div>
+      </div>
+    </main>
+
+
+<div id="buyModal" class="modal hidden">
+  <div class="modal-backdrop" data-modal="close"></div>
+
+  <div class="modal-card">
+    <div class="modal-head">
+      <div class="modal-title">
+        <div class="tiny">Comprar cotas</div>
+        <div id="buyTitle" class="modal-veh">-</div>
+      </div>
+      <button class="btn btn-icon" data-modal="close" title="Fechar">✕</button>
+    </div>
+
+    <div class="modal-body">
+      <div class="modal-preview">
+        <div class="modal-thumb">
+          <img id="buyImage" src="" alt="">
+        </div>
+        <div>
+          <div class="tiny">Valor por cota</div>
+          <div id="buyPrice" class="modal-price">R$ 0</div>
+        </div>
+      </div>
+
+      <div class="qty-row">
+        <button id="qtyMinus" class="qty-btn">-</button>
+        <div class="qty-box">
+          <div class="tiny">Quantidade</div>
+          <div id="qtyValue" class="qty-value">1</div>
+        </div>
+        <button id="qtyPlus" class="qty-btn">+</button>
+      </div>
+
+      <div class="total-row">
+        <div>
+          <div class="tiny">Total</div>
+          <div id="buyTotal" class="modal-total">R$ 0</div>
+        </div>
+        <button id="buyConfirm" class="cta">Comprar</button>
+      </div>
+
+      <div id="buyMsg" class="buy-msg hidden"></div>
+    </div>
+  </div>
+</div>
+
+
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>

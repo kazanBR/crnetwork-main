@@ -1,0 +1,295 @@
+/* === CORES PARA TEMA CLARO === */
+:root {
+    /* Cores Primárias iFood */
+    --ifood-red: #EA1D2C;
+    --ifood-red-dark: #D41827;
+    --ifood-red-light: #FF4757;
+    --ifood-orange: #FF8C00;
+    --ifood-yellow: #FFD93D;
+    
+    /* Cores de Status */
+    --status-pending: #FFA500;
+    --status-confirmed: #FF6B6B;
+    --status-preparing: #4ECDC4;
+    --status-ready: #45B7D1;
+    --status-pickup: #96CEB4;
+    --status-delivering: #FECA57;
+    --status-delivered: #6C5CE7;
+    --status-cancelled: #FF7675;
+    
+    /* Cores de Background - Tema Claro */
+    --background-primary: #FFFFFF;
+    --background-secondary: #F8F9FA;
+    --background-tertiary: #F1F3F4;
+    --background-card: #FFFFFF;
+    --background-overlay: rgba(0, 0, 0, 0.5);
+    
+    /* Cores de Texto - Tema Claro */
+    --text-primary: #212529;
+    --text-secondary: #6C757D;
+    --text-tertiary: #ADB5BD;
+    --text-white: #FFFFFF;
+    --text-black: #000000;
+    --text-muted: #868E96;
+    
+    /* Cores de Interação */
+    --primary-color: var(--ifood-red);
+    --primary-hover: var(--ifood-red-dark);
+    --secondary-color: var(--ifood-orange);
+    --accent-color: var(--ifood-yellow);
+    
+    /* Cores de Estado */
+    --success-color: #28A745;
+    --success-light: #D4EDDA;
+    --warning-color: #FFC107;
+    --warning-light: #FFF3CD;
+    --danger-color: #DC3545;
+    --danger-light: #F8D7DA;
+    --info-color: #17A2B8;
+    --info-light: #D1ECF1;
+    
+    /* Bordas e Sombras */
+    --border-color: #DEE2E6;
+    --border-light: #E9ECEF;
+    --border-dark: #ADB5BD;
+    --shadow-sm: 0 0.125rem 0.25rem rgba(0, 0, 0, 0.075);
+    --shadow: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    --shadow-lg: 0 1rem 3rem rgba(0, 0, 0, 0.175);
+    --shadow-hover: 0 0.75rem 1.5rem rgba(234, 29, 44, 0.2);
+    
+    /* Gradientes */
+    --gradient-primary: linear-gradient(135deg, var(--ifood-red), var(--ifood-red-dark));
+    --gradient-secondary: linear-gradient(135deg, var(--ifood-orange), var(--ifood-red));
+    --gradient-accent: linear-gradient(135deg, var(--ifood-yellow), var(--ifood-orange));
+    --gradient-success: linear-gradient(135deg, #56AB2F, #A8E6CF);
+    --gradient-card: linear-gradient(145deg, #FFFFFF, #F8F9FA);
+    
+    /* Transições */
+    --transition-fast: 0.15s ease-in-out;
+    --transition-normal: 0.3s ease-in-out;
+    --transition-slow: 0.5s ease-in-out;
+    
+    /* Border Radius */
+    --radius-sm: 0.25rem;
+    --radius: 0.5rem;
+    --radius-lg: 0.75rem;
+    --radius-xl: 1rem;
+    --radius-full: 50%;
+    
+    /* Espaçamentos */
+    --spacing-xs: 0.25rem;
+    --spacing-sm: 0.5rem;
+    --spacing: 1rem;
+    --spacing-lg: 1.5rem;
+    --spacing-xl: 2rem;
+    --spacing-xxl: 3rem;
+}
+
+/* === CORES PARA TEMA ESCURO === */
+[data-theme='dark'] {
+    /* Cores Primárias adaptadas para escuro */
+    --ifood-red: #FF4757;
+    --ifood-red-dark: #FF3742;
+    --ifood-red-light: #FF6B7A;
+    --ifood-orange: #FFA502;
+    --ifood-yellow: #FFDD59;
+    
+    /* Cores de Status para escuro */
+    --status-pending: #FFB84D;
+    --status-confirmed: #FF7979;
+    --status-preparing: #74B9FF;
+    --status-ready: #0984E3;
+    --status-pickup: #00B894;
+    --status-delivering: #FDCB6E;
+    --status-delivered: #A29BFE;
+    --status-cancelled: #E84393;
+    
+    /* Cores de Background - Tema Escuro */
+    --background-primary: #1A1A1A;
+    --background-secondary: #2D2D2D;
+    --background-tertiary: #3A3A3A;
+    --background-card: #252525;
+    --background-overlay: rgba(0, 0, 0, 0.7);
+    
+    /* Cores de Texto - Tema Escuro */
+    --text-primary: #FFFFFF;
+    --text-secondary: #CCCCCC;
+    --text-tertiary: #999999;
+    --text-white: #FFFFFF;
+    --text-black: #000000;
+    --text-muted: #777777;
+    
+    /* Cores de Interação para escuro */
+    --primary-color: var(--ifood-red);
+    --primary-hover: var(--ifood-red-light);
+    --secondary-color: var(--ifood-orange);
+    --accent-color: var(--ifood-yellow);
+    
+    /* Cores de Estado para escuro */
+    --success-color: #00B894;
+    --success-light: rgba(0, 184, 148, 0.2);
+    --warning-color: #FDCB6E;
+    --warning-light: rgba(253, 203, 110, 0.2);
+    --danger-color: #E84393;
+    --danger-light: rgba(232, 67, 147, 0.2);
+    --info-color: #74B9FF;
+    --info-light: rgba(116, 185, 255, 0.2);
+    
+    /* Bordas e Sombras para escuro */
+    --border-color: #404040;
+    --border-light: #333333;
+    --border-dark: #555555;
+    --shadow-sm: 0 0.125rem 0.25rem rgba(255, 255, 255, 0.05);
+    --shadow: 0 0.5rem 1rem rgba(255, 255, 255, 0.1);
+    --shadow-lg: 0 1rem 3rem rgba(255, 255, 255, 0.15);
+    --shadow-hover: 0 0.75rem 1.5rem rgba(255, 71, 87, 0.3);
+    
+    /* Gradientes para escuro */
+    --gradient-primary: linear-gradient(135deg, var(--ifood-red), var(--ifood-red-dark));
+    --gradient-secondary: linear-gradient(135deg, var(--ifood-orange), var(--ifood-red));
+    --gradient-accent: linear-gradient(135deg, var(--ifood-yellow), var(--ifood-orange));
+    --gradient-success: linear-gradient(135deg, #00B894, #55A3FF);
+    --gradient-card: linear-gradient(145deg, #252525, #2D2D2D);
+}
+
+/* === CORES ESPECÍFICAS PARA CATEGORIAS === */
+.category-hamburger { --category-color: #FF6B6B; }
+.category-pizza { --category-color: #4ECDC4; }
+.category-japonesa { --category-color: #45B7D1; }
+.category-mexicana { --category-color: #96CEB4; }
+.category-italiana { --category-color: #FECA57; }
+.category-brasileira { --category-color: #FF9FF3; }
+.category-bebida { --category-color: #54A0FF; }
+.category-sobremesa { --category-color: #5F27CD; }
+.category-acompanhamento { --category-color: #00D2D3; }
+
+/* === CORES PARA RATINGS === */
+.rating-5 { color: #27AE60; } /* Verde para 4.5+ */
+.rating-4 { color: #F39C12; } /* Laranja para 3.5-4.4 */
+.rating-3 { color: #E74C3C; } /* Vermelho para menos de 3.5 */
+
+/* === CORES PARA DELIVERY FEES === */
+.delivery-free { color: var(--success-color); font-weight: 600; }
+.delivery-low { color: var(--warning-color); }
+.delivery-high { color: var(--danger-color); }
+
+/* === CORES PARA PREÇOS === */
+.price-low { color: var(--success-color); }
+.price-medium { color: var(--warning-color); }
+.price-high { color: var(--danger-color); }
+
+/* === CORES PARA DISTÂNCIAS === */
+.distance-close { color: var(--success-color); } /* < 2km */
+.distance-medium { color: var(--warning-color); } /* 2-5km */
+.distance-far { color: var(--danger-color); } /* > 5km */
+
+/* === CORES PARA TEMPO DE ENTREGA === */
+.time-fast { color: var(--success-color); } /* < 30min */
+.time-medium { color: var(--warning-color); } /* 30-60min */
+.time-slow { color: var(--danger-color); } /* > 60min */
+
+/* === UTILITÁRIOS DE COR === */
+.text-primary { color: var(--text-primary) !important; }
+.text-secondary { color: var(--text-secondary) !important; }
+.text-muted { color: var(--text-muted) !important; }
+.text-white { color: var(--text-white) !important; }
+.text-success { color: var(--success-color) !important; }
+.text-warning { color: var(--warning-color) !important; }
+.text-danger { color: var(--danger-color) !important; }
+.text-info { color: var(--info-color) !important; }
+
+.bg-primary { background-color: var(--primary-color) !important; }
+.bg-secondary { background-color: var(--background-secondary) !important; }
+.bg-card { background-color: var(--background-card) !important; }
+.bg-success { background-color: var(--success-color) !important; }
+.bg-warning { background-color: var(--warning-color) !important; }
+.bg-danger { background-color: var(--danger-color) !important; }
+.bg-info { background-color: var(--info-color) !important; }
+
+.border-primary { border-color: var(--primary-color) !important; }
+.border-secondary { border-color: var(--border-color) !important; }
+.border-success { border-color: var(--success-color) !important; }
+.border-warning { border-color: var(--warning-color) !important; }
+.border-danger { border-color: var(--danger-color) !important; }
+
+/* === ANIMAÇÕES DE COR === */
+@keyframes pulse-primary {
+    0%, 100% { background-color: var(--primary-color); }
+    50% { background-color: var(--primary-hover); }
+}
+
+@keyframes pulse-success {
+    0%, 100% { background-color: var(--success-color); }
+    50% { background-color: #20C997; }
+}
+
+@keyframes pulse-warning {
+    0%, 100% { background-color: var(--warning-color); }
+    50% { background-color: #FFB30F; }
+}
+
+.pulse-primary { animation: pulse-primary 2s infinite; }
+.pulse-success { animation: pulse-success 2s infinite; }
+.pulse-warning { animation: pulse-warning 2s infinite; }
+
+/* === HOVER EFFECTS === */
+.hover-primary:hover { background-color: var(--primary-hover) !important; }
+.hover-lift:hover { transform: translateY(-2px); }
+.hover-shadow:hover { box-shadow: var(--shadow-hover); }
+.hover-scale:hover { transform: scale(1.05); }
+
+/* === GRADIENT BACKGROUNDS === */
+.bg-gradient-primary { background: var(--gradient-primary); }
+.bg-gradient-secondary { background: var(--gradient-secondary); }
+.bg-gradient-accent { background: var(--gradient-accent); }
+.bg-gradient-success { background: var(--gradient-success); }
+.bg-gradient-card { background: var(--gradient-card); }
+
+/* === CORES PARA NOTIFICAÇÕES === */
+.notification-success {
+    background: var(--success-light);
+    border-left: 4px solid var(--success-color);
+    color: var(--success-color);
+}
+
+.notification-warning {
+    background: var(--warning-light);
+    border-left: 4px solid var(--warning-color);
+    color: var(--warning-color);
+}
+
+.notification-danger {
+    background: var(--danger-light);
+    border-left: 4px solid var(--danger-color);
+    color: var(--danger-color);
+}
+
+.notification-info {
+    background: var(--info-light);
+    border-left: 4px solid var(--info-color);
+    color: var(--info-color);
+}
+
+/* === RESPONSIVIDADE === */
+@media (prefers-color-scheme: dark) {
+    :root:not([data-theme='light']) {
+        /* Aplicar tema escuro automaticamente se não especificado */
+    }
+}
+
+@media (max-width: 768px) {
+    :root {
+        /* Ajustes para mobile */
+        --shadow: 0 0.25rem 0.5rem rgba(0, 0, 0, 0.1);
+        --shadow-lg: 0 0.5rem 1rem rgba(0, 0, 0, 0.15);
+    }
+}
+
+/* === ACESSIBILIDADE === */
+@media (prefers-reduced-motion: reduce) {
+    * {
+        animation-duration: 0.01ms !important;
+        animation-iteration-count: 1 !important;
+        transition-duration: 0.01ms !important;
+    }
+}
