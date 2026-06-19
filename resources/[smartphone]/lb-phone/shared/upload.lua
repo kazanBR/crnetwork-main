@@ -4,14 +4,17 @@
 -----------------------------------------------------------------------------------------------------------------------------------
 
 ---@class UploadMethod
----@field url string # The url to upload to. Can use BASE_URL & PRESIGNED_URL as well.
----@field field string # The field name (formData)
----@field headers? table<string, any>
+---@field url string # Upload URL. Supports PRESIGNED_URL, which will automatically get replaced with the URL returned by GetPresignedUrl (server/custom/functions/functions.lua)
+---@field httpMethod? "POST" | "PUT" # Defaults to "POST" if not defined
+---@field headers? table<string, any> # These placeholders are supported: API_KEY, PLAYER_IDENTIFIER, PLAYER_NAME, RESOURCE_NAME, PLAYER_DATA (json encoded)
+---@field uploadType? "formdata" | "binary" | "base64" # Defaults to "formdata" if not defined
+---@field success? { path: string } # The path to the file. Supports nested paths, e.g. "data.0.url" (translates to data[0].url)
 ---@field error? { path: string, value: any } # The path to the error value and the value to check for
----@field success { path: string } # The path to the video file
----@field suffix? string # Add a suffix to the url? Needed if the url doesn't return the correct file name
----@field sendPlayer? string # The formData field name to send player's metadata to, as json
----@field sendResource? boolean # Send the resource name in the formData?
+---@field field? string # The field name (only needed if using "formdata")
+---@field suffix? string # Add a suffix to the url? Only needed if your upload server doesn't return the correct file extension
+---@field bodyTemplate? table<string, any> # JSON body template for base64 uploads. These placeholders are supported: BASE64_DATA, FILE_EXTENSION, PLAYER_DATA, RESOURCE_NAME
+---@field sendPlayer? string # The formdata field to send player's metadata (json encoded)
+---@field sendResource? boolean # The formdata field to send the resource name
 
 ---@type table<string, { Default: UploadMethod?, Video?: UploadMethod, Image?: UploadMethod, Audio?: UploadMethod }>
 UploadMethods = {
@@ -29,7 +32,6 @@ UploadMethods = {
             success = {
                 path = "url" -- The path to the video file (res.url)
             },
-            suffix = "webm", -- Add a suffix to the url (not needed if you return the correct name)
         },
         Image = {
             url = "https://your-custom-url.com/upload?api=API_KEY",
@@ -44,7 +46,6 @@ UploadMethods = {
             success = {
                 path = "url" -- The path to the image file (res.url)
             },
-            suffix = "png", -- Add a suffix to the url (not needed if you return the correct name)
         },
         Audio = {
             url = "https://your-custom-url.com/upload?api=API_KEY",
@@ -59,7 +60,6 @@ UploadMethods = {
             success = {
                 path = "url" -- The path to the audio file (res.url)
             },
-            suffix = "mp3", -- Add a suffix to the url (not needed if you return the correct name)
         },
     },
     Fivemanage = {
@@ -72,53 +72,22 @@ UploadMethods = {
             sendPlayer = "metadata"
         },
     },
-    LBUpload = {
+    LBPresigned = { -- https://github.com/lbphone/lb-presigned
         Default = {
-            url = "https://BASE_URL/lb-upload/",
-            field = "file",
-            headers = {
-                ["Authorization"] = "API_KEY"
-            },
-            error = {
-                path = "success",
-                value = false
-            },
-            success = {
-                path = "link"
-            },
-            sendPlayer = "metadata"
-        },
+            url = "PRESIGNED_URL",
+            httpMethod = "PUT",
+            uploadType = "binary",
+        }
     },
-    OldFivemanage = {
-        Video = {
-            url = "https://fmapi.net/api/v2/video",
+    Qbox = {
+        Default = {
+            url = "PRESIGNED_URL",
+            httpMethod = "POST",
+            uploadType = "formdata",
             field = "file",
-            headers = {
-                ["Authorization"] = "API_KEY"
-            },
-            success = {
-                path = "data.url"
-            },
-        },
-        Image = {
-            url = "https://fmapi.net/api/v2/image",
-            field = "file",
-            headers = {
-                ["Authorization"] = "API_KEY"
-            },
             success = {
                 path = "data.url"
             }
-        },
-        Audio = {
-            url = "https://fmapi.net/api/v2/audio",
-            field = "file",
-            headers = {
-                ["Authorization"] = "API_KEY"
-            },
-            success = {
-                path = "data.url"
-            }
-        },
-    },
+        }
+    }
 }

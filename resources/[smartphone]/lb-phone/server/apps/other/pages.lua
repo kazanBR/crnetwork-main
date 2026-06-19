@@ -1,43 +1,38 @@
+-- =====================================================
+--  lb-phone · server/apps/other/pages.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
-local PAGE_SIZE = 10
+BaseCallback("yellowPages:getPosts", function(source, phoneNumber, data)
+    local filter = data and data.filter
+    local params = {}
+    local where = {}
 
--- Callback: get a page of Yellow Pages posts with optional search/from filters
-BaseCallback("yellowPages:getPosts", function(source, phoneNumber, page, filters)
-    if not page then page = 0 end
+    if filter and filter.search and #filter.search > 0 then
+        local search = "%" .. filter.search .. "%"
 
-    local params     = {}
-    local conditions = {}
+        params[#params + 1] = search
+        params[#params + 1] = search
 
-    if filters then
-        -- Full-text search across title, description, and optionally phone number
-        if filters.search then
-            local pattern = "%" .. filters.search .. "%"
-            conditions[#conditions + 1] = "(title LIKE ? OR description LIKE ?)"
-            params[#params + 1] = pattern
-            params[#params + 1] = pattern
-
-            -- Also search by phone number unless a specific 'from' filter is set
-            if not filters.from then
-                conditions[#conditions + 1] = "OR phone_number LIKE ?"
-                params[#params + 1] = pattern
-            end
-        end
-
-        -- Filter by a specific phone number (poster)
-        if filters.from then
-            local prefix = #conditions > 0 and "AND " or ""
-            conditions[#conditions + 1] = prefix .. "phone_number = ?"
-            params[#params + 1] = filters.from
+        if filter.from then
+            where[#where + 1] = "(title LIKE ? OR description LIKE ?)"
+        else
+            where[#where + 1] = "(title LIKE ? OR description LIKE ? OR phone_number LIKE ?)"
+            params[#params + 1] = search
         end
     end
 
-    -- Build WHERE clause if any conditions exist
-    local whereClause = ""
-    if #conditions > 0 then
-        whereClause = "WHERE " .. table.concat(conditions, " ")
+    if filter and filter.from then
+        where[#where + 1] = "phone_number = ?"
+        params[#params + 1] = filter.from
     end
 
-    local query = ([[
+    if data and data.lastId then
+        where[#where + 1] = "id < ?"
+        params[#params + 1] = data.lastId
+    end
+
+    local query = [[
         SELECT
             id,
             phone_number AS `number`,
@@ -50,131 +45,171 @@ BaseCallback("yellowPages:getPosts", function(source, phoneNumber, page, filters
             phone_yellow_pages_posts
         {WHERE}
         ORDER BY
-            `timestamp` DESC
-        LIMIT ?, ?
-    ]]):gsub("{WHERE}", whereClause)
+            id DESC
+        LIMIT ?
+    ]]
 
-    -- Append pagination params
-    params[#params + 1] = page * PAGE_SIZE
-    params[#params + 1] = PAGE_SIZE
+    query = query:gsub(
+        "{WHERE}",
+        #where > 0 and ("WHERE " .. table.concat(where, " AND ")) or ""
+    )
 
-    local posts = MySQL.query.await(query, params)
+    params[#params + 1] = 25
 
-    -- For each post, hide the phone number from non-owners so the UI's
-    -- ownership check (post.number === myNumber) fails and hides the delete button.
-    -- Owners and admins still see the number so their delete button shows correctly.
-    local isAdmin = false -- TEMP DISABLED: IsAdmin(source)
-    if posts then
-        for i = 1, #posts do
-            posts[i].isOwner = (posts[i].number == phoneNumber)
-            if not posts[i].isOwner and not isAdmin then
-                posts[i].number = nil
-            end
+    return MySQL.query.await(query, params)
+end)
+
+local pagesConfig = Config.Pages or {}
+local postCost = pagesConfig.Cost and pagesConfig.Cost > 0 and pagesConfig.Cost or 0
+local maxPosts = pagesConfig.MaxPosts and pagesConfig.MaxPosts > 0 and pagesConfig.MaxPosts or nil
+local rateLimit = pagesConfig.RateLimit and pagesConfig.RateLimit > 0 and pagesConfig.RateLimit or nil
+
+BaseCallback("yellowPages:createPost", function(source, phoneNumber, data)
+    if not (data and data.title and data.description) then
+        return { success = false }
+    end
+
+    if ContainsBlacklistedWord(source, "Pages", data.title)
+        or ContainsBlacklistedWord(source, "Pages", data.description)
+    then
+        return { success = false }
+    end
+
+    local price = math.clamp(tonumber(data.price or 0) or 0, 0, 1000000000)
+
+    if price == 0 then
+        price = nil
+    end
+
+    data.price = price
+
+    if postCost > 0 and GetBalance(source) < postCost then
+        return {
+            success = false,
+            error = "noMoney"
+        }
+    end
+
+    if maxPosts then
+        local postCount = MySQL.scalar.await(
+            "SELECT COUNT(1) FROM phone_yellow_pages_posts WHERE phone_number = ?",
+            { phoneNumber }
+        ) or 0
+
+        if postCount >= maxPosts then
+            return {
+                success = false,
+                error = "postLimit"
+            }
         end
     end
 
-    return posts
-end)
+    if rateLimit then
+        local lastPostTime = MySQL.scalar.await(
+            "SELECT `timestamp` FROM phone_yellow_pages_posts WHERE phone_number = ? ORDER BY id DESC LIMIT 1",
+            { phoneNumber }
+        )
 
-
--- Callback: create a new Yellow Pages post
-BaseCallback("yellowPages:createPost", function(source, phoneNumber, data)
-    local title       = data and data.title
-    local description = data and data.description
-
-    -- Validate required fields and check for blacklisted words
-    if not title or not description then
-        return false
+        if lastPostTime and os.time() - lastPostTime < rateLimit * 60 then
+            return {
+                success = false,
+                error = "rateLimit"
+            }
+        end
     end
 
-    if ContainsBlacklistedWord(source, "Pages", title)
-    or ContainsBlacklistedWord(source, "Pages", description) then
-        return false
+    if not ValidateChecks("postPages", source, data) then
+        return { success = false }
     end
 
     local postId = MySQL.insert.await(
         "INSERT INTO phone_yellow_pages_posts (phone_number, title, description, attachment, price) VALUES (@number, @title, @description, @attachment, @price)",
         {
-            ["@number"]      = phoneNumber,
-            ["@title"]       = LimitStringLength(title, 50),
-            ["@description"] = LimitStringLength(description, 1000),
-            ["@attachment"]  = data.attachment,
-            ["@price"]       = math.clamp(tonumber(data.price) or 0, 0, 1000000000),
+            number = phoneNumber,
+            title = LimitStringLength(data.title, 50),
+            description = LimitStringLength(data.description, 1000),
+            attachment = data.attachment,
+            price = price
         }
     )
 
     if not postId then
-        return false
+        return { success = false }
     end
 
-    -- Attach metadata and broadcast to all clients
-    data.id     = postId
+    if postCost > 0 then
+        RemoveMoney(source, postCost)
+        AddTransaction(
+            phoneNumber,
+            -postCost,
+            L("APPS.YELLOWPAGES.TRANSACTION"),
+            "./assets/img/icons/apps/YellowPages.jpg"
+        )
+    end
+
+    data.id = postId
     data.number = phoneNumber
     data.source = source
 
     TriggerClientEvent("phone:yellowPages:newPost", -1, data)
     TriggerEvent("lb-phone:pages:newPost", data)
 
-    Log("YellowPages", source, "info",
+    Log(
+        "YellowPages",
+        source,
+        "info",
         L("BACKEND.LOGS.YELLOWPAGES_NEW_TITLE"),
         L("BACKEND.LOGS.YELLOWPAGES_NEW_DESCRIPTION", {
-            title       = data.title,
+            title = data.title,
             description = data.description,
-            attachment  = data.attachment or "",
-            id          = postId,
+            attachment = data.attachment or "",
+            id = data.id
         })
     )
 
-    return postId
-end)
+    return {
+        success = true,
+        id = postId
+    }
+end, false, {
+    preventSpam = true,
+    rateLimit = 6
+})
 
-
--- Callback: delete a post (admins can delete any post, others only their own)
 BaseCallback("yellowPages:deletePost", function(source, phoneNumber, postId)
-    local isAdmin = false -- TEMP DISABLED: IsAdmin(source)
+    local params = { postId }
+    local query = "DELETE FROM phone_yellow_pages_posts WHERE id = ?"
 
-    if not isAdmin then
-        -- Double-check ownership directly from DB to prevent spoofed phone number exploits.
-        -- We verify that the post's phone_number matches what the DB says belongs to this
-        -- player's identifier, not just the in-memory phoneNumber which can be manipulated.
-        local identifier = GetIdentifier(source)
-        local dbPhoneNumber = MySQL.scalar.await(
-            "SELECT phone_number FROM phone_phones WHERE owner_id = ? AND phone_number = ?",
-            { identifier, phoneNumber }
-        )
-
-        if not dbPhoneNumber then
-            infoprint("warning", ("Player %s (%s) tried to delete post %s but their phone number could not be verified"):format(
-                GetPlayerName(source), source, tostring(postId)
-            ))
-            return false
-        end
-
-        -- Verify the post actually belongs to this phone number
-        local postOwner = MySQL.scalar.await(
-            "SELECT phone_number FROM phone_yellow_pages_posts WHERE id = ?",
-            { postId }
-        )
-
-        if postOwner ~= phoneNumber then
-            infoprint("warning", ("Player %s (%s) tried to delete post %s which belongs to %s"):format(
-                GetPlayerName(source), source, tostring(postId), tostring(postOwner)
-            ))
-            return false
-        end
+    if not IsAdmin(source) then
+        query = query .. " AND phone_number = ?"
+        params[#params + 1] = phoneNumber
     end
 
-    local affected = MySQL.update.await(
-        "DELETE FROM phone_yellow_pages_posts WHERE id = @id" .. (isAdmin and "" or " AND phone_number = @number"),
-        { ["@id"] = postId, ["@number"] = phoneNumber }
-    )
+    local deleted = MySQL.update.await(query, params) > 0
 
-    if affected > 0 then
-        Log("YellowPages", source, "error",
+    if deleted then
+        Log(
+            "YellowPages",
+            source,
+            "error",
             L("BACKEND.LOGS.YELLOWPAGES_DELETED"),
             ("**ID**: %s"):format(postId)
         )
+
+        return true
     end
 
-    return affected > 0
+    return false
 end)
+
+local deleteOld = pagesConfig.DeleteOld and pagesConfig.DeleteOld > 0 and pagesConfig.DeleteOld or nil
+
+Interval:new(function()
+    MySQL.update(
+        "DELETE FROM phone_yellow_pages_posts WHERE `timestamp` < DATE_SUB(NOW(), INTERVAL ? HOUR)",
+        { deleteOld },
+        function(deleted)
+            debugprint("Deleted", deleted, "old pages posts")
+        end
+    )
+end, 3600000, deleteOld ~= nil)

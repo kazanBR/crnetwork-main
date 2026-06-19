@@ -72,7 +72,7 @@ end
 ---@param handler fun(source: number, ...) : ...any
 ---@param options? CallbackOptions
 function RegisterCallback(event, handler, options)
-    assert(registeredCallbacks[event] == nil, ("event '%s' is already registered"):format(event))
+    assert(registeredCallbacks[event] == nil, ("event '%s' is already registered. This usually happens due to not updating correctly. When updating, you need to delete all old files before installing the new version."):format(event))
 
     registeredCallbacks[event] = RegisterNetEvent("lb-phone:cb:" .. event, function(requestId, ...)
         local src = source

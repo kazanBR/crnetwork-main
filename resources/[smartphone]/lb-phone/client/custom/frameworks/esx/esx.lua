@@ -56,7 +56,7 @@ RegisterNetEvent("esx:setAccountMoney", function(account)
         return
     end
 
-    SendReactMessage("wallet:setBalance", math.floor(account.money))
+    SendNUIAction("wallet:setBalance", math.floor(account.money))
 end)
 
 local isHandcuffed = false

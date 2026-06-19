@@ -1,126 +1,99 @@
-local DisableControl    = DisableControlAction
-local IsNuiFocused      = IsNuiFocused
-local DisableFiring     = DisablePlayerFiring
+-- =====================================================
+--  lb-phone · client/client.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- Global state
-phoneData     = nil
-currentPhone  = nil
-settings      = nil
-phoneOpen     = false
+phoneData = nil
+currentPhone = nil
+settings = nil
+phoneOpen = false
+SavedLocations = {}
+PhoneOnScreen = false
 
-SavedLocations  = {}
-PhoneOnScreen   = false
+local cachedPhoneNumber = nil
+local hasLoadedPhone = nil
+local fetchingPhone = false
+local configReceived = nil
+local togglingPhone = false
+local focusToggleBusy = false
 
--- Internal flags
-local fetchingPhone    = nil   -- AKL4_1: phone already loaded once
-local isFetchingPhone  = nil   -- AKL5_1: fetch in progress
-local configReceived   = nil   -- AKL6_1: UI has received config
-
--- ─────────────────────────────────────────────
---  Early global definitions
---  These must be available before other client
---  files load (cellTowers, crypto, recordNearby)
---  and before they are used later in this file.
--- ─────────────────────────────────────────────
-
--- SendReactMessage: sends a message to the NUI layer
-function SendReactMessage(action, data)
-    SendNUIMessage({ action = action, data = data })
-end
-
--- GetConfigFile: loads a JSON file from config/ folder
-function GetConfigFile(filename)
-    return LoadResourceFile(GetCurrentResourceName(), "config/" .. filename)
-end
-
--- GetNearbyPlayers: returns cached nearby player list
--- (full implementation is later in this file; this stub
--- ensures the global exists for files that load early)
-local nearbyPlayers    = {}
-local lastNearbyPos    = vector3(0.0, 0.0, 0.0)
-local lastNearbyRefresh = 0
-
-function GetNearbyPlayers()
-    local now   = GetGameTimer()
-    local myPos = GetEntityCoords(PlayerPedId())
-    local timePassed = now - lastNearbyRefresh > 5000
-    local movedFar   = #(myPos - lastNearbyPos) > 25.0
-    if timePassed or movedFar then
-        lastNearbyRefresh = now
-        lastNearbyPos     = myPos
-        local myId = PlayerId()
-        local result = {}
-        for _, pid in ipairs(GetActivePlayers()) do
-            if pid ~= myId then
-                local ped    = GetPlayerPed(pid)
-                local coords = GetEntityCoords(ped)
-                local dist   = #(myPos - coords)
-                if dist <= 50.0 then
-                    result[#result + 1] = {
-                        player = pid,
-                        source = GetPlayerServerId(pid),
-                        ped    = ped,
-                        coords = coords,
-                    }
-                end
-            end
-        end
-        nearbyPlayers = result
+local function NormalizeLocaleCode(locale)
+    if type(locale) ~= "string" or locale == "" then
+        return "en"
     end
-    return nearbyPlayers
+
+    local normalized = locale:lower():gsub("_", "-"):gsub("%.json$", "")
+
+    if normalized == "cn" or normalized == "zh" then
+        return "zh-cn"
+    end
+
+    return normalized
 end
 
--- OnDeath: stub defined early, full impl replaces later
-function OnDeath()
-    if ToggleOpen then ToggleOpen(false) end
-end
+local function waitForConfig()
+    if configReceived then
+        return
+    end
 
--- ─────────────────────────────────────────────
---  WaitForConfig
---  Blocks until the UI signals configReceived.
--- ─────────────────────────────────────────────
-local function WaitForConfig()
-    if configReceived then return end
     debugprint("waiting for config to be received")
+
     while not configReceived do
         Wait(0)
     end
+
     debugprint("config received")
 end
 
--- ─────────────────────────────────────────────
---  GetServerIdentifier
---  Extracts a clean server ID from the base URL.
--- ─────────────────────────────────────────────
-local function GetServerIdentifier()
-    local url = GetBaseUrl()
-    local result = url
+local function loadJsonConfig(fileName)
+    local fileContent = GetConfigFile(fileName)
 
-    if string.find(url, "%.users%.cfx%.re") then
-        local len      = #url
-        local reversed = string.reverse(url)
-        local dashPos  = string.find(reversed, "-")
-        if not dashPos then
-            dashPos = len + 1
-        end
-        local start  = len - dashPos + 2
-        local suffix = ".users.cfx.re"
-        local finish = len - #suffix
-        result = string.sub(url, start, finish)
+    if not fileContent then
+        return nil
     end
 
-    return result
+    return json.decode(fileContent)
 end
 
--- ─────────────────────────────────────────────
---  FetchPhone
---  Loads the player's phone number and data
---  from the server for the first time.
--- ─────────────────────────────────────────────
-local function FetchPhone()
+local function GetLocaleConfig(locale)
+    locale = NormalizeLocaleCode(locale or Config.DefaultLocale or "en")
+
+    local localeData = loadJsonConfig("locales/" .. locale .. ".json")
+    if localeData then
+        return localeData, locale
+    end
+
+    if locale ~= "en" then
+        localeData = loadJsonConfig("locales/en.json")
+
+        if localeData then
+            return localeData, "en"
+        end
+    end
+
+    return nil, locale
+end
+
+local function SendPhoneDataToUI()
+    if not phoneData then
+        return
+    end
+
+    local phoneNumber = phoneData.phoneNumber
+
+    SendNUIAction("setPhoneData", phoneData)
+
+    SetTimeout(300, function()
+        if phoneData and phoneData.phoneNumber == phoneNumber then
+            SendNUIAction("setPhoneData", phoneData)
+        end
+    end)
+end
+
+function FetchPhone()
     debugprint("FetchPhone triggered")
 
-    if isFetchingPhone then
+    if fetchingPhone then
         debugprint("already fetching phone")
         return
     end
@@ -130,9 +103,8 @@ local function FetchPhone()
         return
     end
 
-    isFetchingPhone = true
+    fetchingPhone = true
 
-    -- Wait for the framework to finish loading
     while not FrameworkLoaded do
         debugprint("waiting for framework to load")
         Wait(500)
@@ -140,21 +112,21 @@ local function FetchPhone()
 
     debugprint("triggering phone:playerLoaded")
 
-    -- Retrieve (or reuse) the player's phone number
     local phoneNumber
-    if fetchingPhone and currentPhone then
-        phoneNumber = SavedLocations  -- reuse cached number
+
+    if hasLoadedPhone and currentPhone then
+        phoneNumber = cachedPhoneNumber
     else
-        phoneNumber   = AwaitCallback("playerLoaded")
-        SavedLocations = phoneNumber  -- store for reuse
-        fetchingPhone  = true
+        phoneNumber = AwaitCallback("playerLoaded")
+        cachedPhoneNumber = phoneNumber
+        hasLoadedPhone = true
     end
 
     debugprint("got number", phoneNumber)
 
-    -- If no number yet, check if the player has the phone item
     if not phoneNumber then
         debugprint("no number, checking if player has item")
+
         if HasPhoneItem() then
             debugprint("player has item; triggering phone:generatePhoneNumber")
             phoneNumber = AwaitCallback("generatePhoneNumber")
@@ -164,118 +136,108 @@ local function FetchPhone()
         end
     end
 
-    -- Still no number — abort
     if not phoneNumber then
-        isFetchingPhone = false
+        fetchingPhone = false
+
         if currentPhone then
             debugprint("no number. using SetPhone")
             SetPhone()
         end
+
         debugprint("no number, returning")
         return
     end
 
-    -- Load default settings
-    local defaultSettings = json.decode(GetConfigFile("defaultSettings.json"))
-
-    -- Version info
+    local defaultSettings = loadJsonConfig("defaultSettings.json")
     local latestVersion = AwaitCallback("getLatestVersion")
-    local resourceName  = GetCurrentResourceName()
-    local currentVersion = GetResourceMetadata(resourceName, "version", 0)
-    if not latestVersion then
-        latestVersion = currentVersion
-    end
+    local resourceVersion = GetResourceMetadata(GetCurrentResourceName(), "version", 0)
 
-    defaultSettings.locale        = Config.DefaultLocale
-    defaultSettings.version       = currentVersion
+    latestVersion = latestVersion or resourceVersion
+
+    local _, resolvedDefaultLocale = GetLocaleConfig(Config.DefaultLocale)
+    defaultSettings.locale = resolvedDefaultLocale
+    defaultSettings.version = resourceVersion
     defaultSettings.latestVersion = latestVersion
 
-    -- Fetch full phone data from server
-    local isSetup = false
     debugprint("fetching phone data")
-    local phone = AwaitCallback("getPhone", phoneNumber)
-    debugprint("got phone data", json.encode(phone))
 
-    if phone then
-        -- Use phone's own settings if available
-        if phone.settings then
-            defaultSettings = phone.settings
+    local loadedPhoneData = AwaitCallback("getPhone", phoneNumber)
+
+    debugprint("got phone data", json.encode(loadedPhoneData))
+
+    if loadedPhoneData then
+        local savedLocale = defaultSettings.locale
+        local localeWasNormalized = false
+
+        if loadedPhoneData.settings then
+            defaultSettings = loadedPhoneData.settings
+            savedLocale = defaultSettings.locale
         end
 
-        -- Display name
-        if phone.name then
-            defaultSettings.name = phone.name
+        local _, resolvedLocale = GetLocaleConfig(defaultSettings.locale or Config.DefaultLocale)
+        defaultSettings.locale = resolvedLocale
+        localeWasNormalized = savedLocale ~= nil and savedLocale ~= defaultSettings.locale
+
+        if loadedPhoneData.name then
+            defaultSettings.name = loadedPhoneData.name
         else
-            local charName = AwaitCallback("getCharacterName")
+            local characterName = AwaitCallback("getCharacterName")
+
             defaultSettings.name = L("BACKEND.MISC.X_PHONE", {
-                name     = charName.firstname,
-                lastname = charName.lastname,
+                name = characterName.firstname,
+                lastname = characterName.lastname
             })
         end
 
-        defaultSettings.version       = currentVersion
+        defaultSettings.version = resourceVersion
         defaultSettings.latestVersion = latestVersion
-
-        -- Saved map locations
         SavedLocations = AwaitCallback("maps:getSavedLocations")
-
-        isSetup    = phone.is_setup or false
         currentPhone = phoneNumber
 
-        -- Build phoneData table
-        local battery = 100
-        if Config.Battery and Config.Battery.Enabled then
-            battery = phone.battery or 100
-        end
-
         phoneData = {
-            isSetup          = isSetup,
-            phoneNumber      = phoneNumber,
-            settings         = defaultSettings,
-            battery          = battery,
-            serverIdentifier = GetServerIdentifier(),
+            isSetup = loadedPhoneData.is_setup or false,
+            phoneNumber = phoneNumber,
+            settings = defaultSettings,
+            battery = (Config.Battery.Enabled and loadedPhoneData.battery) or 100,
+            serverIdentifier = GetCurrentServerEndpoint()
         }
 
-        WaitForConfig()
+        waitForConfig()
 
         debugprint("triggering phone:setPhoneData")
-        SendReactMessage("setPhoneData", phoneData)
+        SendPhoneDataToUI()
         TriggerEvent("lb-phone:numberChanged", phoneNumber)
+
+        if localeWasNormalized then
+            debugprint("normalizing legacy locale", savedLocale, "->", defaultSettings.locale)
+            AwaitCallback("setSettings", defaultSettings)
+        end
+
         Wait(250)
     end
 
-    -- Fetch crypto coins if available
     if FetchCryptoCoins then
         FetchCryptoCoins()
     end
 
-    settings        = defaultSettings
-    isFetchingPhone = false
+    settings = defaultSettings
+    fetchingPhone = false
 end
 
--- Expose globally
-FetchPhone = FetchPhone
-
--- ─────────────────────────────────────────────
---  RefreshPhone (also assigned to FetchPhone
---  at the end of the original — kept as-is)
--- ─────────────────────────────────────────────
-local function RefreshPhone(skipFetch)
+function RefreshPhone(skipFetch)
     debugprint("RefreshPhone triggered")
 
-    -- Wait if a fetch is already running
-    if isFetchingPhone then
+    if fetchingPhone then
         debugprint("phone is being fetched, waiting before refreshing")
-        while isFetchingPhone do
+
+        while fetchingPhone do
             Wait(0)
         end
     end
 
-    -- Handle dynamic WebRTC credentials
     if Config.DynamicWebRTC and Config.DynamicWebRTC.Enabled then
         local iceServers = AwaitCallback("getWebRTCCredentials")
 
-        -- Remove STUN-only entries if configured
         if Config.DynamicWebRTC.RemoveStun and iceServers then
             for i = #iceServers, 1, -1 do
                 if not iceServers[i].credential then
@@ -290,225 +252,191 @@ local function RefreshPhone(skipFetch)
         end
     end
 
-    -- Mark config as not yet received so UI re-sends it
     configReceived = false
 
-    -- Decode main config
-    local cfg = json.decode(GetConfigFile("config.json"))
+    local currentConfig = loadJsonConfig("config.json")
+    local _, resolvedDefaultLocale = GetLocaleConfig(Config.DefaultLocale)
 
-    -- Valet settings
-    local valetEnabled = Config.Valet and Config.Valet.Enabled or false
-    local valet = {
-        enabled      = valetEnabled,
-        price        = Config.Valet.Price or 0,
-        vehicleTypes = Config.Valet.VehicleTypes or { "car" },
-    }
-    cfg.valet = valet
-
-    -- Copy top-level config values into cfg
-    cfg.locations                  = Config.Locations
-    cfg.AllowExternal              = Config.AllowExternal
-    cfg.ExternalBlacklistedDomains = Config.ExternalBlacklistedDomains
-    cfg.ExternalWhitelistedDomains = Config.ExternalWhitelistedDomains
-    cfg.EmailDomain                = Config.EmailDomain
-    cfg.RealTime                   = Config.RealTime
-    cfg.CurrencyFormat             = Config.CurrencyFormat
-    cfg.DeleteMessages             = Config.DeleteMessages
-    cfg.Battery                    = Config.Battery
-    cfg.rtc                        = Config.RTCConfig
-    cfg.PromoteBirdy               = Config.PromoteBirdy
-    cfg.DynamicIsland              = Config.DynamicIsland
-    cfg.SetupScreen                = Config.SetupScreen
-    cfg.MaxTransferAmount          = Config.MaxTransferAmount
-    cfg.EnableMessagePay           = Config.EnableMessagePay
-    cfg.EnableGIFs                 = Config.EnableGIFs
-    cfg.GIFsFilter                 = Config.GIFsFilter or "low"
-    cfg.EnableVoiceMessages        = Config.EnableVoiceMessages
-    cfg.DefaultLocale              = Config.DefaultLocale
-    cfg.DateLocale                 = Config.DateLocale
-    cfg.Debug                      = Config.Debug
-    cfg.TikTokTTS                  = Config.TrendyTTS or {{ "English (US) - Female", "en_us_001" }}
-    cfg.recordNearbyVoices         = Config.Voice and Config.Voice.RecordNearby
-    cfg.frameColor                 = Config.FrameColor
-    cfg.allowFrameColorChange      = Config.AllowFrameColorChange
-    cfg.unlockPhoneKey             = Config.KeyBinds and Config.KeyBinds.UnlockPhone and Config.KeyBinds.UnlockPhone.Bind or nil
-    cfg.DeleteMail                 = Config.DeleteMail
-    cfg.ChangePassword             = Config.ChangePassword
-    cfg.DeleteAccount              = Config.DeleteAccount
-    cfg.CustomCamera               = (Config.Camera and Config.Camera.Walkable) or false
-    cfg.UsernameFilter             = (Config.UsernameFilter and Config.UsernameFilter.Regex) or "[a-zA-Z0-9]+"
-
-    -- Crypto limits
-    if Config.Crypto and Config.Crypto.Limits then
-        cfg.CryptoLimit = Config.Crypto.Limits
-    else
-        cfg.CryptoLimit = { Buy = 1000000, Sell = 1000000 }
-    end
-
-    cfg.Browser    = Config.Browser
-    cfg.CustomMaps = Config.CustomMaps
-
-    -- Sound settings
-    cfg.sound = {
-        system           = Config.Sound.System,
-        ringtones        = Config.Sound.Ringtones,
-        notifications    = Config.Sound.Notifications,
-        appNotifications = Config.Sound.AppNotifications,
+    currentConfig.valet = {
+        enabled = Config.Valet.Enabled and true or false,
+        price = Config.Valet.Price or 0,
+        vehicleTypes = Config.Valet.VehicleTypes or { "car" }
     }
 
-    cfg.AppDownloadTime = Config.AppDownloadTime
-
-    -- Phone number length
-    local numLength    = Config.PhoneNumber.Length or 7
-    local prefixes     = Config.PhoneNumber.Prefixes
-    local prefixLength = (#prefixes > 0) and #prefixes[1] or 0
-    cfg.PhoneNumberLength = numLength + prefixLength
-    cfg.Format            = Config.PhoneNumber.Format
-
-    -- Image options
-    cfg.imageOptions = {
-        mime    = (Config.Image and Config.Image.Mime)    or "image/png",
-        quality = (Config.Image and Config.Image.Quality) or 1.0,
+    currentConfig.locations = Config.Locations
+    currentConfig.AllowExternal = Config.AllowExternal
+    currentConfig.ExternalBlacklistedDomains = Config.ExternalBlacklistedDomains
+    currentConfig.ExternalWhitelistedDomains = Config.ExternalWhitelistedDomains
+    currentConfig.EmailDomain = Config.EmailDomain
+    currentConfig.RealTime = Config.RealTime
+    currentConfig.CurrencyFormat = Config.CurrencyFormat
+    currentConfig.DeleteMessages = Config.DeleteMessages
+    currentConfig.Battery = Config.Battery
+    currentConfig.rtc = Config.RTCConfig
+    currentConfig.PromoteBirdy = Config.PromoteBirdy
+    currentConfig.Verified = Config.Verified
+    currentConfig.LiveTray = Config.LiveTray
+    currentConfig.SetupScreen = Config.SetupScreen
+    currentConfig.MaxTransferAmount = Config.MaxTransferAmount
+    currentConfig.EnableMessagePay = Config.EnableMessagePay
+    currentConfig.EnableGIFs = Config.EnableGIFs
+    currentConfig.GIFsFilter = Config.GIFsFilter or "low"
+    currentConfig.EnableVoiceMessages = Config.EnableVoiceMessages
+    currentConfig.DefaultLocale = resolvedDefaultLocale
+    currentConfig.DateLocale = Config.DateLocale
+    currentConfig.Debug = Config.Debug
+    currentConfig.TikTokTTS = Config.TrendyTTS or {
+        { "English (US) - Female", "en_us_001" }
     }
-
-    -- Video options
-    cfg.videoOptions = {
-        bitrate  = (Config.Video and Config.Video.Bitrate)     or 250,
-        size     = (Config.Video and Config.Video.MaxSize)     or 10,
+    currentConfig.recordNearbyVoices = Config.Voice.RecordNearby
+    currentConfig.frameColor = Config.FrameColor
+    currentConfig.allowFrameColorChange = Config.AllowFrameColorChange
+    currentConfig.unlockPhoneKey = Config.KeyBinds.UnlockPhone and Config.KeyBinds.UnlockPhone.Bind or nil
+    currentConfig.DeleteMail = Config.DeleteMail
+    currentConfig.ChangePassword = Config.ChangePassword
+    currentConfig.DeleteAccount = Config.DeleteAccount
+    currentConfig.CustomCamera = (Config.Camera and Config.Camera.Walkable) or false
+    currentConfig.UsernameFilter = (Config.UsernameFilter and Config.UsernameFilter.Regex) or "[a-zA-Z0-9]+"
+    currentConfig.CryptoLimit = (Config.Crypto and Config.Crypto.Limits) or {
+        Buy = 1000000,
+        Sell = 1000000
+    }
+    currentConfig.Browser = Config.Browser
+    currentConfig.CustomMaps = Config.CustomMaps
+    currentConfig.sound = {
+        system = Config.Sound.System,
+        ringtones = Config.Sound.Ringtones,
+        notifications = Config.Sound.Notifications,
+        appNotifications = Config.Sound.AppNotifications
+    }
+    currentConfig.AppDownloadTime = Config.AppDownloadTime
+    currentConfig.Pages = Config.Pages
+    currentConfig.Marketplace = Config.Marketplace
+    currentConfig.PhoneNumberLength = (Config.PhoneNumber.Length or 7) + (#Config.PhoneNumber.Prefixes > 0 and #Config.PhoneNumber.Prefixes[1] or 0)
+    currentConfig.Format = Config.PhoneNumber.Format
+    currentConfig.imageOptions = {
+        mime = (Config.Image and Config.Image.Mime) or "image/png",
+        quality = (Config.Image and Config.Image.Quality) or 1.0
+    }
+    currentConfig.videoOptions = {
+        bitrate = (Config.Video and Config.Video.Bitrate) or 250,
+        audioBitrate = (Config.Video and Config.Video.AudioBitrate) or 128,
+        variableBitrate = (Config.Video and Config.Video.VariableBitrate) or false,
+        size = (Config.Video and Config.Video.MaxSize) or 10,
         duration = (Config.Video and Config.Video.MaxDuration) or 60,
-        fps      = (Config.Video and Config.Video.FrameRate)   or 24,
+        fps = (Config.Video and Config.Video.FrameRate) or 24
     }
+    currentConfig.Companies = table.deep_clone(Config.Companies)
 
-    -- Companies — deep clone and flag custom icon handlers
-    cfg.Companies = table.deep_clone(Config.Companies)
-    if cfg.Companies and cfg.Companies.Services then
-        for i = 1, #cfg.Companies.Services do
-            if cfg.Companies.Services[i].onCustomIconClick then
-                cfg.Companies.Services[i].onCustomIconClick = true
+    if currentConfig.Companies and currentConfig.Companies.Services then
+        for i = 1, #currentConfig.Companies.Services do
+            if currentConfig.Companies.Services[i].onCustomIconClick then
+                currentConfig.Companies.Services[i].onCustomIconClick = true
             end
         end
     end
 
-    -- Custom apps
     if Config.CustomApps then
-        for appId, appData in pairs(Config.CustomApps) do
-            cfg.apps[appId] = FormatCustomAppDataForUI(appData)
+        for identifier, app in pairs(Config.CustomApps) do
+            currentConfig.apps[identifier] = FormatCustomAppDataForUI(app)
         end
     end
 
-    -- Set access flags on all apps
-    for appId, appData in pairs(cfg.apps) do
-        appData.access = HasAccessToApp(appId)
+    for appIdentifier, app in pairs(currentConfig.apps) do
+        app.access = HasAccessToApp(appIdentifier)
     end
 
-    -- Default settings
-    local defaultSettings = json.decode(GetConfigFile("defaultSettings.json"))
-    cfg.defaultSettings = defaultSettings
+    currentConfig.defaultSettings = loadJsonConfig("defaultSettings.json")
+    currentConfig.defaultSettings.locale = resolvedDefaultLocale
 
-    -- Helper: remove an app from the default settings layout
-    local function removeFromDefaultLayout(appId)
-        local rows = cfg.defaultSettings.apps
-        for rowIdx = 1, #rows do
-            local row = rows[rowIdx]
-            for colIdx = 1, #row do
-                if row[colIdx] == appId then
-                    table.remove(row, colIdx)
+    local function removeDefaultApp(appName)
+        local appRows = currentConfig.defaultSettings.apps
+
+        for row = 1, #appRows do
+            for index = 1, #appRows[row] do
+                if appRows[row][index] == appName then
+                    table.remove(appRows[row], index)
                     break
                 end
             end
         end
     end
 
-    -- Standalone framework: remove framework-dependent apps
     if Config.Framework == "standalone" and not Config.CustomFramework then
-        cfg.apps.Wallet   = nil
-        cfg.apps.Home     = nil
-        cfg.apps.Garage   = nil
-        cfg.apps.Services = nil
-        removeFromDefaultLayout("Wallet")
-        removeFromDefaultLayout("Home")
-        removeFromDefaultLayout("Garage")
-        removeFromDefaultLayout("Services")
+        currentConfig.apps.Wallet = nil
+        currentConfig.apps.Home = nil
+        currentConfig.apps.Garage = nil
+        currentConfig.apps.Services = nil
+
+        removeDefaultApp("Wallet")
+        removeDefaultApp("Home")
+        removeDefaultApp("Garage")
+        removeDefaultApp("Services")
     end
 
-    -- No house script: remove home app
     if not Config.HouseScript then
-        cfg.apps.Home = nil
+        currentConfig.apps.Home = nil
         debugprint("No Config.HouseScript, removed home app")
-        removeFromDefaultLayout("Home")
+        removeDefaultApp("Home")
     end
 
-    -- Crypto disabled: remove crypto app
     if not (Config.Crypto and Config.Crypto.Enabled) then
-        cfg.apps.Crypto = nil
+        currentConfig.apps.Crypto = nil
         debugprint("Config.Crypto not enabled, removed crypto app")
-        removeFromDefaultLayout("Crypto")
+        removeDefaultApp("Crypto")
     end
 
-    -- Apply hidden-app flags
-    for appId, isHidden in pairs(GetHiddenApps()) do
-        if cfg.apps[appId] then
-            cfg.apps[appId].hidden = isHidden
+    for appIdentifier, hidden in pairs(GetHiddenApps()) do
+        if currentConfig.apps[appIdentifier] then
+            currentConfig.apps[appIdentifier].hidden = hidden
         end
     end
 
-    -- Send config to UI
-    SendReactMessage("setConfig", cfg)
-    WaitForConfig()
+    SendNUIAction("setConfig", currentConfig)
+    waitForConfig()
 
-    -- If phone data exists, resend it; otherwise fetch fresh
     if phoneData then
         debugprint("phoneData is defined")
-        SendReactMessage("setPhoneData", phoneData)
+        SendPhoneDataToUI()
         return
     end
 
-    if skipFetch then return end
-
-    FetchPhone()
+    if not skipFetch then
+        FetchPhone()
+    end
 end
 
-RefreshPhone = RefreshPhone
-
--- ─────────────────────────────────────────────
---  Net event: job updated → refresh app access
--- ─────────────────────────────────────────────
-RegisterNetEvent("lb-phone:jobUpdated")
-AddEventHandler("lb-phone:jobUpdated", function(jobInfo)
-    if not Config.WhitelistApps and not Config.BlacklistApps then return end
+RegisterNetEvent("lb-phone:jobUpdated", function(jobData)
+    if not Config.WhitelistApps and not Config.BlacklistApps then
+        return
+    end
 
     debugprint("Job updated, refreshing whitelisted & blacklisted apps")
 
-    local accessMap = {}
+    local appAccess = {}
 
-    for appId in pairs(Config.WhitelistApps or {}) do
-        accessMap[appId] = HasAccessToApp(appId, jobInfo.job, jobInfo.grade)
+    for appIdentifier in pairs(Config.WhitelistApps or {}) do
+        appAccess[appIdentifier] = HasAccessToApp(appIdentifier, jobData.job, jobData.grade)
     end
 
-    for appId in pairs(Config.BlacklistApps or {}) do
-        accessMap[appId] = HasAccessToApp(appId, jobInfo.job, jobInfo.grade)
+    for appIdentifier in pairs(Config.BlacklistApps or {}) do
+        appAccess[appIdentifier] = HasAccessToApp(appIdentifier, jobData.job, jobData.grade)
     end
 
-    for appId in pairs(Config.CustomApps or {}) do
-        accessMap[appId] = HasAccessToApp(appId, jobInfo.job, jobInfo.grade)
+    for appIdentifier in pairs(Config.CustomApps or {}) do
+        appAccess[appIdentifier] = HasAccessToApp(appIdentifier, jobData.job, jobData.grade)
     end
 
-    SendReactMessage("app:setHasAccess", accessMap)
+    SendNUIAction("app:setHasAccess", appAccess)
 end)
 
--- ─────────────────────────────────────────────
---  NUI callback: UI signals config received
--- ─────────────────────────────────────────────
-RegisterNUICallback("configReceived", function(_, cb)
+RegisterNUICallback("configReceived", function(data, callback)
     debugprint("UI has received the config (configReceived triggered)")
     configReceived = true
-    cb("ok")
+    callback("ok")
 end)
 
--- ─────────────────────────────────────────────
---  NUI callback: UI requests phone data
--- ─────────────────────────────────────────────
-RegisterNUICallback("getPhoneData", function(data, cb)
+RegisterNUICallback("getPhoneData", function(data, callback)
     debugprint("getPhoneData triggered")
 
     while not FrameworkLoaded do
@@ -518,62 +446,48 @@ RegisterNUICallback("getPhoneData", function(data, cb)
     Wait(1000)
     RefreshPhone()
 
-    if not cb then
-        debugprint("cb is not defined in getPhoneData", data)
-        return
+    if not callback then
+        return debugprint("cb is not defined in getPhoneData", data)
     end
 
-    cb(true)
+    callback(true)
 end)
 
--- ─────────────────────────────────────────────
---  KeepInput thread: disable game controls
---  while the phone is open (KeepInput mode).
--- ─────────────────────────────────────────────
-local function KeepInputThread()
+local function keepInputThread()
     local playerId = PlayerId()
-
-    -- Block movement / combat controls while phone is open
-    local blockedControls = {
-        199, 200, 24, 25, 69, 70, 91, 92,
-        106, 114, 140, 141, 142, 257, 263,
-        264, 330, 331,
+    local controls = {
+        199, 200, 24, 25, 69, 70, 91, 92, 106, 114, 140, 141, 142, 257, 263, 264, 330, 331
     }
-
-    -- Extra controls blocked when NUI has focus
-    local nuiFocusControls = {
-        1, 2, 245, 14, 15, 16, 17, 37, 50,
-        99, 115, 180, 181, 198, 241, 242,
-        261, 262, 85,
+    local focusedControls = {
+        1, 2, 245, 14, 15, 16, 17, 37, 50, 99, 115, 180, 181, 198, 241, 242, 261, 262, 85
     }
 
     while phoneOpen do
         Wait(0)
 
-        for _, control in ipairs(blockedControls) do
-            DisableControl(0, control, true)
+        for i = 1, #controls do
+            DisableControlAction(0, controls[i], true)
         end
-        DisableFiring(playerId, true)
+
+        DisablePlayerFiring(playerId, true)
 
         if IsNuiFocused() then
-            for _, control in ipairs(nuiFocusControls) do
-                DisableControl(0, control, true)
+            for i = 1, #focusedControls do
+                DisableControlAction(0, focusedControls[i], true)
             end
         end
     end
 
-    -- Keep blocking the scroll wheel until released
     while IsDisabledControlPressed(0, 200) do
-        DisableControl(0, 200, true)
+        DisableControlAction(0, 200, true)
         Wait(0)
     end
 
-    -- Handle walkable camera state on close
     if cameraOpen and IsWalkingCamEnabled() then
         local wasSelfie = IsSelfieCam()
+
         DisableWalkableCam()
 
-        -- Wait until phone reopens
         while not phoneOpen do
             Wait(500)
         end
@@ -585,141 +499,124 @@ local function KeepInputThread()
     end
 end
 
--- ─────────────────────────────────────────────
---  toggleLock: internal mutex flag
--- ─────────────────────────────────────────────
-local toggleLock = false
+local function isPushToTalkHeld()
+    return (Config.DisableFocusTalking and IsDisabledControlPressed(0, 249)) or IsDisabledControlJustReleased(0, 249)
+end
 
--- ─────────────────────────────────────────────
---  ToggleOpen
---  Opens or closes the phone UI.
--- ─────────────────────────────────────────────
-local function ToggleOpen(open, keepFocus)
-    if toggleLock then return end
+function ToggleOpen(open, noFocus)
+    if togglingPhone then
+        return
+    end
 
-    -- If not a boolean, invert current state
     if type(open) ~= "boolean" then
         open = not phoneOpen
     end
 
     open = open == true
 
-    debugprint("ToggleOpen triggered", tostring(open), tostring(keepFocus))
+    debugprint("ToggleOpen triggered", tostring(open), tostring(noFocus))
 
-    -- Guard: phone disabled
     if phoneDisabled and open then
         debugprint("phone is disabled, returning")
         return
     end
 
-    -- Guard: state unchanged
     if phoneOpen == open then
         debugprint("phoneOpen & open are both the same value, returning")
         return
     end
 
-    -- Guard: framework not ready
-    if not FrameworkLoaded and open then
+    if open and not FrameworkLoaded then
         infoprint("warning", "Framework not loaded")
         return
     end
 
-    if open then
-        -- Guard: player is dead
-        if IsPedDeadOrDying(PlayerPedId(), true) then
-            debugprint("player ped is dead/dying, returning")
-            return
-        end
+    if open and IsPedDeadOrDying(PlayerPedId(), true) then
+        debugprint("player ped is dead/dying, returning")
+        return
+    end
 
-        -- Guard: custom CanOpenPhone check
-        if CanOpenPhone and not CanOpenPhone() then
-            debugprint("CanOpenPhone returned false, returning")
-            return
-        end
+    if open and CanOpenPhone and not CanOpenPhone() then
+        debugprint("CanOpenPhone returned false, returning")
+        return
+    end
 
-        -- Guard: ValidateChecks
-        if not ValidateChecks("openPhone") then
-            debugprint("ValidateChecks returned false for openPhone, returning")
-            return
-        end
+    if open and not ValidateChecks("openPhone") then
+        debugprint("ValidateChecks returned false for openPhone, returning")
+        return
+    end
 
-        -- Guard: another NUI has focus
-        if IsNuiFocused() and Config.DisableOpenNUI then
-            infoprint("info", "Not opening the phone as another script has NUI focus. You can disable this behavior by setting Config.DisableOpenNUI to false.")
-            return
-        end
+    if open and IsNuiFocused() and Config.DisableOpenNUI then
+        infoprint("info", "Not opening the phone as another script has NUI focus. You can disable this behavior by setting Config.DisableOpenNUI to false.")
+        return
+    end
 
-        -- Guard: lb-tablet is open
-        if GetResourceState("lb-tablet") == "started" and not Config.DisableTabletOpenPhone then
-            local ok, tabletOpen = pcall(function()
-                return exports["lb-tablet"]:IsOpen()
-            end)
-            if ok and tabletOpen then
-                infoprint("info", "Not opening the phone as the tablet is open. You can disable this behavior by adding Config.DisableTabletOpenPhone = true to the config.")
-                return
-            end
+    if open and GetResourceState("lb-tablet") == "started" and not Config.DisableTabletOpenPhone then
+        local ok, tabletOpen = pcall(function()
+            return exports["lb-tablet"]:IsOpen()
+        end)
+
+        if ok and tabletOpen then
+            infoprint("info", "Not opening the phone as the tablet is open. You can disable this behavior by adding Config.DisableTabletOpenPhone = true to the config.")
+            return
         end
     end
 
-    -- Wait for any in-progress fetch to finish
-    if isFetchingPhone then
-        toggleLock = true
-        while isFetchingPhone do
+    if fetchingPhone then
+        togglingPhone = true
+
+        while fetchingPhone do
             Wait(0)
         end
-        toggleLock = false
+
+        togglingPhone = false
     end
 
-    -- Ensure the player has a phone number
-    if open then
+    if open and not currentPhone then
+        debugprint("no phone, fetching")
+        FetchPhone()
+
         if not currentPhone then
-            debugprint("no phone, fetching")
-            FetchPhone()
-            if not currentPhone then
-                debugprint("still no phone after fetching, returning")
-                return
-            end
-        end
-    end
-
-    -- Ensure the player actually has the phone item
-    if open then
-        if not HasPhoneItem(currentPhone) then
-            debugprint("HasPhoneItem returned false. Phone number:", tostring(currentPhone))
-            TriggerServerEvent("phone:togglePhone")
-            SendReactMessage("closePhone")
+            debugprint("still no phone after fetching, returning")
             return
         end
     end
 
-    -- Close selfie cam when closing phone
+    if open and not HasPhoneItem(currentPhone) then
+        debugprint("HasPhoneItem returned false. Phone number:", tostring(currentPhone))
+        TriggerServerEvent("phone:togglePhone")
+        SendNUIAction("closePhone")
+        return
+    end
+
     if not open and IsWalkingCamEnabled() and IsSelfieCam() then
         ToggleSelfieCam(false)
     end
 
-    -- End live stream when closing phone
     if not open and Config.EndLiveClose then
-        local wasWatching = IsWatchingLive()
+        local liveId = IsWatchingLive()
+
         EndLive()
-        if wasWatching then
-            SendReactMessage("instagram:liveEnded", wasWatching)
+
+        if liveId then
+            SendNUIAction("instagram:liveEnded", liveId)
         end
     end
 
     phoneOpen = open
-    toggleLock = true
+    togglingPhone = true
 
     if open then
         debugprint("should open phone. sending openPhone event to ui")
-        SendReactMessage("openPhone")
+        SendNUIAction("openPhone")
 
-        if not keepFocus then
+        if not noFocus then
             SetNuiFocus(true, true)
             SetNuiFocusKeepInput(Config.KeepInput)
         end
 
         if Config.KeepInput then
-            CreateThread(KeepInputThread)
+            CreateThread(keepInputThread)
         end
 
         if ControllerThread then
@@ -727,6 +624,7 @@ local function ToggleOpen(open, keepFocus)
         end
 
         debugprint("setting animation action")
+
         if IsWalkingCamEnabled() then
             SetPhoneAction("camera")
         elseif IsInCall() then
@@ -739,189 +637,145 @@ local function ToggleOpen(open, keepFocus)
         PlayCloseAnim()
         SetNuiFocus(false, false)
         SetNuiFocusKeepInput(false)
-        SendReactMessage("closePhone")
+        SendNUIAction("closePhone")
     end
 
     TriggerServerEvent("phone:togglePhone", open)
     TriggerEvent("lb-phone:phoneToggled", open)
-    toggleLock = false
+
+    togglingPhone = false
 end
 
-ToggleOpen = ToggleOpen
+RegisterNUICallback("toggleInput", function(data, callback)
+    callback("ok")
 
--- ─────────────────────────────────────────────
---  NUI callback: toggle NUI input focus
--- ─────────────────────────────────────────────
-RegisterNUICallback("toggleInput", function(focused, cb)
-    cb("ok")
-
-    if not Config.KeepInput then return end
-
-    -- Check push-to-talk state
-    local pttPressed
-    if Config.DisableFocusTalking then
-        pttPressed = IsDisabledControlPressed(0, 249)
-    else
-        pttPressed = IsDisabledControlJustReleased(0, 249)
+    if not Config.KeepInput then
+        return
     end
 
-    if pttPressed then
-        if focused then
+    if isPushToTalkHeld() then
+        if data then
             debugprint("PTT is pressed, ignoring toggle focus")
             return
         end
 
         debugprint("PTT is pressed, waiting before toggling focus")
-        while true do
-            local stillPressed
-            if Config.DisableFocusTalking then
-                stillPressed = IsDisabledControlPressed(0, 249)
-            else
-                stillPressed = IsDisabledControlJustReleased(0, 249)
-            end
-            if not stillPressed then break end
+
+        while isPushToTalkHeld() do
             Wait(100)
         end
     end
 
-    if focused then
+    if data then
         Wait(200)
     end
 
-    SetNuiFocusKeepInput(not focused)
+    SetNuiFocusKeepInput(not data)
 end)
 
--- ─────────────────────────────────────────────
---  PTT-during-focus flag
--- ─────────────────────────────────────────────
-local pttWhileFocused = false
+AddEventHandler("lb-phone:keyPressed", function(key)
+    if IsPauseMenuActive() then
+        return
+    end
 
--- ─────────────────────────────────────────────
---  Event handler: keybind pressed
--- ─────────────────────────────────────────────
-AddEventHandler("lb-phone:keyPressed", function(action)
-    if IsPauseMenuActive() then return end
-
-    if action == "Open" then
+    if key == "Open" then
         debugprint("Pressed open keybind")
         ToggleOpen(not phoneOpen)
-
-    elseif action == "Focus" then
-        -- Only handle focus toggle if phone is open and not blocked by PTT
-        if not phoneOpen then return end
-        if pttWhileFocused then return end
-
-        -- Check PTT
-        local pttPressed
-        if Config.DisableFocusTalking then
-            pttPressed = IsDisabledControlPressed(0, 249)
-        else
-            pttPressed = IsDisabledControlJustReleased(0, 249)
+    elseif key == "Focus" then
+        if not phoneOpen or focusToggleBusy then
+            return
         end
 
-        if pttPressed then
+        if isPushToTalkHeld() then
             debugprint("PTT is pressed, waiting before toggling focus")
-            pttWhileFocused = true
-            while true do
-                local stillPressed = IsDisabledControlPressed(0, 249)
-                if not stillPressed then
-                    stillPressed = IsDisabledControlJustReleased(0, 249)
-                end
-                if not stillPressed then break end
+            focusToggleBusy = true
+
+            while IsDisabledControlPressed(0, 249) or IsDisabledControlJustReleased(0, 249) do
                 Wait(0)
             end
-            pttWhileFocused = false
+
+            focusToggleBusy = false
         end
 
-        local hasFocus = IsNuiFocused()
-        SetNuiFocus(not hasFocus, not hasFocus)
-        if not hasFocus then
+        local focused = IsNuiFocused()
+
+        SetNuiFocus(not focused, not focused)
+
+        if not focused then
             SetNuiFocusKeepInput(Config.KeepInput)
         else
             SetNuiFocusKeepInput(false)
         end
-
-    elseif action == "StopSounds" then
-        SendReactMessage("stopSounds")
+    elseif key == "StopSounds" then
+        SendNUIAction("stopSounds")
     end
 
-    -- Call answer / decline
-    if action == "AnswerCall" or action == "DeclineCall" then
+    if key == "AnswerCall" or key == "DeclineCall" then
         if CanOpenPhone then
             if not CanOpenPhone() then
                 debugprint("CanOpenPhone returned false, not answering/declining call")
                 return
             end
-        else
-            if not ValidateChecks("openPhone") then
-                debugprint("ValidateChecks returned false for openPhone, not answering/declining call")
-                return
-            end
+        elseif not ValidateChecks("openPhone") then
+            debugprint("ValidateChecks returned false for openPhone, not answering/declining call")
+            return
         end
 
-        if action == "AnswerCall" then
-            SendReactMessage("usedCommand", "answer")
-        else
-            SendReactMessage("usedCommand", "decline")
+        if key == "AnswerCall" then
+            SendNUIAction("usedCommand", "answer")
+        elseif key == "DeclineCall" then
+            SendNUIAction("usedCommand", "decline")
         end
     end
 
-    -- Camera controls
-    if action == "TakePhoto" then
-        SendReactMessage("camera:usedCommand", "toggleTaking")
-    elseif action == "ToggleFlash" then
-        SendReactMessage("camera:usedCommand", "toggleFlash")
-    elseif action == "LeftMode" then
-        SendReactMessage("camera:usedCommand", "leftMode")
-    elseif action == "RightMode" then
-        SendReactMessage("camera:usedCommand", "rightMode")
-    elseif action == "FlipCamera" then
-        SendReactMessage("camera:usedCommand", "toggleFlip")
+    if key == "TakePhoto" then
+        SendNUIAction("camera:usedCommand", "toggleTaking")
+    elseif key == "ToggleFlash" then
+        SendNUIAction("camera:usedCommand", "toggleFlash")
+    elseif key == "LeftMode" then
+        SendNUIAction("camera:usedCommand", "leftMode")
+    elseif key == "RightMode" then
+        SendNUIAction("camera:usedCommand", "rightMode")
+    elseif key == "FlipCamera" then
+        SendNUIAction("camera:usedCommand", "toggleFlip")
     end
 end)
 
--- ─────────────────────────────────────────────
---  Register keybinds / commands from config
--- ─────────────────────────────────────────────
-for actionName, bindCfg in pairs(Config.KeyBinds) do
-    if bindCfg.Command then
-        bindCfg.Command = string.lower(bindCfg.Command)
+for key, keyBind in pairs(Config.KeyBinds) do
+    if keyBind.Command then
+        keyBind.Command = keyBind.Command:lower()
 
-        if bindCfg.Bind then
-            -- Register as a key bind
-            local bindOptions = {
-                name             = bindCfg.Command,
-                description      = bindCfg.Description or "no description",
-                defaultKey       = bindCfg.Bind,
-                defaultMapper    = bindCfg.Mapper,
-                secondaryKey     = bindCfg.SecondaryBind,
-                secondaryMapper  = bindCfg.SecondaryMapper,
+        if keyBind.Bind then
+            keyBind.bindData = AddKeyBind({
+                name = keyBind.Command,
+                description = keyBind.Description or "no description",
+                defaultKey = keyBind.Bind,
+                defaultMapper = keyBind.Mapper,
+                secondaryKey = keyBind.SecondaryBind,
+                secondaryMapper = keyBind.SecondaryMapper,
                 onPress = function()
-                    TriggerEvent("lb-phone:keyPressed", actionName)
+                    TriggerEvent("lb-phone:keyPressed", key)
                 end,
-                onRelease = function(duration)
-                    TriggerEvent("lb-tablet:keyReleased", actionName, duration)
-                end,
-            }
-            bindCfg.bindData = AddKeyBind(bindOptions)
+                onRelease = function(data)
+                    TriggerEvent("lb-phone:keyReleased", key, data)
+                end
+            })
         else
-            -- Register as a chat command
-            RegisterCommand(bindCfg.Command, function()
-                TriggerEvent("lb-phone:keyPressed", actionName)
+            RegisterCommand(keyBind.Command, function()
+                TriggerEvent("lb-phone:keyPressed", key)
                 Wait(0)
-                TriggerEvent("lb-phone:keyReleased", actionName, 0)
+                TriggerEvent("lb-phone:keyReleased", key, 0)
             end, false)
         end
     end
 end
 
--- ─────────────────────────────────────────────
---  NUI callback: player finished setup wizard
--- ─────────────────────────────────────────────
-RegisterNUICallback("finishedSetup", function(data, cb)
-    if phoneData then phoneData.isSetup = true end
+RegisterNUICallback("finishedSetup", function(data, callback)
+    if phoneData then
+        phoneData.isSetup = true
+    end
 
-    SendReactMessage("setName", data.name)
+    SendNUIAction("setName", data.name)
     TriggerServerEvent("phone:setName", data.name)
     TriggerServerEvent("phone:togglePhone", phoneOpen)
     TriggerServerEvent("phone:finishedSetup", data)
@@ -930,221 +784,283 @@ RegisterNUICallback("finishedSetup", function(data, cb)
         TriggerCallback("backup:createBackup")
     end
 
-    cb("ok")
+    callback("ok")
 end)
 
--- ─────────────────────────────────────────────
---  NUI callback: check admin status
--- ─────────────────────────────────────────────
-RegisterNUICallback("isAdmin", function(_, cb)
-    TriggerCallback("isAdmin", cb)
+RegisterNUICallback("isAdmin", function(data, callback)
+    TriggerCallback("isAdmin", callback)
 end)
 
--- ─────────────────────────────────────────────
---  NUI callback: rename this phone
--- ─────────────────────────────────────────────
-RegisterNUICallback("setPhoneName", function(name, cb)
+RegisterNUICallback("setPhoneName", function(data, callback)
     if phoneData and phoneData.isSetup then
-        if settings then settings.name = name end
-        TriggerServerEvent("phone:setName", name)
+        if settings then
+            settings.name = data
+        end
+
+        TriggerServerEvent("phone:setName", data)
     end
-    cb("ok")
+
+    callback("ok")
 end)
 
--- ─────────────────────────────────────────────
---  NUI callback: save updated settings
--- ─────────────────────────────────────────────
-RegisterNUICallback("setSettings", function(newSettings, cb)
+RegisterNUICallback("setSettings", function(data, callback)
     debugprint("setSettings triggered")
-    cb("ok")
+    callback("ok")
 
     if not phoneData then
         print("setSettings triggered, but phoneData is nil")
         return
     end
 
-    settings          = newSettings
+    if data and data.locale then
+        local _, resolvedLocale = GetLocaleConfig(data.locale)
+        data.locale = resolvedLocale
+    end
+
+    settings = data
     phoneData.settings = settings
 
     AwaitCallback("setSettings", settings)
     SetCallVolume(settings and settings.sound and settings.sound.callVolume)
-    TriggerEvent("lb-phone:settingsUpdated", newSettings)
-
-    SendReactMessage("customApp:sendMessage", {
+    TriggerEvent("lb-phone:settingsUpdated", data)
+    SendNUIAction("customApp:sendMessage", {
         identifier = "any",
         message = {
-            type     = "settingsUpdated",
+            type = "settingsUpdated",
             settings = settings,
-            action   = "settingsUpdated",
-            data     = newSettings,
-        },
+            action = "settingsUpdated",
+            data = data
+        }
     })
 end)
 
--- ─────────────────────────────────────────────
---  NUI callback: reposition hardware cursor
--- ─────────────────────────────────────────────
-RegisterNUICallback("setCursorLocation", function(data, cb)
-    local screenW, screenH = GetActiveScreenResolution()
-    SetCursorLocation(data.x / screenW, data.y / screenH)
-    cb("ok")
+RegisterNUICallback("setCursorLocation", function(data, callback)
+    local width, height = GetActiveScreenResolution()
+
+    SetCursorLocation(data.x / width, data.y / height)
+    callback("ok")
 end)
 
--- ─────────────────────────────────────────────
---  NUI callback: release NUI focus (close)
--- ─────────────────────────────────────────────
-RegisterNUICallback("exitFocus", function(_, cb)
+RegisterNUICallback("exitFocus", function(data, callback)
     debugprint("exitFocus triggered")
     SetNuiFocus(false, false)
     ToggleOpen(false)
-    cb("ok")
+    callback("ok")
 end)
 
--- ─────────────────────────────────────────────
---  NUI callback: return available locales
--- ─────────────────────────────────────────────
-RegisterNUICallback("getLocales", function(_, cb)
-    cb(Config.Locales or { en = "English" })
-end)
+RegisterNUICallback("getLocales", function(data, callback)
+    local locales = {}
 
--- ─────────────────────────────────────────────
---  NUI callback: phone visibility changed
--- ─────────────────────────────────────────────
-RegisterNUICallback("setOnScreen", function(value, cb)
-    local onScreen = value == true
-    if onScreen ~= PhoneOnScreen then
-        TriggerEvent("lb-phone:setOnScreen", onScreen)
-        PhoneOnScreen = onScreen
+    for key, value in pairs(Config.Locales or { en = "English" }) do
+        local locale = key
+        local label = value
+
+        if type(value) == "table" then
+            locale = value.locale
+            label = value.name
+        end
+
+        if locale and GetLocaleConfig(locale) then
+            locales[#locales + 1] = {
+                locale = NormalizeLocaleCode(locale),
+                name = type(label) == "string" and label or locale
+            }
+        end
     end
-    cb("ok")
+
+    table.sort(locales, function(a, b)
+        return a.name < b.name
+    end)
+
+    callback(locales)
+end)
+
+RegisterNUICallback("setOnScreen", function(data, callback)
+    data = data == true
+
+    if data ~= PhoneOnScreen then
+        TriggerEvent("lb-phone:setOnScreen", data)
+        PhoneOnScreen = data
+    end
+
+    callback("ok")
+end)
+
+RegisterNUICallback("restartPhone", function(data, callback)
+    callback("ok")
+    ToggleOpen(false)
+    Wait(1000)
+    ToggleOpen(true)
 end)
 
 exports("IsPhoneOnScreen", function()
     return PhoneOnScreen
 end)
 
-
--- ─────────────────────────────────────────────
---  Time & service update thread
--- ─────────────────────────────────────────────
 CreateThread(function()
-    local lastTime = {}
+    local previousTime = {}
 
     debugprint("Waiting for currentPhone to be set before updating time & service")
+
     while not currentPhone do
         Wait(500)
     end
 
-    SendReactMessage("updateService", GetServiceBars())
+    SendNUIAction("updateService", GetServiceBars())
     debugprint("currentPhone is set, updating time & service")
 
-    while true do
-        -- If RealTime is enabled the UI handles the clock itself
-        if Config.RealTime then break end
+    while not Config.RealTime do
+        local time = Config.CustomTime and Config.CustomTime() or {
+            hour = GetClockHours(),
+            minute = GetClockMinutes()
+        }
 
-        local time
-        if Config.CustomTime then
-            time = Config.CustomTime()
-        end
-
-        if not time then
-            time = { hour = GetClockHours(), minute = GetClockMinutes() }
-        end
-
-        -- Only push update when the time actually changed
-        if time.hour ~= lastTime.hour or time.minute ~= lastTime.minute then
-            lastTime.hour   = time.hour
-            lastTime.minute = time.minute
-            SendReactMessage("updateTime", time)
+        if time.hour ~= previousTime.hour or time.minute ~= previousTime.minute then
+            previousTime.hour = time.hour
+            previousTime.minute = time.minute
+            SendNUIAction("updateTime", time)
         end
 
         Wait(1000)
     end
 end)
 
+function GetConfigFile(fileName)
+    if type(fileName) == "string" then
+        local locale = fileName:match("^locales/(.+)%.json$")
 
--- ─────────────────────────────────────────────
---  NUI callback: fetch a JSON config file
--- ─────────────────────────────────────────────
-RegisterNUICallback("getConfigFile", function(name, cb)
-    local raw     = GetConfigFile(name .. ".json")
-    local decoded = json.decode(raw)
-    cb(decoded)
+        if locale then
+            fileName = "locales/" .. NormalizeLocaleCode(locale) .. ".json"
+        end
+    end
+
+    return LoadResourceFile(GetCurrentResourceName(), "config/" .. fileName)
+end
+
+RegisterNUICallback("getConfigFile", function(data, callback)
+    if type(data) ~= "string" then
+        callback(nil)
+        return
+    end
+
+    if data:sub(1, 8) == "locales/" then
+        local locale = data:match("^locales/(.+)$")
+        local localeData = GetLocaleConfig(locale)
+
+        callback(localeData)
+        return
+    end
+
+    callback(loadJsonConfig(data .. ".json"))
 end)
 
+local nearbyPlayers = {}
+local lastNearbyCoords = vector3(0.0, 0.0, 0.0)
+local lastNearbyUpdate = 0
 
--- ─────────────────────────────────────────────
---  LogOut
---  Clears all phone state (character logout).
--- ─────────────────────────────────────────────
-local function LogOut()
+local function updateNearbyPlayers()
+    local playerCoords = GetEntityCoords(PlayerPedId())
+    local activePlayers = GetActivePlayers()
+    local players = {}
+
+    for i = 1, #activePlayers do
+        local player = activePlayers[i]
+
+        if player ~= PlayerId() then
+            local ped = GetPlayerPed(player)
+            local coords = GetEntityCoords(ped)
+            local distance = #(playerCoords - coords)
+
+            if distance <= 50.0 then
+                players[#players + 1] = {
+                    player = player,
+                    source = GetPlayerServerId(player),
+                    ped = ped,
+                    coords = coords
+                }
+            end
+        end
+    end
+
+    nearbyPlayers = players
+end
+
+function GetNearbyPlayers()
+    local shouldUpdate = GetGameTimer() - lastNearbyUpdate > 5000
+
+    if not shouldUpdate then
+        shouldUpdate = #(GetEntityCoords(PlayerPedId()) - lastNearbyCoords) > 25.0
+    end
+
+    if shouldUpdate then
+        lastNearbyUpdate = GetGameTimer()
+        lastNearbyCoords = GetEntityCoords(PlayerPedId())
+        updateNearbyPlayers()
+    end
+
+    return nearbyPlayers
+end
+
+function LogOut()
     debugprint("LogOut triggered")
 
-    while isFetchingPhone do
+    while fetchingPhone do
         debugprint("LogOut triggered, waiting for fetchingPhone to finish...")
         Wait(500)
     end
 
     ResetSecurity()
-    if OnDeath then OnDeath() end
+    OnDeath()
 
-    phoneData    = nil
+    phoneData = nil
     currentPhone = nil
-    settings     = nil
+    settings = nil
 
     TriggerEvent("lb-phone:numberChanged", nil)
     TriggerCallback("setLastPhone")
 end
-LogOut = LogOut
 
--- ─────────────────────────────────────────────
---  SetPhone
---  Switches the active phone number.
--- ─────────────────────────────────────────────
-local function SetPhone(number, flag)
-    debugprint("SetPhone triggered", number, flag)
+function SetPhone(phoneNumber, refetch)
+    debugprint("SetPhone triggered", phoneNumber, refetch)
 
-    while isFetchingPhone do
+    while fetchingPhone do
         debugprint("SetPhone triggered, waiting for fetchingPhone to finish...")
         Wait(500)
     end
 
-    if OnDeath then OnDeath() end
-    AwaitCallback("setLastPhone", number)
+    OnDeath()
+    AwaitCallback("setLastPhone", phoneNumber)
     ResetSecurity(true)
     ToggleCharging(false)
 
-    phoneData    = nil
+    phoneData = nil
     currentPhone = nil
-    settings     = nil
+    settings = nil
 
     TriggerEvent("lb-phone:numberChanged", nil)
 
-    if number or flag then
+    if phoneNumber or refetch then
         FetchPhone()
     end
 
-    -- If clearing and no explicit number, auto-select the first number
-    if number == nil and not flag then
-        local first = GetFirstNumber()
-        if first then
-            SetPhone(first)
+    if phoneNumber == nil and not refetch then
+        local firstNumber = GetFirstNumber()
+
+        if firstNumber then
+            SetPhone(firstNumber)
         end
     end
 end
-SetPhone = SetPhone
 
--- ─────────────────────────────────────────────
---  OnDeath
---  Cleans up active states when the player dies.
--- ─────────────────────────────────────────────
-local function OnDeath()
+function OnDeath()
     debugprint("OnDeath triggered")
 
-    local wasWatching = IsWatchingLive()
+    local liveId = IsWatchingLive()
+
     EndLive()
-    if wasWatching then
-        SendReactMessage("instagram:liveEnded", wasWatching)
+
+    if liveId then
+        SendNUIAction("instagram:liveEnded", liveId)
     end
 
     if flashlightEnabled then
@@ -1155,13 +1071,8 @@ local function OnDeath()
     EndCall()
     ToggleOpen(false)
 end
-OnDeath = OnDeath
 
--- ─────────────────────────────────────────────
---  Net / export wiring
--- ─────────────────────────────────────────────
 RegisterNetEvent("phone:toggleOpen", ToggleOpen)
-
 exports("ToggleOpen", ToggleOpen)
 
 exports("IsOpen", function()
@@ -1172,9 +1083,11 @@ exports("IsDisabled", function()
     return phoneDisabled
 end)
 
-exports("ToggleDisabled", function(state)
-    phoneDisabled = state == true
+exports("ToggleDisabled", function(disabled)
+    phoneDisabled = disabled == true
+
     debugprint("ToggleDisabled triggered", phoneDisabled)
+
     if phoneDisabled and phoneOpen then
         ToggleOpen(false)
     end

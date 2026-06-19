@@ -13,15 +13,19 @@ RegisterNetEvent("QBCore:Client:OnJobUpdate", function(jobInfo)
     PlayerJob = jobInfo
 
     if oldJob.name ~= PlayerJob.name or oldJob.grade?.level ~= PlayerJob.grade?.level then
-        SendReactMessage("services:setCompany", GetCompanyData())
+        SendNUIAction("services:setCompany", GetCompanyData())
     else
-        SendReactMessage("services:setDuty", jobInfo.onduty)
+        SendNUIAction("services:setDuty", jobInfo.onduty)
     end
 
     TriggerEvent("lb-phone:jobUpdated", {
         job = PlayerJob.name,
         grade = PlayerJob.grade.level
     })
+
+    if RefreshMultiJobs then
+        RefreshMultiJobs()
+    end
 end)
 
 ---@return string

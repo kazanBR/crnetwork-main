@@ -37,6 +37,15 @@ function StopDisplayingCameraButtons()
     ClearHelp(true)
 end
 
+---@param action string
+---@param data any
+function SendNUIAction(action, data)
+    SendNUIMessage({
+        action = action,
+        data = data
+    })
+end
+
 ---@param entity number
 ---@return boolean success
 function TakeControlOfEntity(entity)

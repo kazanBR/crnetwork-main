@@ -1,108 +1,88 @@
--- ── Helper: rotate a vector by Euler angles (pitch=x, roll=y, yaw=z, in degrees) ──
-local function rotateVectorByEuler(vec, rotation)
-    -- Convert each Euler angle from degrees to radians
-    local pitch = math.rad(rotation.x)
-    local roll  = math.rad(rotation.y)
-    local yaw   = math.rad(rotation.z)
+-- =====================================================
+--  lb-phone · client/misc/spatialAudio.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
-    -- Precompute sin/cos for each axis
-    local cosPitch = math.cos(pitch)
-    local sinPitch = math.sin(pitch)
-    local cosRoll  = math.cos(roll)
-    local sinRoll  = math.sin(roll)
-    local cosYaw   = math.cos(yaw)
-    local sinYaw   = math.sin(yaw)
+local function RotateVector(vector, rotation)
+    local rotationX = math.rad(rotation.x)
+    local rotationY = math.rad(rotation.y)
+    local rotationZ = math.rad(rotation.z)
 
-    -- Apply yaw (Z) rotation to X/Y
-    local rotX = vec.x * cosYaw - vec.y * sinYaw
-    local rotY = vec.x * sinYaw + vec.y * cosYaw
+    local cosX = math.cos(rotationX)
+    local sinX = math.sin(rotationX)
+    local cosY = math.cos(rotationY)
+    local sinY = math.sin(rotationY)
+    local cosZ = math.cos(rotationZ)
+    local sinZ = math.sin(rotationZ)
 
-    -- Apply roll (Y) rotation to the result using Z component
-    local rotZ    = vec.z
-    local afterX  = rotX
-    local afterY  = rotY * cosPitch - rotZ * sinPitch
-    local afterZ  = rotY * sinPitch + rotZ * cosPitch
+    local rotatedX = vector.x * cosZ - vector.y * sinZ
+    local rotatedY = vector.x * sinZ + vector.y * cosZ
+    local rotatedZ = vector.z
 
-    -- Apply pitch (X) rotation
-    local finalX =  afterX  * cosRoll + afterZ * sinRoll
-    local finalY =  afterY
-    local finalZ = -afterX  * sinRoll + afterZ * cosRoll
+    local pitchX = rotatedX
+    local pitchY = rotatedY * cosX - rotatedZ * sinX
+    local pitchZ = rotatedY * sinX + rotatedZ * cosX
+
+    local finalX = pitchX * cosY + pitchZ * sinY
+    local finalY = pitchY
+    local finalZ = -pitchX * sinY + pitchZ * cosY
 
     return vector3(finalX, finalY, finalZ)
 end
 
--- ── CalculateSpatialAudio ────────────────────────────────────────────────────
--- Returns a table of {frontLeft, frontRight, rearLeft, rearRight} volume weights
--- based on the relative position of a sound source to the listener.
---
--- Parameters:
---   listenerPos  (vector3) – world position of the listener
---   listenerRot  (vector3) – Euler rotation of the listener (degrees)
---   sourcePos    (vector3) – world position of the sound source
---   maxDist      (number)  – distance beyond which volume is zero
---   volume       (number)  – master volume scale [0.0–1.0], defaults to 1.0
-function CalculateSpatialAudio(listenerPos, listenerRot, sourcePos, maxDist, volume)
-    -- Clamp volume to [0, 1], defaulting to 1.0 if not provided
+function CalculateSpatialAudio(listenerCoords, listenerRotation, audioCoords, maxDistance, volume)
     volume = math.clamp(volume or 1.0, 0.0, 1.0)
 
-    -- Vector from listener to source, and its scalar distance
-    local toSource = sourcePos - listenerPos
-    local dist     = #toSource
+    local offset = audioCoords - listenerCoords
+    local distance = #offset
 
-    -- Source is beyond max distance — all speakers silent
-    if maxDist <= dist then
-        return { frontLeft = 0.0, frontRight = 0.0, rearLeft = 0.0, rearRight = 0.0 }
+    if distance >= maxDistance then
+        return {
+            frontLeft = 0.0,
+            frontRight = 0.0,
+            rearLeft = 0.0,
+            rearRight = 0.0
+        }
     end
 
-    -- Rotate the to-source vector into listener-local space using the inverse
-    -- rotation (negate the rotation angles to get listener-relative direction)
-    local negRot       = vector3(-listenerRot.x, -listenerRot.y, -listenerRot.z)
-    local localDir     = rotateVectorByEuler(toSource, negRot)
+    local inverseRotation = vector3(-listenerRotation.x, -listenerRotation.y, -listenerRotation.z)
+    local localOffset = RotateVector(offset, inverseRotation)
+    local direction = norm(vector2(localOffset.x, localOffset.y))
 
-    -- Project onto the horizontal plane and normalise to get a 2D pan direction
-    local panDir = norm(vector2(localDir.x, localDir.y))
+    local rightPan = (direction.x + 1.0) * 0.5
+    local frontPan = (direction.y + 1.0) * 0.5
+    local leftPan = 1.0 - rightPan
+    local rearPan = 1.0 - frontPan
 
-    -- Map the normalised direction to [0, 1] pan coordinates:
-    --   panX: 0 = full left,  1 = full right
-    --   panY: 0 = full rear,  1 = full front
-    local panX = (panDir.x + 1.0) * 0.5
-    local panY = (panDir.y + 1.0) * 0.5
-
-    local right = panX
-    local left  = 1.0 - panX
-    local front = panY
-    local rear  = 1.0 - panY
-
-    -- Compute raw per-speaker weights (bilinear blend of pan axes)
-    local speakers = {
-        frontLeft  = front * left,
-        frontRight = front * right,
-        rearLeft   = rear  * left,
-        rearRight  = rear  * right,
+    local channelGains = {
+        frontLeft = frontPan * leftPan,
+        frontRight = frontPan * rightPan,
+        rearLeft = rearPan * leftPan,
+        rearRight = rearPan * rightPan
     }
 
-    -- Normalise speaker weights so the loudest combination sums to 1
-    local sumSq = speakers.frontLeft  ^ 2
-               + speakers.frontRight ^ 2
-               + speakers.rearLeft   ^ 2
-               + speakers.rearRight  ^ 2
+    local power =
+        channelGains.frontLeft ^ 2 +
+        channelGains.frontRight ^ 2 +
+        channelGains.rearLeft ^ 2 +
+        channelGains.rearRight ^ 2
 
-    if sumSq > 0 then
-        local invLen = 1.0 / math.sqrt(sumSq)
-        speakers.frontLeft  = speakers.frontLeft  * invLen
-        speakers.frontRight = speakers.frontRight * invLen
-        speakers.rearLeft   = speakers.rearLeft   * invLen
-        speakers.rearRight  = speakers.rearRight  * invLen
+    if power > 0 then
+        local scale = 1.0 / math.sqrt(power)
+
+        channelGains.frontLeft = channelGains.frontLeft * scale
+        channelGains.frontRight = channelGains.frontRight * scale
+        channelGains.rearLeft = channelGains.rearLeft * scale
+        channelGains.rearRight = channelGains.rearRight * scale
     end
 
-    -- Distance falloff: quadratic fade from 1 at the listener to 0 at maxDist,
-    -- then scaled by the master volume
-    local distFactor = math.clamp((1.0 - dist / maxDist) ^ 2, 0.0, 1.0) * volume
+    local distanceRatio = distance / maxDistance
+    local attenuation = math.clamp((1.0 - distanceRatio) ^ 2, 0.0, 1.0) * volume
 
     return {
-        frontLeft  = speakers.frontLeft  * distFactor,
-        frontRight = speakers.frontRight * distFactor,
-        rearLeft   = speakers.rearLeft   * distFactor,
-        rearRight  = speakers.rearRight  * distFactor,
+        frontLeft = channelGains.frontLeft * attenuation,
+        frontRight = channelGains.frontRight * attenuation,
+        rearLeft = channelGains.rearLeft * attenuation,
+        rearRight = channelGains.rearRight * attenuation
     }
 end

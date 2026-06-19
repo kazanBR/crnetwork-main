@@ -1,6 +1,8 @@
 local MumbleIsPlayerTalking = MumbleIsPlayerTalking
 local NetworkIsPlayerTalking = NetworkIsPlayerTalking
 
+local talking = false
+
 ---@param volume? number # The call volume, 0.0 - 1.0
 function SetCallVolume(volume)
     volume = (volume or (settings?.sound?.callVolume or 0.5)) / 1
@@ -62,6 +64,18 @@ function RemoveFromCall(callId)
     end
 end
 
+---@param muted boolean
+---@param callId number
+function SetCallMuted(muted, callId)
+    if muted then
+        RemoveFromCall(callId)
+    else
+        AddToCall(callId)
+    end
+
+    TriggerServerEvent("phone:phone:toggleMute", muted)
+end
+
 function ToggleSpeaker(enabled)
     if Config.Voice.System == "salty" then
         TriggerServerEvent("phone:voice:toggleSpeaker", enabled)
@@ -71,6 +85,8 @@ end
 function IsTalking()
     if Config.Voice.System == "pma" or Config.Voice.System == "mumble" then
         return MumbleIsPlayerTalking(PlayerId())
+    elseif Config.Voice.System == "salty" then
+        return talking
     else
         return NetworkIsPlayerTalking(PlayerId())
     end
@@ -116,8 +132,6 @@ RegisterNUICallback("waitUntilNotTalking", function(_, cb)
 end)
 
 -- This thread is used to send the talking state to the frontend, used to record audio only when talking in-game
-local talking = false
-
 RegisterNUICallback("isTalking", function(_, cb)
     cb(IsTalking())
 end)
@@ -128,11 +142,11 @@ local sendTalkingInterval = Interval:new(function()
     if isTalking and not talking then
         talking = true
 
-        SendReactMessage("camera:toggleMicrophone", talking)
+        SendNUIAction("camera:toggleMicrophone", talking)
     elseif not isTalking and talking then
         talking = false
 
-        SendReactMessage("camera:toggleMicrophone", talking)
+        SendNUIAction("camera:toggleMicrophone", talking)
     end
 end, 100, false)
 
@@ -149,6 +163,16 @@ RegisterNUICallback("toggleTalkingInterval", function(enabled, cb)
 
     cb("ok")
 end)
+
+if Config.Voice.System == "salty" then
+    RegisterNetEvent("SaltyChat_TalkStateChanged", function(isTalking)
+        talking = isTalking
+
+        if sendTalkingInterval.enabled then
+            SendNUIAction("camera:toggleMicrophone", talking)
+        end
+    end)
+end
 
 -- proximity
 

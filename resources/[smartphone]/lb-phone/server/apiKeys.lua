@@ -4,7 +4,9 @@ INSTAPIC_WEBHOOK = "https://discord.com/api/webhooks/"
 BIRDY_WEBHOOK = "https://discord.com/api/webhooks/"
 
 -- Discord webhook or API key for server logs
--- We recommend https://fivemanage.com/ for logs. Use code "LBLOGS" for 20% off the Logs Pro plan
+-- We recommend Fivemanage for logs
+-- Use code "LBPHONE25" at https://refer.fivemanage.com/lb for 25% off forever
+-- Affiliate link - purchases made through this link will give us a commission at no extra cost to you
 LOGS = {
     Default = "https://discord.com/api/webhooks/", -- set to false to disable
     Calls = "https://discord.com/api/webhooks/",
@@ -26,9 +28,9 @@ DISCORD_TOKEN = nil -- you can set a discord bot token here to get the players d
 
 -- Set your API keys for uploading media here.
 -- Please note that the API key needs to match the correct upload method defined in Config.UploadMethod.
--- The default upload method is Fivemanage
--- You can get your API keys from https://fivemanage.com/
--- Use code LBPHONE10 for 10% off on Fivemanage
+-- The default and recommended upload method is Fivemanage
+-- Use code "LBPHONE25" at https://refer.fivemanage.com/lb for 25% off forever
+-- Affiliate link - purchases made through this link will give us a commission at no extra cost to you
 -- A video tutorial for how to set up Fivemanage can be found here: https://www.youtube.com/watch?v=y3bCaHS6Moc
 API_KEYS = {
     Video = "",
@@ -40,6 +42,6 @@ API_KEYS = {
 -- This is needed if video calls or InstaPic live streams are not working
 -- You can get your credentials from https://dash.cloudflare.com/?to=/:account/realtime/turn/overview
 WEBRTC = {
-    TokenID = "7aaa66a66bae8f9702f1e6ba2fbce308",
-    APIToken = "df891985c17734c38eee609e5e659517c9038a07984e197d64e1eea253e0dd41",
+    TokenID = nil,
+    APIToken = nil,
 }

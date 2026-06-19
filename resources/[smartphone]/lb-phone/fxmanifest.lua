@@ -2,7 +2,7 @@ fx_version "cerulean"
 game "gta5"
 lua54 "yes"
 
-version "2.7.2"
+version "2.8.2"
 
 shared_script {
     "config/*.lua",
@@ -25,9 +25,10 @@ server_scripts {
 files {
     "ui/dist/**/*",
     "ui/components.js",
+   -- "ui/livetray-bridge.js",
     "config/**/*",
-    'sound/data/lbphone.dat54.rel',
-    'sound/dlc_lbscripts/sounds.awc'
+    "sound/data/lbphone.dat54.rel",
+    "sound/dlc_lbscripts/sounds.awc"
 }
 
 data_file 'AUDIO_WAVEPACK'  'sound/dlc_lbscripts'
@@ -62,3 +63,4 @@ escrow_ignore {
     "lib/**/*",
 }
 
+dependency '/assetpacks'

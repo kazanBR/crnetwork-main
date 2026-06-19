@@ -1,3 +1,8 @@
+-- =====================================================
+--  lb-phone · client/custom/frameworks/vrp2.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
 ---@diagnostic disable: deprecated
 
 local name = "lbphone" .. 1
@@ -95,7 +100,7 @@ vRP.loadScript(GetCurrentResourceName(), "client/custom/frameworks/vrp2")
 
 local lbphone = proxy.getInterface("vRP.EXT." .. name)
 
--- TODO: check if has phone item
+-- vRP2 does not expose an item check through this adapter, so keep the original permissive behavior.
 
 ---@param itemName string
 ---@return boolean

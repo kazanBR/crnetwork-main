@@ -1,22 +1,24 @@
--- NUI callback: dispatch VoiceMemo UI actions to the appropriate server callback
-RegisterNUICallback("VoiceMemo", function(data, cb)
+-- =====================================================
+--  lb-phone · client/apps/default/voicememo.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
+RegisterNUICallback("VoiceMemo", function(data, callback)
     if not currentPhone then
         return
     end
 
     local action = data.action
-    debugprint("VoiceMemo:", action or "")
+
+    debugprint("VoiceMemo:" .. (action or ""))
 
     if action == "upload" then
-        TriggerCallback("voiceMemo:saveRecording", cb, data.data)
-
+        TriggerCallback("voiceMemo:saveRecording", callback, data.data)
     elseif action == "get" then
-        TriggerCallback("voiceMemo:getMemos", cb)
-
+        TriggerCallback("voiceMemo:getMemos", callback)
     elseif action == "delete" then
-        TriggerCallback("voiceMemo:deleteMemo", cb, data.id)
-
+        TriggerCallback("voiceMemo:deleteMemo", callback, data.id)
     elseif action == "rename" then
-        TriggerCallback("voiceMemo:renameMemo", cb, data.id, data.title)
+        TriggerCallback("voiceMemo:renameMemo", callback, data.id, data.title)
     end
 end)

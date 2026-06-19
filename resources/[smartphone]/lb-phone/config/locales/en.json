@@ -24,7 +24,7 @@
         "Clock": "Clock",
         "Maps": "Maps",
         "YellowPages": "Pages",
-        "MarketPlace": "MarketPlace",
+        "MarketPlace": "Marketplace",
         "Wallet": "Wallet",
         "Home": "Home",
         "Garage": "Garage",
@@ -73,6 +73,12 @@
             "TIME_ZONE": "Time Zone",
             "LANGUAGE_REGION": "Language & Region",
             "LANGUAGE": "Language",
+            "LANGUAGE_RESTART_POPUP": {
+                "TITLE": "Change Language",
+                "TEXT": "Changing language will restart the phone. Do you want to continue?",
+                "CANCEL": "Cancel",
+                "CONFIRM": "Change"
+            },
             "TEMPERATURE": "Temperature",
             "CELCIUS": "Celsius",
             "FAHRENHEIT": "Fahrenheit",
@@ -88,6 +94,8 @@
             "DEFAULT": "Default",
             "PHONE_STORAGE": "Phone Storage",
             "STORAGE": "Storage",
+            "MICROPHONE": "Microphone",
+            "MICROPHONE_DESCRIPTION": "Choose which microphone to use for recordings",
             "USED": "Used",
             "OF": "of",
             "DISPLAY_BRIGHTNESS": "Display & Brightness",
@@ -368,6 +376,12 @@
             "PROCEED": "Proceed",
             "OK": "OK",
             "EDIT": "Edit",
+            "EDITOR_MARKUP": "Markup",
+            "EDITOR_CROP": "Crop",
+            "EDITOR_SAVE": "Save",
+            "EDITOR_SIZE": "Size",
+            "EDITOR_UNDO": "Undo",
+            "EDITOR_APPLY_CROP": "Apply Crop",
             "DONE": "Done",
             "DELETE": "Delete",
             "SELECT_ITEMS": "Select Items",
@@ -512,6 +526,11 @@
             "SENT_LOCATION_SHORT": "Shared their location",
             "TRIED_TO_CALL": "{number} tried to call you",
             "DELETE": "Delete",
+            "REPLY": "Reply",
+            "REACT": "React",
+            "REPLYING_TO": "Replying to",
+            "ATTACHMENT": "Attachment",
+            "YOU": "You",
             "GROUP": "Group",
             "GROUP_NAME": "Group Name",
             "REMOVE_POPUP": {
@@ -581,6 +600,10 @@
             "GROUP_MEMBER_LIMIT_NOTIFICATION": {
                 "TITLE": "Member limit reached",
                 "CONTENT": "You have reached the maximum amount of members in a group ({limit})."
+            },
+            "REACT_NOTIFICATION": {
+                "TITLE": "New Reaction",
+                "CONTENT": "{name} reacted with {reaction} to your message"
             }
         },
         "PHONE": {
@@ -863,13 +886,23 @@
             "MESSAGE": "Message",
             "CALL": "Call",
             "REMOVE": "Remove",
+            "TRANSACTION": "Posted to Marketplace",
 
+            "CREATION_COST_POPUP": {
+                "TITLE": "Create Post",
+                "DESCRIPTION": "Creating a post costs {cost}, do you want to proceed?",
+                "CANCEL": "Cancel",
+                "PROCEED": "Proceed"
+            },
             "ERROR_POPUP": {
                 "TITLE": "Error",
                 "NO_TITLE": "You need to enter a title",
                 "NO_DESCRIPTION": "You need to enter a description",
                 "NO_PRICE": "You need to enter a price",
                 "NO_ATTACHMENTS": "You need to attach at least one image",
+                "NO_MONEY": "You do not have enough money to create a post",
+                "RATE_LIMIT": "You have reached the rate limit for creating posts",
+                "POST_LIMIT": "You have reached the post limit for creating posts",
                 "OK": "OK"
             },
             "DELETE_POPUP": {
@@ -890,10 +923,22 @@
             "PRICE": "Price",
             "POST": "Post",
             "CALL": "Call",
+            "HOME": "Home",
+            "YOUR_POSTS": "Your Posts",
+            "TRANSACTION": "Posted to Pages",
+            "CREATION_COST_POPUP": {
+                "TITLE": "Create Post",
+                "DESCRIPTION": "Creating a post costs {cost}, do you want to proceed?",
+                "CANCEL": "Cancel",
+                "PROCEED": "Proceed"
+            },
             "ERROR_POPUP": {
                 "TITLE": "Error",
                 "NO_TITLE": "You need to enter a title",
                 "NO_DESCRIPTION": "You need to enter a description",
+                "NO_MONEY": "You do not have enough money to create a post",
+                "RATE_LIMIT": "You have reached the rate limit for creating posts",
+                "POST_LIMIT": "You have reached the post limit for creating posts",
                 "OK": "OK"
             },
             "DELETE_POPUP": {
@@ -1224,6 +1269,7 @@
             "REPLIES": "Replies",
             "MEDIA": "Media",
             "LIKES": "Likes",
+            "RETWEETS": "Reposts",
             "CANCEL": "Cancel",
             "TWEET": "Post",
             "TWEET_REPLY": "Post your reply",
@@ -1232,7 +1278,7 @@
             "SAVE": "Save",
             "NAME": "Name",
             "JOIN_DATE": "Join Date",
-            "PROTECTED_POSTS": "Protect your posts",
+            "PRIVATE_ACCOUNT": "Private account",
             "BIO": "Bio",
             "SIGN_OUT": "Sign Out",
             "CHANGE_PASSWORD": "Change Password",
@@ -1276,6 +1322,14 @@
                 "CANCEL": "Cancel",
                 "PROCEED": "Proceed"
             },
+            "VERIFIED": {
+                "LABEL": "Verified account",
+                "DESCRIPTION": "This account is verified."
+            },
+            "VERIFIED_GOVERNMENT": {
+                "LABEL": "Government account",
+                "DESCRIPTION": "This account is an official government account."
+            },
             "YOU": "You",
             "FOLLOW": "Follow",
             "PENDING": "Pending",
@@ -1306,6 +1360,9 @@
             "SEARCH_DIRECT_MESSAGES": "Search direct messages",
             "SEARCH_TWITTER": "Search Birdy",
             "MESSAGE_PLACEHOLDER": "Message...",
+            "MESSAGES": "Messages",
+            "SEARCH_PEOPLE": "Search people",
+            "CHANGE_PHOTO": "Change photo",
             "NOW": "Now",
             "LOGIN": "Log In",
             "NEXT": "Next",
@@ -1330,6 +1387,7 @@
             "ACTIONS": "Actions",
             "COMPANIES": "Companies",
             "MESSAGES": "Messages",
+            "JOBS": "Jobs",
             "SETTINGS": "Settings",
 
             "CLOSED": "Closed",
@@ -1396,6 +1454,12 @@
                 "CANCEL": "Cancel",
                 "PROCEED": "Proceed"
             },
+            "LEAVE_POPUP": {
+                "TITLE": "Leave Job",
+                "DESCRIPTION": "Are you sure you want to leave {name}?",
+                "CANCEL": "Cancel",
+                "PROCEED": "Leave"
+            },
             "QUICK_REPLIES": {
                 "REQUEST_LOCATION": {
                     "TITLE": "Request Location",
@@ -1425,6 +1489,7 @@
             "CHECK_FAILED": "Vaildation checks failed",
             "BUY_DISABLED": "Buying has been disabled for this coin",
             "SELL_DISABLED": "Selling has been disabled for this coin",
+            "INVALID_COIN_PRICE": "The coin is not worth anything",
             "TRANSFER_DISABLED": "Transferring has been disabled for this coin",
             "ERROR": "Error",
             "CLOSE": "Close",
@@ -1756,6 +1821,11 @@
         "FONT_AND_COLOR": "Font & Color"
     },
     "MISC": {
+        "ERROR": {
+            "TITLE": "Error",
+            "DESCRIPTION": "An error occurred while performing the action",
+            "OK": "OK"
+        },
         "ORDINAL": {
             "ZERO": "th",
             "ONE": "st",
@@ -1793,7 +1863,10 @@
             "CANCEL": "Cancel",
             "PROCEED": "Proceed",
             "OK": "OK"
-        }
+        },
+
+        "COPY": "Copy",
+        "OPEN_IN_BROWSER": "Open in browser"
     },
     "BACKEND": {
         "CALLS": {

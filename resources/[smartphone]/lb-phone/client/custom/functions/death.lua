@@ -3,14 +3,7 @@ local alreadyDead = false
 local function JustDied()
     alreadyDead = true
 
-    if OnDeath then
-        OnDeath()
-    else
-        -- OnDeath not yet available (load order race); close phone manually
-        if phoneOpen then
-            ToggleOpen(false)
-        end
-    end
+    OnDeath()
 
     while IsPedDeadOrDying(PlayerPedId(), false) or ESX?.PlayerData?.dead do
         Wait(500)

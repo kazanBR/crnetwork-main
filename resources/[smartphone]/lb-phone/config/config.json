@@ -127,28 +127,16 @@
             "images": ["1.webp", "2.webp"]
         },
         "MarketPlace": {
-            "name": "MarketPlace",
+            "name": "Marketplace",
             "description": "Buy and sell items",
             "removable": true,
             "size": 84400,
             "images": ["1.webp", "2.webp", "3.webp", "4.webp"]
         },
-        "Home": {
-            "name": "Home",
-            "removable": false,
-            "size": 19200
-        },
         "Garage": {
             "name": "Garage",
             "removable": false,
             "size": 17400
-        },
-        "Music": {
-            "name": "Music",
-            "description": "Listen to your favorite music",
-            "removable": true,
-            "size": 17400,
-            "images": ["1.webp", "2.webp"]
         },
         "DarkChat": {
             "name": "Dark Chat",

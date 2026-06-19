@@ -1,54 +1,57 @@
--- Auto-join channels on MySQL ready
+-- =====================================================
+--  lb-phone · server/apps/other/darkchat.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
 if Config.AutoJoinDarkChat and #Config.AutoJoinDarkChat > 0 then
     MySQL.ready(function()
-        -- Wait until database checker has finished
         while not DatabaseCheckerFinished do
             Wait(500)
         end
 
-        -- Build batch insert params for each auto-join channel
-        local params = {}
+        local channels = {}
+
         for i = 1, #Config.AutoJoinDarkChat do
-            params[#params + 1] = { Config.AutoJoinDarkChat[i] }
+            channels[#channels + 1] = { Config.AutoJoinDarkChat[i] }
         end
 
-        MySQL.rawExecute("INSERT IGNORE INTO phone_darkchat_channels (`name`) VALUES (?)", params)
+        MySQL.rawExecute("INSERT IGNORE INTO phone_darkchat_channels (`name`) VALUES (?)", channels)
     end)
 end
 
--- Callback: get the logged-in DarkChat username for a phone number
 BaseCallback("darkchat:getUsername", function(source, phoneNumber)
     local username = GetLoggedInAccount(phoneNumber, "DarkChat")
 
     if not username then
-        -- Try to find an account with no password (guest/linked account)
         username = MySQL.scalar.await(
             "SELECT username FROM phone_darkchat_accounts WHERE phone_number = ? AND `password` IS NULL",
             { phoneNumber }
         )
 
-        if username then
-            AddLoggedInAccount(phoneNumber, "DarkChat", username)
-        else
+        if not username then
             return false
         end
+
+        AddLoggedInAccount(phoneNumber, "DarkChat", username)
     end
 
-    -- Check whether this account has a password set
     local hasPassword = MySQL.scalar.await(
         "SELECT TRUE FROM phone_darkchat_accounts WHERE username = ? AND `password` IS NOT NULL",
         { username }
     )
 
-    if not hasPassword then
-        return { username = username, password = false }
-    end
+    return {
+        username = username,
+        password = hasPassword and true or false
+    }
+end, nil, {
+    defaultReturn = {
+        success = false,
+        reason = "unknown"
+    },
+    preventSpam = true
+})
 
-    return { username = username, password = true }
-end, nil, { defaultReturn = { success = false, reason = "unknown" }, preventSpam = true })
-
-
--- Callback: set a password for an account that doesn't have one yet
 BaseCallback("darkchat:setPassword", function(source, phoneNumber, password)
     if #password < 3 then
         debugprint("DarkChat: password < 3 characters")
@@ -57,107 +60,142 @@ BaseCallback("darkchat:setPassword", function(source, phoneNumber, password)
 
     local username = GetLoggedInAccount(phoneNumber, "DarkChat")
 
-    if username then
-        -- Only allow setting password if one isn't already set
-        local alreadyHasPassword = MySQL.scalar.await(
-            "SELECT TRUE FROM phone_darkchat_accounts WHERE username = ? AND `password` IS NOT NULL",
-            { username }
-        )
-
-        if alreadyHasPassword then
-            return false
-        end
-    else
+    if not username then
         return false
     end
 
-    local hash = GetPasswordHash(password)
-    MySQL.update.await("UPDATE phone_darkchat_accounts SET `password` = ? WHERE username = ?", { hash, username })
+    local alreadyHasPassword = MySQL.scalar.await(
+        "SELECT TRUE FROM phone_darkchat_accounts WHERE username = ? AND `password` IS NOT NULL",
+        { username }
+    )
+
+    if alreadyHasPassword then
+        return false
+    end
+
+    MySQL.update.await(
+        "UPDATE phone_darkchat_accounts SET `password` = ? WHERE username = ?",
+        { GetPasswordHash(password), username }
+    )
+
     return true
-end, nil, { defaultReturn = false, preventSpam = true })
+end, nil, {
+    defaultReturn = false,
+    preventSpam = true
+})
 
-
--- Callback: login with username + password
 BaseCallback("darkchat:login", function(source, phoneNumber, username, password)
-    local storedHash = MySQL.scalar.await(
+    local passwordHash = MySQL.scalar.await(
         "SELECT `password` FROM phone_darkchat_accounts WHERE username = ?",
         { username }
     )
 
-    if not storedHash then
-        return { success = false, reason = "invalid_username" }
+    if not passwordHash then
+        return {
+            success = false,
+            reason = "invalid_username"
+        }
     end
 
-    if not VerifyPasswordHash(password, storedHash) then
-        return { success = false, reason = "incorrect_password" }
+    if not VerifyPasswordHash(password, passwordHash) then
+        return {
+            success = false,
+            reason = "incorrect_password"
+        }
     end
 
     AddLoggedInAccount(phoneNumber, "DarkChat", username)
-    return { success = true }
-end, nil, { defaultReturn = { success = false, reason = "unknown" }, preventSpam = true })
 
+    return {
+        success = true
+    }
+end, nil, {
+    defaultReturn = {
+        success = false,
+        reason = "unknown"
+    },
+    preventSpam = true
+})
 
--- Callback: register a new DarkChat account
 BaseCallback("darkchat:register", function(source, phoneNumber, username, password)
     username = username:lower()
 
     if not IsUsernameValid(username) then
-        return { success = false, reason = "USERNAME_NOT_ALLOWED" }
+        return {
+            success = false,
+            reason = "USERNAME_NOT_ALLOWED"
+        }
     end
 
-    local taken = MySQL.scalar.await(
+    local usernameExists = MySQL.scalar.await(
         "SELECT 1 FROM phone_darkchat_accounts WHERE username = ?",
         { username }
     )
 
-    if taken then
-        return { success = false, reason = "username_taken" }
+    if usernameExists then
+        return {
+            success = false,
+            reason = "username_taken"
+        }
     end
 
-    local hash = GetPasswordHash(password)
-    local affected = MySQL.update.await(
+    local created = MySQL.update.await(
         "INSERT INTO phone_darkchat_accounts (phone_number, username, `password`) VALUES (?, ?, ?)",
-        { phoneNumber, username, hash }
-    )
+        { phoneNumber, username, GetPasswordHash(password) }
+    ) > 0
 
-    if not (affected > 0) then
-        return { success = false, reason = "unknown" }
+    if not created then
+        return {
+            success = false,
+            reason = "unknown"
+        }
     end
 
     AddLoggedInAccount(phoneNumber, "DarkChat", username)
 
-    -- Auto-join configured channels for the new user
     if Config.AutoJoinDarkChat and #Config.AutoJoinDarkChat > 0 then
-        local memberParams = {}
+        local memberRows = {}
+
         for i = 1, #Config.AutoJoinDarkChat do
-            memberParams[#memberParams + 1] = { Config.AutoJoinDarkChat[i], username }
+            memberRows[#memberRows + 1] = {
+                Config.AutoJoinDarkChat[i],
+                username
+            }
         end
+
         MySQL.prepare.await(
             "INSERT INTO phone_darkchat_members (channel_name, username) VALUES (?, ?)",
-            memberParams
+            memberRows
         )
     end
 
-    return { success = true }
-end, nil, { defaultReturn = { success = false, reason = "unknown" }, preventSpam = true })
+    return {
+        success = true
+    }
+end, nil, {
+    defaultReturn = {
+        success = false,
+        reason = "unknown"
+    },
+    preventSpam = true
+})
 
-
--- Helper: register an authenticated DarkChat callback (requires logged-in account)
-local function RegisterAuthCallback(action, handler, defaultReturn)
-    local eventName = "darkchat:" .. action
-
-    BaseCallback(eventName, function(source, phoneNumber, ...)
+local function RegisterDarkChatCallback(name, handler, defaultReturn)
+    BaseCallback("darkchat:" .. name, function(source, phoneNumber, ...)
         local username = GetLoggedInAccount(phoneNumber, "DarkChat")
+
         if not username then
             return defaultReturn
         end
+
         return handler(source, phoneNumber, username, ...)
-    end, nil, { defaultReturn = defaultReturn, preventSpam = true })
+    end, nil, {
+        defaultReturn = defaultReturn,
+        preventSpam = true
+    })
 end
 
-
--- Callback: change password (requires old password verification)
-RegisterAuthCallback("changePassword", function(source, phoneNumber, username, oldPassword, newPassword)
+RegisterDarkChatCallback("changePassword", function(source, phoneNumber, username, oldPassword, newPassword)
     if not Config.ChangePassword.DarkChat then
         infoprint("warning", ("%s tried to change password on DarkChat, but it's not enabled in the config."):format(source))
         return false
@@ -168,32 +206,29 @@ RegisterAuthCallback("changePassword", function(source, phoneNumber, username, o
         return false
     end
 
-    local storedHash = MySQL.scalar.await(
+    local passwordHash = MySQL.scalar.await(
         "SELECT `password` FROM phone_darkchat_accounts WHERE username = ?",
         { username }
     )
 
-    if not storedHash or not VerifyPasswordHash(oldPassword, storedHash) then
+    if not passwordHash or not VerifyPasswordHash(oldPassword, passwordHash) then
         return false
     end
 
-    local newHash = GetPasswordHash(newPassword)
-    local affected = MySQL.update.await(
+    local changed = MySQL.update.await(
         "UPDATE phone_darkchat_accounts SET `password` = ? WHERE username = ?",
-        { newHash, username }
-    )
+        { GetPasswordHash(newPassword), username }
+    ) > 0
 
-    if not (affected > 0) then
+    if not changed then
         return false
     end
 
-    -- Notify all other sessions that they've been logged out due to password change
     NotifyLoggedInAccounts("DarkChat", username, {
-        title   = L("BACKEND.MISC.LOGGED_OUT_PASSWORD.TITLE"),
-        content = L("BACKEND.MISC.LOGGED_OUT_PASSWORD.DESCRIPTION"),
+        title = L("BACKEND.MISC.LOGGED_OUT_PASSWORD.TITLE"),
+        content = L("BACKEND.MISC.LOGGED_OUT_PASSWORD.DESCRIPTION")
     }, { phoneNumber })
 
-    -- Remove all other logged-in sessions for this account
     MySQL.update.await(
         "DELETE FROM phone_logged_in_accounts WHERE username = ? AND app = 'DarkChat' AND phone_number != ?",
         { username, phoneNumber }
@@ -203,35 +238,32 @@ RegisterAuthCallback("changePassword", function(source, phoneNumber, username, o
 
     TriggerClientEvent("phone:logoutFromApp", -1, {
         username = username,
-        app      = "darkchat",
-        reason   = "password",
-        number   = phoneNumber,
+        app = "darkchat",
+        reason = "password",
+        number = phoneNumber
     })
 
     return true
 end)
 
-
--- Callback: delete account (requires password confirmation)
-RegisterAuthCallback("deleteAccount", function(source, phoneNumber, username, password)
+RegisterDarkChatCallback("deleteAccount", function(source, phoneNumber, username, password)
     if not Config.DeleteAccount.DarkChat then
         infoprint("warning", ("%s tried to delete their account on DarkChat, but it's not enabled in the config."):format(source))
         return false
     end
 
-    local storedHash = MySQL.scalar.await(
+    local passwordHash = MySQL.scalar.await(
         "SELECT `password` FROM phone_darkchat_accounts WHERE username = ?",
         { username }
     )
 
-    if not storedHash or not VerifyPasswordHash(password, storedHash) then
+    if not passwordHash or not VerifyPasswordHash(password, passwordHash) then
         return false
     end
 
-    -- Notify other sessions of deletion
     NotifyLoggedInAccounts("DarkChat", username, {
-        title   = L("BACKEND.MISC.DELETED_NOTIFICATION.TITLE"),
-        content = L("BACKEND.MISC.DELETED_NOTIFICATION.DESCRIPTION"),
+        title = L("BACKEND.MISC.DELETED_NOTIFICATION.TITLE"),
+        content = L("BACKEND.MISC.DELETED_NOTIFICATION.DESCRIPTION")
     })
 
     MySQL.update.await(
@@ -243,102 +275,123 @@ RegisterAuthCallback("deleteAccount", function(source, phoneNumber, username, pa
 
     TriggerClientEvent("phone:logoutFromApp", -1, {
         username = username,
-        app      = "darkchat",
-        reason   = "deleted",
+        app = "darkchat",
+        reason = "deleted"
     })
 
     return true
 end)
 
-
--- Callback: logout
-RegisterAuthCallback("logout", function(source, phoneNumber, username)
+RegisterDarkChatCallback("logout", function(source, phoneNumber, username)
     RemoveLoggedInAccount(phoneNumber, "DarkChat", username)
+
     return true
 end)
 
+local function CreateDarkChatChannel(channel, password)
+    assert(type(channel) == "string", "channel must be a string")
 
--- Internal: validate and create a channel (returns success, errorReason)
-local function CreateChannel(channelName, password)
-    assert(type(channelName) == "string", "channel must be a string")
-
-    -- Validate channel name: non-empty, max 50 chars, no whitespace
-    if not channelName
-        or #channelName < 1
-        or #channelName > 50
-        or channelName:find("%s")
-    then
+    if #channel < 1 or #channel > 50 or channel:find("%s") then
         debugprint("darkchat: invalid channel name")
         return false, "invalid_name"
     end
 
-    local exists = MySQL.scalar.await(
+    local channelExists = MySQL.scalar.await(
         "SELECT TRUE FROM phone_darkchat_channels WHERE `name` = ?",
-        { channelName }
+        { channel }
     )
 
-    if exists then
-        debugprint("darkchat:createChannel: channel already exists", channelName)
+    if channelExists then
+        debugprint("darkchat:createChannel: channel already exists", channel)
         return false, "channel_exists"
     end
 
-    -- Hash password if provided
-    local passwordHash = nil
-    if password then
-        passwordHash = GetPasswordHash(password)
-    end
-
-    local affected = MySQL.update.await(
+    local passwordHash = password and GetPasswordHash(password) or nil
+    local created = MySQL.update.await(
         "INSERT INTO phone_darkchat_channels (`name`, `password`) VALUES (@name, @password)",
-        { ["@name"] = channelName, ["@password"] = passwordHash }
-    )
+        {
+            ["@name"] = channel,
+            ["@password"] = passwordHash
+        }
+    ) > 0
 
-    if not (affected > 0) then
-        debugprint("darkchat:createChannel: failed to create channel", channelName)
+    if not created then
+        debugprint("darkchat:createChannel: failed to create channel", channel)
         return false, "unknown_error"
     end
 
     return true
 end
 
+local function GetChannelPreview(channel)
+    local members = MySQL.scalar.await(
+        "SELECT COUNT(username) FROM phone_darkchat_members WHERE channel_name = ?",
+        { channel }
+    )
+    local lastMessage = MySQL.single.await([[
+        SELECT sender, content, `timestamp`
+        FROM phone_darkchat_messages
+        WHERE `channel` = ?
+        ORDER BY `id` DESC
+        LIMIT 1
+    ]], { channel })
+    local channelData = {
+        name = channel,
+        members = members or 1
+    }
 
--- Callback: createChannel
-RegisterAuthCallback("createChannel", function(source, phoneNumber, username, channelName, password)
-    if not ValidateChecks("createDarkChatChannel", source, username, channelName) then
+    if lastMessage then
+        channelData.sender = lastMessage.sender
+        channelData.lastMessage = lastMessage.content
+        channelData.timestamp = lastMessage.timestamp
+    end
+
+    return channelData
+end
+
+RegisterDarkChatCallback("createChannel", function(source, phoneNumber, username, channel, password)
+    if not ValidateChecks("createDarkChatChannel", source, username, channel) then
         debugprint("darkchat:createChannel: createDarkChatChannel check returned false")
         return false
     end
 
-    local ok, reason = CreateChannel(channelName, password)
-    if not ok then
+    local created, reason = CreateDarkChatChannel(channel, password)
+
+    if not created then
         return reason
     end
 
-    Log("DarkChat", source, "info",
+    Log(
+        "DarkChat",
+        source,
+        "info",
         L("BACKEND.LOGS.DARKCHAT_CREATED_TITLE"),
-        L("BACKEND.LOGS.DARKCHAT_CREATED_DESCRIPTION", { creator = username, channel = channelName })
+        L("BACKEND.LOGS.DARKCHAT_CREATED_DESCRIPTION", {
+            creator = username,
+            channel = channel
+        })
     )
 
-    local affected = MySQL.update.await(
+    local joined = MySQL.update.await(
         "INSERT INTO phone_darkchat_members (channel_name, username) VALUES (?, ?)",
-        { channelName, username }
-    )
+        { channel, username }
+    ) > 0
 
-    if not (affected > 0) then
+    if not joined then
         debugprint("darkchat:createChannel: failed to insert into members")
         return "unknown_error"
     end
 
-    return { name = channelName, members = 1 }
+    return {
+        name = channel,
+        members = 1
+    }
 end)
 
-
--- Callback: joinChannel
-RegisterAuthCallback("joinChannel", function(source, phoneNumber, username, channelName, password)
-    -- Check user isn't already a member
+RegisterDarkChatCallback("joinChannel", function(source, phoneNumber, username, channel, password)
     local alreadyMember = MySQL.scalar.await(
         "SELECT TRUE FROM phone_darkchat_members WHERE channel_name = ? AND username = ?",
-        { channelName, username }
+        { channel, username }
     )
 
     if alreadyMember then
@@ -346,29 +399,27 @@ RegisterAuthCallback("joinChannel", function(source, phoneNumber, username, chan
         return "already_in_channel"
     end
 
-    -- Fetch channel details
-    local channel = MySQL.single.await(
+    local channelData = MySQL.single.await(
         "SELECT `name`, `password` FROM phone_darkchat_channels WHERE `name` = ?",
-        { channelName }
+        { channel }
     )
 
-    if not channel then
+    if not channelData then
         return "invalid_channel"
     end
 
-    if not ValidateChecks("joinDarkChatChannel", source, username, channelName) then
+    if not ValidateChecks("joinDarkChatChannel", source, username, channel) then
         debugprint("darkchat:joinChannel: joinDarkChatChannel check returned false")
         return "check_failed"
     end
 
-    -- Verify password if channel is protected
-    if channel.password then
+    if channelData.password then
         if not password then
             debugprint("darkchat:joinChannel: password required")
             return "password_required"
         end
 
-        if not VerifyPasswordHash(password, channel.password) then
+        if not VerifyPasswordHash(password, channelData.password) then
             debugprint("darkchat:joinChannel: incorrect password")
             return "incorrect_password"
         end
@@ -376,56 +427,32 @@ RegisterAuthCallback("joinChannel", function(source, phoneNumber, username, chan
 
     MySQL.update.await(
         "INSERT INTO phone_darkchat_members (channel_name, username) VALUES (?, ?)",
-        { channelName, username }
+        { channel, username }
     )
 
-    local memberCount = MySQL.scalar.await(
-        "SELECT COUNT(username) FROM phone_darkchat_members WHERE channel_name = ?",
-        { channelName }
-    )
+    local preview = GetChannelPreview(channel)
 
-    local lastMessage = MySQL.single.await([[
-        SELECT sender, content, `timestamp`
-        FROM phone_darkchat_messages
-        WHERE `channel` = ?
-        ORDER BY `id` DESC
-        LIMIT 1
-    ]], { channelName })
+    TriggerClientEvent("phone:darkChat:updateChannel", -1, channel, username, "joined")
 
-    local result = {
-        name    = channelName,
-        members = memberCount or 1,
-    }
-
-    if lastMessage then
-        result.sender      = lastMessage.sender
-        result.lastMessage = lastMessage.content
-        result.timestamp   = lastMessage.timestamp
-    end
-
-    TriggerClientEvent("phone:darkChat:updateChannel", -1, channelName, username, "joined")
-    return result
+    return preview
 end)
 
-
--- Callback: leaveChannel
-RegisterAuthCallback("leaveChannel", function(source, phoneNumber, username, channelName)
-    local affected = MySQL.update.await(
+RegisterDarkChatCallback("leaveChannel", function(source, phoneNumber, username, channel)
+    local deleted = MySQL.update.await(
         "DELETE FROM phone_darkchat_members WHERE channel_name = ? AND username = ?",
-        { channelName, username }
+        { channel, username }
     )
 
-    if not affected then
+    if not deleted then
         return false
     end
 
-    TriggerClientEvent("phone:darkChat:updateChannel", -1, channelName, username, "left")
+    TriggerClientEvent("phone:darkChat:updateChannel", -1, channel, username, "left")
+
     return true
 end)
 
-
--- Callback: getChannels (returns all channels the user is a member of)
-RegisterAuthCallback("getChannels", function(source, phoneNumber, username)
+RegisterDarkChatCallback("getChannels", function(source, phoneNumber, username)
     return MySQL.query.await([[
         SELECT
             c.name,
@@ -443,9 +470,7 @@ RegisterAuthCallback("getChannels", function(source, phoneNumber, username)
     ]], { username })
 end, {})
 
-
--- Callback: getMessages (paginated, 15 messages per page)
-RegisterAuthCallback("getMessages", function(source, phoneNumber, username, channelName, lastId)
+RegisterDarkChatCallback("getMessages", function(source, phoneNumber, username, channel, lastId)
     local query = [[
         SELECT
             id,
@@ -463,24 +488,28 @@ RegisterAuthCallback("getMessages", function(source, phoneNumber, username, chan
         LIMIT 15
     ]]
 
-    query = query:gsub("{PAGINATION}", lastId and "AND id < @lastId" or "")
+    if lastId then
+        query = query:gsub("{PAGINATION}", "AND id < @lastId")
+    else
+        query = query:gsub("{PAGINATION}", "")
+    end
 
-    return MySQL.query.await(query, { channel = channelName, lastId = lastId })
+    return MySQL.query.await(query, {
+        channel = channel,
+        lastId = lastId
+    })
 end)
 
-
--- Internal: insert a message and broadcast to channel members
-local function SendMessageInternal(username, channelName, content)
-    local id = MySQL.insert.await(
+local function SendDarkChatMessage(username, channel, message)
+    local messageId = MySQL.insert.await(
         "INSERT INTO phone_darkchat_messages (sender, `channel`, content) VALUES (?, ?, ?)",
-        { username, channelName, content }
+        { username, channel, message }
     )
 
-    if not id then
+    if not messageId then
         return false
     end
 
-    -- Push notification to active members (excluding sender)
     NotifyPhonesWithQuery([[
         phone_darkchat_members m
         JOIN phone_logged_in_accounts l
@@ -491,83 +520,84 @@ local function SendMessageInternal(username, channelName, content)
             m.channel_name = @channel
             AND m.username != @username
     ]], {
-        app     = "DarkChat",
-        title   = channelName,
-        content = username .. ": " .. content,
-    }, "l.", { ["@channel"] = channelName, ["@username"] = username })
+        app = "DarkChat",
+        title = channel,
+        content = username .. ": " .. message
+    }, "l.", {
+        ["@channel"] = channel,
+        ["@username"] = username
+    })
 
-    TriggerEvent("lb-phone:darkchat:newMessage", channelName, username, content)
-    TriggerClientEvent("phone:darkChat:newMessage", -1, channelName, username, content)
+    TriggerEvent("lb-phone:darkchat:newMessage", channel, username, message)
+    TriggerClientEvent("phone:darkChat:newMessage", -1, channel, username, message)
+
     return true
 end
 
-
--- Callback: sendMessage
-RegisterAuthCallback("sendMessage", function(source, phoneNumber, username, channelName, content)
-    if ContainsBlacklistedWord(source, "DarkChat", content) then
+RegisterDarkChatCallback("sendMessage", function(source, phoneNumber, username, channel, message)
+    if ContainsBlacklistedWord(source, "DarkChat", message) then
         return false
     end
 
-    if not ValidateChecks("sendDarkchatMessage", source, username, channelName, content) then
+    if not ValidateChecks("sendDarkchatMessage", source, username, channel, message) then
         debugprint("darkchat:sendMessage: sendDarkchatMessage check returned false")
         return false
     end
 
-    if not SendMessageInternal(username, channelName, content) then
+    if not SendDarkChatMessage(username, channel, message) then
         return false
     end
 
-    Log("DarkChat", source, "info",
+    Log(
+        "DarkChat",
+        source,
+        "info",
         L("BACKEND.LOGS.DARKCHAT_MESSAGE_TITLE"),
-        L("BACKEND.LOGS.DARKCHAT_MESSAGE_DESCRIPTION", { sender = username, channel = channelName, message = content })
+        L("BACKEND.LOGS.DARKCHAT_MESSAGE_DESCRIPTION", {
+            sender = username,
+            channel = channel,
+            message = message
+        })
     )
 
     return true
 end)
 
+exports("SendDarkChatMessage", function(username, channel, message, callback)
+    assert(type(username) == "string", "username must be a string")
+    assert(type(channel) == "string", "channel must be a string")
+    assert(type(message) == "string", "message must be a string")
 
--- Export: SendDarkChatMessage
-exports("SendDarkChatMessage", function(username, channelName, message, callback)
-    assert(type(username) == "string",    "username must be a string")
-    assert(type(channelName) == "string", "channel must be a string")
-    assert(type(message) == "string",     "message must be a string")
-
-    local result = SendMessageInternal(username, channelName, message)
+    local sent = SendDarkChatMessage(username, channel, message)
 
     if callback then
-        callback(result)
+        callback(sent)
     end
 
-    return result
+    return sent
 end)
 
+exports("SendDarkChatLocation", function(username, channel, coords, callback)
+    assert(type(username) == "string", "Expected string for argument 1, got " .. type(username))
+    assert(type(channel) == "string", "Expected string for argument 2, got " .. type(channel))
+    assert(type(coords) == "vector2", "Expected vector2 for argument 3, got " .. type(coords))
 
--- Export: SendDarkChatLocation (encodes coords as a special message)
-exports("SendDarkChatLocation", function(username, channelName, coords, callback)
-    assert(type(username) == "string",    "Expected string for argument 1, got " .. type(username))
-    assert(type(channelName) == "string", "Expected string for argument 2, got " .. type(channelName))
-    assert(type(coords) == "vector2",     "Expected vector2 for argument 3, got " .. type(coords))
-
-    local locationMsg = "<!SENT-LOCATION-X=" .. coords.x .. "Y=" .. coords.y .. "!>"
-    local result = SendMessageInternal(username, channelName, locationMsg)
+    local sent = SendDarkChatMessage(username, channel, "<!SENT-LOCATION-X=" .. coords.x .. "Y=" .. coords.y .. "!>")
 
     if callback then
-        callback(result)
+        callback(sent)
     end
 
-    return result
+    return sent
 end)
 
+exports("AddUserToDarkChatChannel", function(username, channel)
+    assert(type(username) == "string", "username must be a string")
+    assert(type(channel) == "string", "channel must be a string")
 
--- Export: AddUserToDarkChatChannel
-exports("AddUserToDarkChatChannel", function(username, channelName)
-    assert(type(username) == "string",    "username must be a string")
-    assert(type(channelName) == "string", "channel must be a string")
-
-    -- Already a member?
     local alreadyMember = MySQL.scalar.await(
         "SELECT TRUE FROM phone_darkchat_members WHERE channel_name = ? AND username = ?",
-        { channelName, username }
+        { channel, username }
     )
 
     if alreadyMember then
@@ -575,113 +605,86 @@ exports("AddUserToDarkChatChannel", function(username, channelName)
         return true
     end
 
-    -- Channel must exist
     local channelExists = MySQL.scalar.await(
         "SELECT TRUE FROM phone_darkchat_channels WHERE `name` = ?",
-        { channelName }
+        { channel }
     )
 
     if not channelExists then
-        debugprint("AddUserToDarkChatChannel: channel does not exist", channelName)
+        debugprint("AddUserToDarkChatChannel: channel does not exist", channel)
         return false
     end
 
-    local affected = MySQL.update.await(
+    local added = MySQL.update.await(
         "INSERT INTO phone_darkchat_members (channel_name, username) VALUES (?, ?)",
-        { channelName, username }
-    )
+        { channel, username }
+    ) > 0
 
-    if not (affected > 0) then
+    if not added then
         debugprint("AddUserToDarkChatChannel: failed to insert into members")
         return false
     end
 
-    local memberCount = MySQL.scalar.await(
-        "SELECT COUNT(username) FROM phone_darkchat_members WHERE channel_name = ?",
-        { channelName }
-    )
+    local channelData = GetChannelPreview(channel)
 
-    local lastMessage = MySQL.single.await([[
-        SELECT sender, content, `timestamp`
-        FROM phone_darkchat_messages
-        WHERE `channel` = ?
-        ORDER BY `id` DESC
-        LIMIT 1
-    ]], { channelName })
+    TriggerClientEvent("phone:darkChat:updateChannel", -1, channel, username, "joined")
 
-    local channelData = {
-        name    = channelName,
-        members = memberCount or 1,
-    }
+    local phoneNumbers = GetLoggedInNumbers("DarkChat", username)
 
-    if lastMessage then
-        channelData.sender      = lastMessage.sender
-        channelData.lastMessage = lastMessage.content
-        channelData.timestamp   = lastMessage.timestamp
-    end
+    for i = 1, #phoneNumbers do
+        local source = GetSourceFromNumber(phoneNumbers[i])
 
-    TriggerClientEvent("phone:darkChat:updateChannel", -1, channelName, username, "joined")
-
-    -- Trigger join event on all active client sessions for this user
-    local loggedInNumbers = GetLoggedInNumbers("DarkChat", username)
-    for _, number in ipairs(loggedInNumbers) do
-        local playerSource = GetSourceFromNumber(number)
-        if playerSource then
-            TriggerClientEvent("phone:darkChat:joinChannel", playerSource, channelData)
+        if source then
+            TriggerClientEvent("phone:darkChat:joinChannel", source, channelData)
         end
     end
 
     return true
 end)
 
+exports("RemoveUserFromDarkChatChannel", function(username, channel)
+    assert(type(username) == "string", "username must be a string")
+    assert(type(channel) == "string", "channel must be a string")
 
--- Export: RemoveUserFromDarkChatChannel
-exports("RemoveUserFromDarkChatChannel", function(username, channelName)
-    assert(type(username) == "string",    "username must be a string")
-    assert(type(channelName) == "string", "channel must be a string")
-
-    local affected = MySQL.update.await(
+    local deleted = MySQL.update.await(
         "DELETE FROM phone_darkchat_members WHERE channel_name = ? AND username = ?",
-        { channelName, username }
+        { channel, username }
     )
 
-    if not affected then
+    if not deleted then
         return false
     end
 
-    TriggerClientEvent("phone:darkChat:updateChannel", -1, channelName, username, "left")
+    TriggerClientEvent("phone:darkChat:updateChannel", -1, channel, username, "left")
 
-    -- Trigger leave event on all active client sessions for this user
-    local loggedInNumbers = GetLoggedInNumbers("DarkChat", username)
-    for _, number in ipairs(loggedInNumbers) do
-        local playerSource = GetSourceFromNumber(number)
-        if playerSource then
-            TriggerClientEvent("phone:darkChat:leaveChannel", playerSource, channelName)
+    local phoneNumbers = GetLoggedInNumbers("DarkChat", username)
+
+    for i = 1, #phoneNumbers do
+        local source = GetSourceFromNumber(phoneNumbers[i])
+
+        if source then
+            TriggerClientEvent("phone:darkChat:leaveChannel", source, channel)
         end
     end
 
-    debugprint("Removed " .. username .. " from DarkChat channel " .. channelName)
+    debugprint("Removed " .. username .. " from DarkChat channel " .. channel)
+
     return true
 end)
 
+exports("CreateDarkChatChannel", CreateDarkChatChannel)
 
--- Export: CreateDarkChatChannel (exposes internal CreateChannel)
-exports("CreateDarkChatChannel", CreateChannel)
+exports("DeleteDarkChatChannel", function(channel, callback)
+    assert(type(channel) == "string", "channel must be a string")
 
-
--- Export: DeleteDarkChatChannel
-exports("DeleteDarkChatChannel", function(channelName)
-    assert(type(channelName) == "string", "channel must be a string")
-
-    local affected = MySQL.update.await(
+    local deleted = MySQL.update.await(
         "DELETE FROM phone_darkchat_channels WHERE `name` = ?",
-        { channelName }
-    )
+        { channel }
+    ) > 0
 
-    if not (affected > 0) then
+    if not deleted then
         return false
     end
 
-    -- Force all clients to leave the deleted channel
-    TriggerClientEvent("phone:darkChat:leaveChannel", -1, channelName)
+    TriggerClientEvent("phone:darkChat:leaveChannel", -1, channel)
 end)

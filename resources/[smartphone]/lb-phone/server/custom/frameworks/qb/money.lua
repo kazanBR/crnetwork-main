@@ -29,19 +29,10 @@ function AddMoney(source, amount)
     local qPlayer = QB.Functions.GetPlayer(tonumber(source))
 
     if not qPlayer or amount < 0 then
-        debugprint("AddMoney: Failed to get player or invalid amount for source:", source, amount)
         return false
     end
 
-    local ok, err = pcall(function()
-        qPlayer.Functions.AddMoney("bank", math.floor(amount + 0.5), "lb-phone")
-    end)
-
-    if not ok then
-        debugprint("AddMoney: Error adding money:", err)
-        return false
-    end
-
+    qPlayer.Functions.AddMoney("bank", math.floor(amount + 0.5), "lb-phone")
     return true
 end
 

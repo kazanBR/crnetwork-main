@@ -1,289 +1,261 @@
+-- =====================================================
+--  lb-phone · client/apps/other/crypto.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
 if not (Config.Crypto and Config.Crypto.Enabled) then
-  return
-end
-
--- ── Module-level state ────────────────────────────────────────
-local coinCache  = {}   -- ordered list of coin data objects shown in the UI
-local isBusy     = false -- prevents overlapping buy/sell/transfer requests
-
--- ─────────────────────────────────────────────────────────────
--- findCoin  (internal helper)
--- Linear search through coinCache by coin id.
--- Returns (index, coinData) on success, or false on miss.
--- ─────────────────────────────────────────────────────────────
-local function findCoin(coinId)
-  for i, coin in ipairs(coinCache) do
-    if coin.id == coinId then
-      return i, coin
-    end
-  end
-  return false
-end
-
--- ─────────────────────────────────────────────────────────────
--- syncQBit  (internal helper)
--- Pulls QBit data from the QB-Core framework integration and
--- inserts/updates the "qbit" entry in coinCache. Only runs
--- when Config.Crypto.QBit is enabled and framework is "qb".
--- ─────────────────────────────────────────────────────────────
-local function syncQBit()
-  if not (Config.Crypto.QBit and Config.Framework == "qb") then
     return
-  end
+end
 
-  local qbit = GetQBit()
+local coins = {}
+local cryptoBusy = false
 
-  -- Build the price history array from QB history entries
-  local prices = {}
-  for _, entry in ipairs(qbit.History) do
-    prices[#prices + 1] = entry.PreviousWorth
-    prices[#prices + 1] = entry.NewWorth
-  end
+local function FindCoin(coinId)
+    for i = 1, #coins do
+        local coin = coins[i]
 
-  -- If no history exists, seed with 10 random values around current worth
-  if #qbit.History == 0 then
-    for i = 1, 10 do
-      prices[i] = qbit.Worth + math.random(-10, 10)
+        if coin.id == coinId then
+            return i, coin
+        end
     end
-  end
 
-  -- Calculate 24 h change from first/last history entries
-  local change24h = 0
-  if #qbit.History > 0 then
-    local newest = qbit.History[#qbit.History].NewWorth
-    local oldest = qbit.History[1].PreviousWorth
-    change24h    = newest - oldest
-  end
-
-  local index = findCoin("qbit")
-  local slot  = index or (#coinCache + 1)
-
-  coinCache[slot] = {
-    id            = "qbit",
-    name          = "QBit",
-    symbol        = "qbit",
-    image         = "https://avatars.githubusercontent.com/u/81791099?s=200&v=4",
-    current_price = qbit.Worth,
-    prices        = prices,
-    change_24h    = change24h,
-    owned         = qbit.Portfolio,
-  }
+    return false
 end
 
--- ─────────────────────────────────────────────────────────────
--- buyCoin  (internal helper)
--- Sends a buy request to the server (or to BuyQBit for qbit)
--- and optimistically updates the local cache on success.
--- ─────────────────────────────────────────────────────────────
-local function buyCoin(coinId, amount)
-  local result
+local function UpdateQBitCoin()
+    if not (Config.Crypto.QBit and Config.Framework == "qb") then
+        return
+    end
 
-  if coinId == "qbit" then
-    result = BuyQBit and BuyQBit(amount)
-  else
-    result = AwaitCallback("crypto:buy", coinId, amount)
-  end
+    local index = FindCoin("qbit") or (#coins + 1)
+    local qbit = GetQBit()
+    local prices = {}
 
-  isBusy = false
-  if not result or not result.success then return result end
+    for i = 1, #qbit.History do
+        prices[#prices + 1] = qbit.History[i].PreviousWorth
+        prices[#prices + 1] = qbit.History[i].NewWorth
+    end
 
-  local _, coin = findCoin(coinId)
-  if not coin then return result end
+    if #qbit.History == 0 then
+        for i = 1, 10 do
+            prices[i] = qbit.Worth + math.random(-10, 10)
+        end
+    end
 
-  -- Update local cache optimistically
-  coin.owned    = (coin.owned    or 0) + (amount / coin.current_price)
-  coin.invested = (coin.invested or 0) + amount
+    local change24h = 0
 
-  return result
+    if #qbit.History > 0 then
+        change24h = qbit.History[#qbit.History].NewWorth - qbit.History[1].PreviousWorth
+    end
+
+    coins[index] = {
+        change_24h = change24h,
+        current_price = qbit.Worth,
+        id = "qbit",
+        image = "https://avatars.githubusercontent.com/u/81791099?s=200&v=4",
+        name = "QBit",
+        prices = prices,
+        symbol = "qbit",
+        owned = qbit.Portfolio
+    }
 end
 
--- ─────────────────────────────────────────────────────────────
--- sellCoin  (internal helper)
--- Sends a sell request and updates the local cache on success.
--- ─────────────────────────────────────────────────────────────
-local function sellCoin(coinId, amount)
-  local result
+local function FinishCryptoOperation(result)
+    cryptoBusy = false
 
-  if coinId == "qbit" then
-    result = SellQBit and SellQBit(amount)
-  else
-    result = AwaitCallback("crypto:sell", coinId, amount)
-  end
-
-  isBusy = false
-  if not result or not result.success then return result end
-
-  local _, coin = findCoin(coinId)
-  if not coin or not coin.invested or not coin.owned then return result end
-
-  coin.invested = coin.invested - (amount * coin.current_price)
-  coin.owned    = coin.owned    - amount
-
-  return result
+    return result or {
+        success = false
+    }
 end
 
--- ─────────────────────────────────────────────────────────────
--- transferCoin  (internal helper)
--- Sends a transfer request and updates the local cache on success.
--- ─────────────────────────────────────────────────────────────
-local function transferCoin(coinId, amount, recipientNumber)
-  local result
+local function BuyCoin(coinId, amount)
+    local result
 
-  if coinId == "qbit" then
-    result = TransferQBit and TransferQBit(amount)
-  else
-    result = AwaitCallback("crypto:transfer", coinId, amount, recipientNumber)
-  end
+    if coinId == "qbit" then
+        if BuyQBit then
+            result = BuyQBit(amount)
+        end
+    else
+        result = AwaitCallback("crypto:buy", coinId, amount)
+    end
 
-  isBusy = false
-  if not result or not result.success then return result end
+    result = FinishCryptoOperation(result)
 
-  local _, coin = findCoin(coinId)
-  if not coin or not coin.invested or not coin.owned then return result end
+    if not result.success then
+        return result
+    end
 
-  coin.invested = coin.invested - (amount * coin.current_price)
-  coin.owned    = coin.owned    - amount
+    local _, coin = FindCoin(coinId)
 
-  return result
+    if coin then
+        coin.owned = (coin.owned or 0) + amount / coin.current_price
+        coin.invested = (coin.invested or 0) + amount
+    end
+
+    return result
 end
 
--- ─────────────────────────────────────────────────────────────
--- RegisterNUICallback "Crypto"
--- Central NUI handler for all crypto actions dispatched from
--- the phone UI: buy, sell, transfer, get, openedApp, closedApp.
--- ─────────────────────────────────────────────────────────────
+local function SellCoin(coinId, amount)
+    local result
+
+    if coinId == "qbit" then
+        if SellQBit then
+            result = SellQBit(amount)
+        end
+    else
+        result = AwaitCallback("crypto:sell", coinId, amount)
+    end
+
+    result = FinishCryptoOperation(result)
+
+    if not result.success then
+        return result
+    end
+
+    local _, coin = FindCoin(coinId)
+
+    if coin and coin.invested and coin.owned then
+        coin.invested = coin.invested - amount * coin.current_price
+        coin.owned = coin.owned - amount
+    end
+
+    return result
+end
+
+local function TransferCoin(coinId, amount, number)
+    local result
+
+    if coinId == "qbit" then
+        if TransferQBit then
+            result = TransferQBit(amount)
+        end
+    else
+        result = AwaitCallback("crypto:transfer", coinId, amount, number)
+    end
+
+    result = FinishCryptoOperation(result)
+
+    if not result.success then
+        return result
+    end
+
+    local _, coin = FindCoin(coinId)
+
+    if coin and coin.invested and coin.owned then
+        coin.invested = coin.invested - amount * coin.current_price
+        coin.owned = coin.owned - amount
+    end
+
+    return result
+end
+
 RegisterNUICallback("Crypto", function(data, cb)
-  local action = data.action
-  debugprint("Crypto:" .. (action or ""))
+    local action = data.action
 
-  -- Spam guard for mutating actions
-  if action == "buy" or action == "sell" or action == "transfer" then
-    if isBusy then
-      return cb({ success = false, msg = "BUSY" })
+    debugprint("Crypto:" .. (action or ""))
+
+    if action == "buy" or action == "sell" or action == "transfer" then
+        if cryptoBusy then
+            return cb({
+                success = false,
+                msg = "BUSY"
+            })
+        end
+
+        cryptoBusy = true
     end
-    isBusy = true
-  end
 
-  if action == "buy" then
-    return cb(buyCoin(data.coin, data.amount))
+    if action == "buy" then
+        return cb(BuyCoin(data.coin, data.amount))
+    elseif action == "sell" then
+        return cb(SellCoin(data.coin, data.amount))
+    elseif action == "transfer" then
+        return cb(TransferCoin(data.coin, data.amount, data.number))
+    elseif action == "get" then
+        UpdateQBitCoin()
+        TriggerServerEvent("phone:crypto:fetchCoins")
 
-  elseif action == "sell" then
-    return cb(sellCoin(data.coin, data.amount))
+        return cb(coins)
+    elseif action == "openedApp" then
+        TriggerServerEvent("phone:crypto:setAppOpen", true)
+    elseif action == "closedApp" then
+        TriggerServerEvent("phone:crypto:setAppOpen", false)
+    end
 
-  elseif action == "transfer" then
-    return cb(transferCoin(data.coin, data.amount, data.number))
-
-  elseif action == "get" then
-    -- Sync QBit first, then ask the server for the latest coin list
-    syncQBit()
-    TriggerServerEvent("phone:crypto:fetchCoins")
-    return cb(coinCache)
-
-  elseif action == "openedApp" then
-    TriggerServerEvent("phone:crypto:setAppOpen", true)
-
-  elseif action == "closedApp" then
-    TriggerServerEvent("phone:crypto:setAppOpen", false)
-  end
-
-  cb("ok")
+    cb("ok")
 end)
 
--- ─────────────────────────────────────────────────────────────
--- FetchCryptoCoins  (exported function)
--- Fetches the full coin list from the server, rebuilds the
--- local cache, and pushes the updated list to the React UI.
--- ─────────────────────────────────────────────────────────────
-local function fetchCryptoCoins()
-  local serverCoins = AwaitCallback("crypto:get")
-  if not serverCoins then return end
+function FetchCryptoCoins()
+    local fetchedCoins = AwaitCallback("crypto:get")
 
-  table.wipe(coinCache)
+    if not fetchedCoins then
+        return
+    end
 
-  for _, coin in pairs(serverCoins) do
-    coinCache[#coinCache + 1] = coin
-  end
+    table.wipe(coins)
 
-  SendReactMessage("crypto:updateCoins", coinCache)
+    for _, coin in pairs(fetchedCoins) do
+        coins[#coins + 1] = coin
+    end
+
+    SendNUIAction("crypto:updateCoins", coins)
 end
 
-FetchCryptoCoins = fetchCryptoCoins
-
--- ─────────────────────────────────────────────────────────────
--- Startup thread
--- Waits for the framework to finish loading, then performs the
--- initial coin fetch so the cache is populated before any NUI
--- requests arrive.
--- ─────────────────────────────────────────────────────────────
 CreateThread(function()
-  while not FrameworkLoaded do Wait(500) end
-  fetchCryptoCoins()
+    while not FrameworkLoaded do
+        Wait(500)
+    end
+
+    FetchCryptoCoins()
 end)
 
--- ─────────────────────────────────────────────────────────────
--- phone:crypto:updateCoins  (net event)
--- Receives a full coin map from the server (sent as a latent
--- event). Merges price/history updates into existing entries
--- and appends any brand-new coins, then notifies the React UI.
--- ─────────────────────────────────────────────────────────────
 RegisterNetEvent("phone:crypto:updateCoins", function(updatedCoins)
-  -- Update price data for coins already in the cache
-  for _, coin in ipairs(coinCache) do
-    local updated = updatedCoins[coin.id]
-    if updated then
-      coin.current_price = updated.current_price
-      coin.change_24h    = updated.change_24h
-      coin.prices        = updated.prices
-    end
-  end
+    for i = 1, #coins do
+        local coin = coins[i]
+        local updatedCoin = updatedCoins[coin.id]
 
-  -- Append any coins that aren't in the cache yet
-  for coinId, coinData in pairs(updatedCoins) do
-    if not findCoin(coinId) then
-      coinCache[#coinCache + 1] = coinData
+        if updatedCoin then
+            coin.current_price = updatedCoin.current_price
+            coin.change_24h = updatedCoin.change_24h
+            coin.prices = updatedCoin.prices
+        end
     end
-  end
 
-  debugprint("updated crypto cache")
-  SendReactMessage("crypto:updateCoins", coinCache)
+    for coinId, coin in pairs(updatedCoins) do
+        if not FindCoin(coinId) then
+            coins[#coins + 1] = coin
+        end
+    end
+
+    debugprint("updated crypto cache")
+    SendNUIAction("crypto:updateCoins", coins)
 end)
 
--- ─────────────────────────────────────────────────────────────
--- phone:crypto:changeOwnedAmount  (net event)
--- Fine-grained update: adjusts a single coin's owned amount
--- without requiring a full cache refresh.
--- ─────────────────────────────────────────────────────────────
-RegisterNetEvent("phone:crypto:changeOwnedAmount", function(coinId, delta)
-  local _, coin = findCoin(coinId)
-  if not coin then return end
+RegisterNetEvent("phone:crypto:changeOwnedAmount", function(coinId, amount)
+    local _, coin = FindCoin(coinId)
 
-  coin.owned = (coin.owned or 0) + delta
-  debugprint("updated crypto cache", coinId, delta, coin.owned)
-  SendReactMessage("crypto:updateCoins", coinCache)
+    if not coin then
+        return
+    end
+
+    coin.owned = (coin.owned or 0) + amount
+
+    debugprint("updated crypto cache", coinId, amount, coin.owned)
+    SendNUIAction("crypto:updateCoins", coins)
 end)
 
--- ─────────────────────────────────────────────────────────────
--- exports.GetCoinValue
--- Returns the current price of a coin by ID, or nil if unknown.
--- ─────────────────────────────────────────────────────────────
 exports("GetCoinValue", function(coinId)
-  local _, coin = findCoin(coinId)
-  return coin and coin.current_price
+    local _, coin = FindCoin(coinId)
+
+    return coin and coin.current_price
 end)
 
--- ─────────────────────────────────────────────────────────────
--- exports.GetCryptoWallet
--- Returns the full coinCache array (all coins with owned/invested).
--- ─────────────────────────────────────────────────────────────
 exports("GetCryptoWallet", function()
-  return coinCache
+    return coins
 end)
 
--- ─────────────────────────────────────────────────────────────
--- exports.GetOwnedCoin
--- Returns the coin data object for a specific coin ID, or nil.
--- ─────────────────────────────────────────────────────────────
 exports("GetOwnedCoin", function(coinId)
-  local _, coin = findCoin(coinId)
-  return coin
+    local _, coin = FindCoin(coinId)
+
+    return coin
 end)

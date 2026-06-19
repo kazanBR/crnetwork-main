@@ -1,135 +1,127 @@
-local coordsTrackingActive = false
-local playerPed            = PlayerPedId()
-local lastKnownCoords      = vector3(0, 0, 0)
+-- =====================================================
+--  lb-phone · client/apps/default/maps.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- Helper: adds a named location at the given coords (or current player position)
-local function addLocation(name, locationOverride)
+local updatingCoords = false
+local playerPed = PlayerPedId()
+local lastCoords = vector3(0, 0, 0)
+
+local function AddSavedLocation(name, location)
     if not name then
         return false
     end
 
-    -- Use the provided coords if available, otherwise fall back to the player's current position
-    local coords
-    if locationOverride then
-        coords = vector2(locationOverride[2], locationOverride[1])
-    end
-    if not coords then
-        coords = GetEntityCoords(PlayerPedId())
-    end
+    local coords = location and vector2(location[2], location[1]) or GetEntityCoords(PlayerPedId())
+    local id = AwaitCallback("maps:addLocation", name, coords.x, coords.y)
 
-    local newId = AwaitCallback("maps:addLocation", name, coords.x, coords.y)
-    if not newId then
+    if not id then
         return false
     end
 
-    -- Build the location entry and append to the local SavedLocations table
-    local entry = {
-        id       = newId,
-        name     = name,
-        position = { coords.y, coords.x },
+    local savedLocation = {
+        id = id,
+        name = name,
+        position = { coords.y, coords.x }
     }
-    SavedLocations[#SavedLocations + 1] = entry
-    return entry
+
+    SavedLocations[#SavedLocations + 1] = savedLocation
+
+    return savedLocation
 end
 
--- Coordinate tracking loop: sends rounded coords to the React UI while the phone is open
-local function startCoordUpdates()
-    playerPed         = PlayerPedId()
-    lastKnownCoords   = GetEntityCoords(playerPed)
-
-    -- Send initial position
-    SendReactMessage("maps:updateCoords", {
-        x = math.floor(lastKnownCoords.x + 0.5),
-        y = math.floor(lastKnownCoords.y + 0.5),
+local function SendCurrentCoords(coords)
+    SendNUIAction("maps:updateCoords", {
+        x = math.floor(coords.x + 0.5),
+        y = math.floor(coords.y + 0.5)
     })
+end
 
-    -- Poll every 250 ms while tracking is enabled
-    while coordsTrackingActive do
-        local currentCoords = GetEntityCoords(playerPed)
+local function UpdateCoordsThread()
+    playerPed = PlayerPedId()
+    lastCoords = GetEntityCoords(playerPed)
 
-        if phoneOpen then
-            -- Only push an update if the player has moved more than 1 unit
-            if #(lastKnownCoords - currentCoords) > 1.0 then
-                lastKnownCoords = currentCoords
-                SendReactMessage("maps:updateCoords", {
-                    x = math.floor(currentCoords.x + 0.5),
-                    y = math.floor(currentCoords.y + 0.5),
-                })
-            end
+    SendCurrentCoords(lastCoords)
+
+    while updatingCoords do
+        local coords = GetEntityCoords(playerPed)
+
+        if phoneOpen and #(lastCoords - coords) > 1.0 then
+            lastCoords = coords
+            SendCurrentCoords(coords)
         end
 
         Wait(250)
     end
 end
 
--- NUI callback router for the Maps app
-RegisterNUICallback("Maps", function(data, cb)
+RegisterNUICallback("Maps", function(data, callback)
     local action = data.action
+
     debugprint("Maps:" .. (action or ""))
 
     if action == "getCurrentLocation" then
-        -- Return the player's current x/y to the UI
         local coords = GetEntityCoords(PlayerPedId())
-        cb({ x = coords.x, y = coords.y })
 
+        callback({
+            x = coords.x,
+            y = coords.y
+        })
     elseif action == "toggleUpdateCoords" then
-        cb("ok")
-        -- Only restart the loop if the toggle state actually changed
-        if coordsTrackingActive == data.toggle then
+        callback("ok")
+
+        if updatingCoords == data.toggle then
             return
         end
-        coordsTrackingActive = (data.toggle == true)
-        startCoordUpdates()
 
+        updatingCoords = data.toggle == true
+        UpdateCoordsThread()
     elseif action == "setWaypoint" then
-        cb("ok")
-        local x = tonumber(data.data.x)
-        local y = tonumber(data.data.y)
+        callback("ok")
+
+        local waypoint = data.data
+        local x = tonumber(waypoint.x)
+        local y = tonumber(waypoint.y)
+
         if not x or not y then
             return
         end
+
         SetNewWaypoint(x / 1, y / 1)
-
     elseif action == "getLocations" then
-        cb(SavedLocations)
-
+        callback(SavedLocations)
     elseif action == "addLocation" then
-        cb(addLocation(data.name, data.location))
-
+        callback(AddSavedLocation(data.name, data.location))
     elseif action == "renameLocation" then
-        local newName = data.name
-        local success = newName  -- falsy if name is nil/empty
+        local name = data.name
+        local renamed = name and AwaitCallback("maps:renameLocation", data.id, name)
 
-        if newName then
-            success = AwaitCallback("maps:renameLocation", data.id, newName)
+        if not renamed then
+            return callback(false)
         end
 
-        if not success then
-            return cb(false)
-        end
-
-        -- Update the name in the local cache
         for i = 1, #SavedLocations do
             if SavedLocations[i].id == data.id then
-                SavedLocations[i].name = newName
+                SavedLocations[i].name = name
                 break
             end
         end
-        cb(true)
 
+        callback(true)
     elseif action == "removeLocation" then
-        local success = AwaitCallback("maps:removeLocation", data.id)
-        if not success then
-            return cb(false)
+        local removed = AwaitCallback("maps:removeLocation", data.id)
+
+        if not removed then
+            return callback(false)
         end
 
-        -- Remove the entry from the local cache
         for i = 1, #SavedLocations do
             if SavedLocations[i].id == data.id then
                 table.remove(SavedLocations, i)
                 break
             end
         end
-        cb(true)
+
+        callback(true)
     end
 end)

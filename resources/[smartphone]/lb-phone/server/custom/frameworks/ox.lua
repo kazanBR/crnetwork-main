@@ -1,3 +1,8 @@
+-- =====================================================
+--  lb-phone · server/custom/frameworks/ox.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
 if Config.Framework ~= "ox" then
     return
 end
@@ -22,6 +27,24 @@ local function GetSourceFromCharacterId(charId)
     end
 end
 
+local function GetGroupGrades(job)
+    local group = GlobalState["group." .. job]
+
+    return group and group.grades or {}
+end
+
+local function GetGroupAccountId(job)
+    local groupAccount = oxCore:GetGroupAccount(job)
+
+    return groupAccount and groupAccount.accountId
+end
+
+local function CallAccountSuccess(accountId, action, data)
+    local result = oxCore:CallAccount(accountId, action, data)
+
+    return (result and result.success) == true
+end
+
 ---@param source number
 ---@return number | nil
 local function GetAccountId(source)
@@ -31,13 +54,17 @@ local function GetAccountId(source)
         return
     end
 
-    return oxCore:GetCharacterAccount(identifier)?.accountId
+    local account = oxCore:GetCharacterAccount(identifier)
+
+    return account and account.accountId
 end
 
 ---@param source number
 ---@return string | nil
 function GetIdentifier(source)
-    return oxCore:GetPlayer(source)?.charId
+    local player = oxCore:GetPlayer(source)
+
+    return player and player.charId
 end
 
 ---@param source number
@@ -71,10 +98,10 @@ function AddMoney(source, amount)
         return false
     end
 
-    return oxCore:CallAccount(accountId, "addBalance", {
+    return CallAccountSuccess(accountId, "addBalance", {
         amount = amount,
         message = "Phone"
-    })?.success == true
+    })
 end
 
 ---@param source any
@@ -87,10 +114,10 @@ function RemoveMoney(source, amount)
         return false
     end
 
-    return oxCore:CallAccount(accountId, "removeBalance", {
+    return CallAccountSuccess(accountId, "removeBalance", {
         amount = amount,
         message = "Phone"
-    })?.success == true
+    })
 end
 
 ---@param source number
@@ -98,8 +125,6 @@ function IsAdmin(source)
     ---@diagnostic disable-next-line: param-type-mismatch
     return IsPlayerAceAllowed(source, "command.lbphone_admin") == 1
 end
-
--- TODO: Player vehicles do not exist in ox_core?
 
 ---@param source number
 ---@return VehicleData[] vehicles An array of vehicles that the player owns
@@ -113,8 +138,6 @@ function GetVehicle(source, plate)
     return false
 end
 
--- TODO: Jobs do not exist in ox_core?
-
 function GetJob(source)
     local jobData = oxCore:CallPlayer(source, "getGroupByType", "job")
 
@@ -127,11 +150,7 @@ end
 
 BaseCallback("services:getManagementEmployees", function(source, phoneNumber, ...)
     local job = GetJob(source)
-    local grades = GlobalState["group." .. job]?.grades or {}
-
-    if not grades then
-        return {}
-    end
+    local grades = GetGroupGrades(job)
 
     local employees = MySQL.query.await([[
         SELECT
@@ -146,9 +165,10 @@ BaseCallback("services:getManagementEmployees", function(source, phoneNumber, ..
 
     for i = 1, #employees do
         local employee = employees[i]
+        local onlinePlayer = oxCore:GetPlayerFromUserId(employee.userId)
 
         employee.gradeLabel = grades[employee.grade] or "Unknown"
-        employee.online = oxCore:GetPlayerFromUserId(employee.userId)?.charId == employee.id
+        employee.online = onlinePlayer and onlinePlayer.charId == employee.id or false
     end
 
     return employees
@@ -161,8 +181,8 @@ BaseCallback("services:getBalance", function(source, phoneNumber)
         return 0
     end
 
-    local job, _ = table.unpack(jobData)
-    local accountId = oxCore:GetGroupAccount(job)?.accountId
+    local job = table.unpack(jobData)
+    local accountId = GetGroupAccountId(job)
 
     if not accountId then
         return 0
@@ -178,8 +198,8 @@ BaseCallback("services:depositMoney", function(source, phoneNumber, amount)
         return 0
     end
 
-    local job, _ = table.unpack(jobData)
-    local accountId = oxCore:GetGroupAccount(job)?.accountId
+    local job = table.unpack(jobData)
+    local accountId = GetGroupAccountId(job)
 
     if not accountId then
         return 0
@@ -189,10 +209,10 @@ BaseCallback("services:depositMoney", function(source, phoneNumber, amount)
         return 0
     end
 
-    if not oxCore:CallAccount(accountId, "addBalance", {
+    if not CallAccountSuccess(accountId, "addBalance", {
         amount = amount,
         message = "Phone"
-    })?.success then
+    }) then
         debugprint("Failed to deposit money")
     end
 
@@ -206,22 +226,23 @@ BaseCallback("services:withdrawMoney", function(source, phoneNumber, amount)
         return 0
     end
 
-    local job, _ = table.unpack(jobData)
-    local accountId = oxCore:GetGroupAccount(job)?.accountId
+    local job = table.unpack(jobData)
+    local accountId = GetGroupAccountId(job)
 
     if not accountId then
         return 0
     end
 
-    if not RemoveMoney(source, amount) then
-        return 0
-    end
-
-    if not oxCore:CallAccount(accountId, "removeBalance", {
+    if not CallAccountSuccess(accountId, "removeBalance", {
         amount = amount,
         message = "Phone"
-    })?.success then
-        debugprint("Failed to deposit money")
+    }) then
+        debugprint("Failed to withdraw money")
+        return oxCore:CallAccount(accountId, "get", "balance") or 0
+    end
+
+    if not AddMoney(source, amount) then
+        debugprint("Failed to add withdrawn money to player")
     end
 
     return oxCore:CallAccount(accountId, "get", "balance") or 0
@@ -236,7 +257,7 @@ BaseCallback("services:hireEmployee", function(source, phoneNumber, targetSource
     end
 
     local job, grade = table.unpack(jobData)
-    local amountGrades = #(GlobalState["group." .. job]?.grades or {})
+    local amountGrades = #GetGroupGrades(job)
 
     if grade ~= amountGrades or GetJob(targetSource) == job then
         return false
@@ -258,7 +279,7 @@ BaseCallback("services:fireEmployee", function(source, phoneNumber, identifier)
     end
 
     local job, grade = table.unpack(jobData)
-    local amountGrades = #(GlobalState["group." .. job]?.grades or {})
+    local amountGrades = #GetGroupGrades(job)
 
     if grade ~= amountGrades then
         return false
@@ -275,7 +296,7 @@ BaseCallback("services:fireEmployee", function(source, phoneNumber, identifier)
     return true
 end)
 
-BaseCallback("services:setGrade", function (source, phoneNumber, identifier, newGrade)
+BaseCallback("services:setGrade", function(source, phoneNumber, identifier, newGrade)
     local jobData = oxCore:CallPlayer(source, "getGroupByType", "job")
 
     if not jobData then
@@ -283,7 +304,7 @@ BaseCallback("services:setGrade", function (source, phoneNumber, identifier, new
     end
 
     local job, grade = table.unpack(jobData)
-    local amountGrades = #(GlobalState["group." .. job]?.grades or {})
+    local amountGrades = #GetGroupGrades(job)
 
     if grade ~= amountGrades then
         return false
@@ -310,7 +331,7 @@ function GetEmployees(job)
         local player = players[i]
 
         if GetJob(player) == job then
-            employees[#employees+1] = tonumber(player)
+            employees[#employees + 1] = tonumber(player)
         end
     end
 
@@ -321,11 +342,7 @@ end
 ---@return { firstname: string, lastname: string, grade: string, number: string }[] employees
 function GetAllEmployees(job)
     local numberTable = Config.Item.Unique and "phone_last_phone" or "phone_phones"
-    local grades = GlobalState["group." .. job]?.grades or {}
-
-    if not grades then
-        return {}
-    end
+    local grades = GetGroupGrades(job)
 
     local employees = MySQL.query.await([[
         SELECT

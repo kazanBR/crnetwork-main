@@ -124,7 +124,7 @@ CREATE TABLE IF NOT EXISTS `phone_twitter_accounts` (
 
     `pinned_tweet` VARCHAR(50) DEFAULT NULL,
 
-    `verified` TINYINT(1) DEFAULT 0,
+    `verified` TINYINT DEFAULT 0,
     `follower_count` INT(11) NOT NULL DEFAULT 0,
     `following_count` INT(11) NOT NULL DEFAULT 0,
 
@@ -547,11 +547,24 @@ CREATE TABLE IF NOT EXISTS `phone_message_messages` (
 
     `sender` VARCHAR(15) NOT NULL,
     `content` VARCHAR(1000),
-    `attachments` TEXT, -- json array of attachments
+    `attachments` TEXT DEFAULT NULL, -- json array of attachments
+
+    `reply_to` INT DEFAULT NULL,
+
     `timestamp` TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
 
     PRIMARY KEY (`id`),
     FOREIGN KEY (`channel_id`) REFERENCES `phone_message_channels`(`id`) ON DELETE CASCADE ON UPDATE CASCADE
+) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
+
+CREATE TABLE IF NOT EXISTS `phone_message_reactions` (
+    `message_id` INT NOT NULL,
+    `phone_number` VARCHAR(15) NOT NULL,
+    `reaction` VARCHAR(50) NOT NULL,
+
+    PRIMARY KEY (`message_id`, `phone_number`, `reaction`),
+    FOREIGN KEY (`message_id`) REFERENCES `phone_message_messages`(`id`) ON DELETE CASCADE ON UPDATE CASCADE,
+    FOREIGN KEY (`phone_number`) REFERENCES `phone_phones`(`phone_number`) ON DELETE CASCADE ON UPDATE CASCADE
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;
 
 -- DARKCHAT
@@ -760,7 +773,7 @@ CREATE TABLE IF NOT EXISTS `phone_maps_locations` (
 CREATE TABLE IF NOT EXISTS `phone_crypto` (
     `id` VARCHAR(100) NOT NULL, -- player identifier
     `coin` VARCHAR(15) NOT NULL, -- coin, for example "bitcoin"
-    `amount` DOUBLE NOT NULL DEFAULT 0, -- amount of coins
+    `amount` DOUBLE UNSIGNED NOT NULL DEFAULT 0, -- amount of coins
     `invested` INT(11) NOT NULL DEFAULT 0, -- amount of $$$ invested
 
     PRIMARY KEY (`id`, `coin`)
@@ -768,7 +781,7 @@ CREATE TABLE IF NOT EXISTS `phone_crypto` (
 
 CREATE TABLE IF NOT EXISTS `phone_crypto_coins` (
     `coin` VARCHAR(15) NOT NULL,
-    `coin_value` DOUBLE NOT NULL DEFAULT 0,
+    `coin_value` DOUBLE UNSIGNED NOT NULL DEFAULT 0,
 
     PRIMARY KEY (`coin`)
 ) CHARACTER SET utf8mb4 COLLATE utf8mb4_unicode_ci;

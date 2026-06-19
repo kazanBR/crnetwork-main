@@ -23,6 +23,8 @@ local checkId = 0
 ---| "sellCrypto"
 ---| "transferCrypto"
 ---| "playNativePhoneSound"
+---| "postMarketplace"
+---| "postPages"
 
 ---@param event CheckEvent
 ---@param handler fun(...: any): boolean
@@ -40,6 +42,8 @@ local checkId = 0
 ---@overload fun(event: "joinDarkChatChannel", handler: fun(source: number, username: string, channel: string): boolean): number
 ---@overload fun(event: "sendDarkchatMessage", handler: fun(source: number, username: string, channel: string, message: string): boolean): number
 ---@overload fun(event: "playNativePhoneSound", handler: fun(soundType: string, soundName?: string): boolean): number
+---@overload fun(event: "postMarketplace", handler: fun(source: number, post: { title: string, description: string, attachments: string[], price: number }): boolean): number
+---@overload fun(event: "postPages", handler: fun(source: number, post: { title: string, description: string, attachment?: string, price?: number }): boolean): number
 ---@return number id
 function AddCheck(event, handler)
     local resource = GetInvokingResource()
@@ -69,7 +73,7 @@ exports("AddCheck", AddCheck)
 ---@return boolean success
 function RemoveCheck(id)
     for _, eventChecks in pairs(checks) do
-        for i = 1, #checks do
+        for i = 1, #eventChecks do
             local check = eventChecks[i]
 
             if check.id == id then

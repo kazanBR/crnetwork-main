@@ -23,15 +23,19 @@ RegisterNetEvent("esx:setJob", function(job)
     ESX.PlayerData.job = job
 
     if oldJob.name ~= job.name or oldJob.grade ~= job.grade then
-        SendReactMessage("services:setCompany", GetCompanyData())
+        SendNUIAction("services:setCompany", GetCompanyData())
     else
-        SendReactMessage("services:setDuty", job.onDuty)
+        SendNUIAction("services:setDuty", job.onDuty)
     end
 
     TriggerEvent("lb-phone:jobUpdated", {
         job = job.name,
         grade = job.grade
     })
+
+    if RefreshMultiJobs then
+        RefreshMultiJobs()
+    end
 end)
 
 function GetCompanyData()

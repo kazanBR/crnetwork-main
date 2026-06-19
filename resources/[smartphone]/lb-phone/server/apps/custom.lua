@@ -1,9 +1,13 @@
-RegisterNetEvent("lb-phone:customApp")
-AddEventHandler("lb-phone:customApp", function(appName)
-    local playerId = source
-    local appConfig = Config.CustomApps[appName]
+-- =====================================================
+--  lb-phone · server/apps/custom.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
-    if appConfig and appConfig.onServerUse then
-        appConfig.onServerUse(playerId)
+RegisterNetEvent("lb-phone:customApp", function(appName)
+    local playerId = source
+    local customApp = Config.CustomApps[appName]
+
+    if customApp and customApp.onServerUse then
+        customApp.onServerUse(playerId)
     end
 end)

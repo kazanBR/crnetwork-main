@@ -1,28 +1,29 @@
--- NUI callback handler: routes all Marketplace UI actions to the appropriate server callbacks
-RegisterNUICallback("MarketPlace", function(data, cb)
+-- =====================================================
+--  lb-phone · client/apps/other/marketplace.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
+RegisterNUICallback("Marketplace", function(data, callback)
     local action = data.action
-    debugprint("MarketPlace:" .. (action or ""))
+
+    debugprint("Marketplace:" .. (action or ""))
 
     if action == "getPosts" then
-        -- Fetch posts and decode attachments JSON before returning to UI
         local posts = AwaitCallback("marketplace:getPosts", data)
-        for _, post in ipairs(posts) do
-            post.attachments = json.decode(post.attachments)
+
+        for i = 1, #posts do
+            posts[i].attachments = json.decode(posts[i].attachments)
         end
-        cb(posts)
 
+        callback(posts)
     elseif action == "sendPost" then
-        TriggerCallback("marketplace:createPost", cb, data.data)
-
+        TriggerCallback("marketplace:createPost", callback, data.data)
     elseif action == "deletePost" then
-        TriggerCallback("marketplace:deletePost", cb, data.id)
+        TriggerCallback("marketplace:deletePost", callback, data.id)
     end
 end)
 
-
--- Net event: new post created — forward to local event bus and React UI
-RegisterNetEvent("phone:marketplace:newPost")
-AddEventHandler("phone:marketplace:newPost", function(postData)
-    TriggerEvent("lb-phone:marketplace:newPost", postData)
-    SendReactMessage("marketPlace:newPost", postData)
+RegisterNetEvent("phone:marketplace:newPost", function(post)
+    TriggerEvent("lb-phone:marketplace:newPost", post)
+    SendNUIAction("marketPlace:newPost", post)
 end)

@@ -1,22 +1,22 @@
 ---Adds a transaction to the wallet app and sends a notification
 ---@param phoneNumber string
 ---@param amount number
----@param company string
+---@param title string
 ---@param logo? string
-function AddTransaction(phoneNumber, amount, company, logo)
-    if not phoneNumber or not amount or not company then
+function AddTransaction(phoneNumber, amount, title, logo)
+    if not phoneNumber or not amount or not title then
         return
     end
 
-    if #company > 50 then
-        company = company:sub(1, 47) .. "..."
+    if #title > 50 then
+        title = title:sub(1, 47) .. "..."
     end
 
     MySQL.insert.await("INSERT INTO phone_wallet_transactions (phone_number, amount, company, logo) VALUES (@phoneNumber, @amount, @company, @logo)", {
-        ["@phoneNumber"] = phoneNumber,
-        ["@amount"] = amount,
-        ["@company"] = company,
-        ["@logo"] = logo
+        phoneNumber = phoneNumber,
+        amount = amount,
+        company = title,
+        logo = logo
     })
 
     local source = GetSourceFromNumber(phoneNumber)
@@ -24,17 +24,17 @@ function AddTransaction(phoneNumber, amount, company, logo)
 
     SendNotification(phoneNumber, {
         app = "Wallet",
-        title = company,
+        title = title,
         content = content,
         thumbnail = logo
     })
 
-    TriggerEvent("lb-phone:onAddTransaction", amount > 0 and "received" or "paid", phoneNumber, amount, company, logo)
+    TriggerEvent("lb-phone:onAddTransaction", amount > 0 and "received" or "paid", phoneNumber, amount, title, logo)
 
     Log("Wallet", source or nil, amount > 0 and "success" or "error", L("BACKEND.LOGS." .. (amount > 0 and "RECEIVED" or "PAID") .. "_TITLE", { amount = math.abs(amount) }), L("BACKEND.LOGS.TRANSACTION", {
         number = FormatNumber(phoneNumber),
         amount = amount,
-        company = company
+        company = title
     }), logo)
 
     if not source then
@@ -43,7 +43,7 @@ function AddTransaction(phoneNumber, amount, company, logo)
 
     TriggerClientEvent("phone:wallet:addTransaction", source, {
         amount = amount,
-        company = company,
+        company = title,
         logo = logo,
         timestamp = os.time()
     })
@@ -93,16 +93,6 @@ end, false)
 
 ---@param data { amount: number, phoneNumber: string }
 BaseCallback("wallet:sendPayment", function(source, phoneNumber, data)
-    -- Fallback: resolve phone number from DB if BaseCallback didn't get it
-    if not phoneNumber then
-        phoneNumber = MySQL.scalar.await("SELECT phone_number FROM phone_phones WHERE owner_id = ?", { GetIdentifier(source) })
-    end
-
-    if not phoneNumber then
-        debugprint("wallet:sendPayment: could not resolve phone number for source", source)
-        return { success = false, reason = "UNKNOWN_ERROR" }
-    end
-
     amount = tonumber(data.amount)
 
     if not amount or amount <= 0 then
@@ -154,62 +144,27 @@ BaseCallback("wallet:sendPayment", function(source, phoneNumber, data)
     end
 
     if not added then
-        debugprint("wallet:sendPayment FAILED_ADD - sendToSource:", sendToSource, "source:", source, "amount:", amount, "recipient:", data.phoneNumber)
         return { success = false, reason = "FAILED_ADD" }
     end
 
     RemoveMoney(source, amount)
+    SendMessage(phoneNumber, data.phoneNumber, "<!SENT-PAYMENT-" .. amount .. "!>")
 
-    -- Send payment notification message directly via SQL (bypassing broken export asserts)
-    local content = "<!SENT-PAYMENT-" .. amount .. "!>"
-    local channelId = MySQL.scalar.await([[
-        SELECT c.id FROM phone_message_channels c
-        WHERE c.is_group = 0
-            AND EXISTS (SELECT TRUE FROM phone_message_members m WHERE m.channel_id = c.id AND m.phone_number = ?)
-            AND EXISTS (SELECT TRUE FROM phone_message_members m WHERE m.channel_id = c.id AND m.phone_number = ?)
-    ]], { phoneNumber, data.phoneNumber })
+    GetContact(data.phoneNumber, phoneNumber, function(contact)
+        if contact then
+            AddTransaction(phoneNumber, -amount, contact.name, contact.avatar)
+        else
+            AddTransaction(phoneNumber, -amount, data.phoneNumber)
+        end
+    end)
 
-    if not channelId then
-        channelId = MySQL.insert.await("INSERT INTO phone_message_channels (is_group) VALUES (0)")
-        MySQL.update.await(
-            "INSERT IGNORE INTO phone_message_members (channel_id, phone_number) VALUES (?, ?), (?, ?)",
-            { channelId, phoneNumber, channelId, data.phoneNumber }
-        )
-    end
-
-    local messageId = MySQL.insert.await(
-        "INSERT INTO phone_message_messages (channel_id, sender, content) VALUES (?, ?, ?)",
-        { channelId, phoneNumber, content }
-    )
-
-    -- Update channel last_message preview and unread count for recipient
-    MySQL.update(
-        "UPDATE phone_message_channels SET last_message = ? WHERE id = ?",
-        { string.sub(content, 1, 50), channelId }
-    )
-    MySQL.update(
-        "UPDATE phone_message_members SET unread = unread + 1 WHERE channel_id = ? AND phone_number != ?",
-        { channelId, phoneNumber }
-    )
-
-    -- Notify recipient's UI (correct individual-arg signature)
-    local recipientSrc = GetSourceFromNumber(data.phoneNumber)
-    if recipientSrc then
-        TriggerClientEvent("phone:messages:newMessage", recipientSrc,
-            channelId, messageId, phoneNumber, content, nil)
-    end
-
-    -- NOTE: We do NOT notify the sender here — the React UI already optimistically
-    -- renders the sent payment message when sendPayment returns success.
-
-    -- Log transactions (skip contact lookup if phoneNumber is nil to avoid SQL errors)
-    if phoneNumber then
-        AddTransaction(phoneNumber, -amount, data.phoneNumber)
-    end
-
-    if data.phoneNumber then
-        AddTransaction(data.phoneNumber, amount, phoneNumber or "Unknown")
-    end
+    GetContact(phoneNumber, data.phoneNumber, function(contact)
+        if contact then
+            AddTransaction(data.phoneNumber, amount, contact.name, contact.avatar)
+        else
+            AddTransaction(data.phoneNumber, amount, phoneNumber)
+        end
+    end)
 
     return { success = true }
 end, nil, {

@@ -1,7 +1,7 @@
 RegisterCommand("phonedebug", function()
     Config.Debug = not Config.Debug
 
-    SendReactMessage("toggleDebug", Config.Debug)
+    SendNUIAction("toggleDebug", Config.Debug)
     print("DEBUG:", Config.Debug)
 end, false)
 
@@ -18,11 +18,11 @@ local function RegisterDebugCommand(command, fn)
 end
 
 RegisterDebugCommand("getcache", function()
-    SendReactMessage("printCache")
+    SendNUIAction("printCache")
 end)
 
 RegisterDebugCommand("getstacks", function()
-    SendReactMessage("printStacks")
+    SendNUIAction("printStacks")
 end)
 
 if not Config.Debug then

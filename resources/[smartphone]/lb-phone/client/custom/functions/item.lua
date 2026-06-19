@@ -101,12 +101,17 @@ RegisterNetEvent("phone:usedPhoneVariation", function(variation)
         return
     end
 
-    phoneVariation = variationIndex
-
     if phoneOpen then
         ToggleOpen(false)
+
+        if phoneVariation == variationIndex then
+            return
+        end
+
         Wait(1000)
     end
+
+    phoneVariation = variationIndex
 
     SetPhoneVariation(variationIndex)
     ToggleOpen(true)

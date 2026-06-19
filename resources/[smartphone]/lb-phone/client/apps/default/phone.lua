@@ -1,271 +1,280 @@
+-- =====================================================
+--  lb-phone · client/apps/default/phone.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
 InExportCall = false
 
--- State variables
-local isVideoCall          = false
-local isInCall             = false
-local activeCallId         = nil
-local customNumbers        = {}    -- number string -> customNumberData
-local dynamicCustomNumbers = {}    -- id -> dynamicNumberData
-local dynamicNumberCount   = 0
-local activeCustomCall     = nil   -- current custom call data
-local customCallStartTime  = 0
-local customCallAnswered   = false
+local isVideoCall = false
+local inCall = false
+local currentCallId = nil
+local customNumbers = {}
+local currentCustomCall = nil
+local customCallStartedAt = 0
+local customCallAnswered = false
+local dynamicCustomNumbers = {}
+local dynamicCustomNumberId = 0
 
--- =====================================================
---  Custom Call Logic
--- =====================================================
 
--- Ends an active custom call, logs it to server, and resets state
-local function EndCustomCall()
+local function endCustomCall()
     debugprint("EndCustomCall triggered")
 
-    if activeCustomCall then
-        local duration = math.floor((GetGameTimer() - customCallStartTime) / 1000 + 0.5)
-        debugprint("Custom call to", activeCustomCall.number, "ended after", duration, "seconds answered:", customCallAnswered)
-        TriggerServerEvent("phone:logCall", activeCustomCall.number, duration)
+    if currentCustomCall then
+        local duration = math.floor((GetGameTimer() - customCallStartedAt) / 1000 + 0.5)
+
+        debugprint(
+            "Custom call to",
+            currentCustomCall.number,
+            "ended after",
+            duration,
+            "seconds",
+            "answered:",
+            customCallAnswered
+        )
+
+        TriggerServerEvent("phone:logCall", currentCustomCall.number, duration)
     end
 
-    isInCall          = false
-    activeCustomCall  = nil
-    activeCallId      = nil
-    customCallStartTime = 0
-    customCallAnswered  = false
+    inCall = false
+    currentCustomCall = nil
+    currentCallId = nil
+    customCallStartedAt = 0
+    customCallAnswered = false
 
     SetPhoneAction("default")
-    SendReactMessage("call:endCall")
+    SendNUIAction("call:endCall")
 
     if not phoneOpen then
         PlayCloseAnim()
     end
 end
 
--- Finds and initiates a custom call for the given number. Returns true if handled.
-local function TryCustomCall(number)
-    local customData = customNumbers[number]
+local function startCustomNumberCall(number)
+    local customNumber = customNumbers[number]
 
-    if not customData then
-        -- Check dynamic validators
-        for id, dynData in pairs(dynamicCustomNumbers) do
-            local ok, isValid = pcall(dynData.isValid, number)
-            if ok and isValid then
-                customData = dynData.customNumber
+    if not customNumber then
+        for id, dynamicNumber in pairs(dynamicCustomNumbers) do
+            local ok, valid = pcall(function()
+                return dynamicNumber.isValid(number)
+            end)
+
+            if ok and valid then
+                customNumber = dynamicNumber.customNumber
                 break
             elseif not ok then
-                local errStr = Citizen.InvokeNative(3607903178, nil, 0, Citizen.ResultAsString()) or ""
-                print(string.format(
-                    "^1SCRIPT ERROR: Dynamic number validator (id %i, by resource '%s') failed: %s^7\n%s",
-                    id, dynData.resource, isValid or "", errStr
-                ))
+                local stackTrace = Citizen.InvokeNative(3607903178, nil, 0, Citizen.ResultAsString())
+
+                print(([[
+^1SCRIPT ERROR: Dynamic number validator (id %i, by resource '%s') failed: %s^7
+%s]]):format(id, dynamicNumber.resource, valid or "", stackTrace or ""))
             end
         end
     end
 
-    if not customData then
+    if not customNumber then
         return false
     end
 
-    local callUniqueId = "CUSTOM_NUMBER_" .. math.random(9999999)
-    isInCall           = true
-    activeCallId       = callUniqueId
-    activeCustomCall   = customData
-    customCallStartTime = GetGameTimer()
-    customCallAnswered  = false
+    local callId = "CUSTOM_NUMBER_" .. math.random(9999999)
+
+    inCall = true
+    currentCallId = callId
+    currentCustomCall = customNumber
+    customCallStartedAt = GetGameTimer()
+    customCallAnswered = false
 
     Citizen.CreateThreadNow(function()
-        customData.onCall({
-            id     = callUniqueId,
+        customNumber.onCall({
+            id = callId,
             number = number,
-
             accept = function()
-                -- Only mark answered if this call is still active
-                if not customCallAnswered and activeCallId == callUniqueId then
-                    customCallAnswered = true
-                    SetPhoneAction("call")
-                    SendReactMessage("call:connected")
+                if customCallAnswered or currentCallId ~= callId then
+                    return
                 end
-            end,
 
+                customCallAnswered = true
+                SetPhoneAction("call")
+                SendNUIAction("call:connected")
+            end,
             deny = function()
-                if activeCallId == callUniqueId then
-                    EndCustomCall()
+                if currentCallId == callId then
+                    endCustomCall()
                 end
             end,
-
             setName = function(name)
-                if activeCallId == callUniqueId then
-                    SendReactMessage("call:setContactData", { name = name })
+                if currentCallId == callId then
+                    SendNUIAction("call:setContactData", {
+                        name = name
+                    })
                 end
             end,
-
             hasEnded = function()
-                return activeCallId ~= callUniqueId
-            end,
+                return currentCallId ~= callId
+            end
         })
     end)
 
     return true
 end
 
--- Dispatches a call action (end/mute/speaker/keypad) to the active custom call handler
-local function DispatchCustomCallAction(action)
-    if not activeCustomCall then return end
+local function handleCustomCallAction(action)
+    if not currentCustomCall then
+        return
+    end
 
     if action == "end" then
-        if activeCustomCall.onEnd then
-            Citizen.CreateThreadNow(activeCustomCall.onEnd)
+        if currentCustomCall.onEnd then
+            Citizen.CreateThreadNow(currentCustomCall.onEnd)
         end
-        EndCustomCall()
+
+        endCustomCall()
         return
     end
 
     if action:find("keypad_") then
-        if not activeCustomCall.onKeypad then return end
+        if not currentCustomCall.onKeypad then
+            return
+        end
+
         local key = action:sub(8)
-        if not key then return end
+
+        if not key then
+            return
+        end
+
         Citizen.CreateThreadNow(function()
-            activeCustomCall.onKeypad(key)
+            currentCustomCall.onKeypad(key)
         end)
+
         return
     end
 
-    if activeCustomCall.onAction then
-        activeCustomCall.onAction(action)
+    if currentCustomCall.onAction then
+        currentCustomCall.onAction(action)
     end
 end
 
--- =====================================================
---  NUI Callback: Phone
--- =====================================================
 
-RegisterNUICallback("Phone", function(data, cb)
-    if not currentPhone then return end
+RegisterNUICallback("Phone", function(data, callback)
+    if not currentPhone then
+        return
+    end
 
     local action = data.action
+
     debugprint("Phone:" .. (action or ""))
 
     if action == "getContacts" then
         TriggerCallback("getContacts", function(contacts)
             if Config.Companies.Enabled then
-                for companyId, companyData in pairs(Config.Companies.Contacts) do
+                for company, companyData in pairs(Config.Companies.Contacts) do
                     contacts[#contacts + 1] = {
                         firstname = companyData.name,
-                        avatar    = companyData.photo,
-                        company   = companyId,
+                        avatar = companyData.photo,
+                        company = company
                     }
                 end
             end
-            cb(contacts)
-        end)
 
+            callback(contacts)
+        end)
     elseif action == "toggleFavourite" then
-        TriggerCallback("toggleFavourite", cb, data.number, data.favourite)
-
+        TriggerCallback("toggleFavourite", callback, data.number, data.favourite)
     elseif action == "toggleBlock" then
-        TriggerCallback("toggleBlock", cb, data.number, data.blocked)
-
+        TriggerCallback("toggleBlock", callback, data.number, data.blocked)
     elseif action == "removeContact" then
-        TriggerCallback("removeContact", cb, data.number)
-
+        TriggerCallback("removeContact", callback, data.number)
     elseif action == "updateContact" then
-        TriggerCallback("updateContact", cb, data.data)
-
+        TriggerCallback("updateContact", callback, data.data)
     elseif action == "saveContact" then
-        TriggerCallback("saveContact", cb, data.data)
-
+        TriggerCallback("saveContact", callback, data.data)
     elseif action == "getRecent" then
-        TriggerCallback("getRecentCalls", cb, data.missed == true, data.lastId)
-
+        TriggerCallback("getRecentCalls", callback, data.missed == true, data.lastId)
     elseif action == "getBlockedNumbers" then
-        TriggerCallback("getBlockedNumbers", function(rows)
-            local numbers = {}
-            for i, row in pairs(rows) do
-                numbers[i] = row.number
+        TriggerCallback("getBlockedNumbers", function(blockedContacts)
+            local blockedNumbers = {}
+
+            for index, contact in pairs(blockedContacts) do
+                blockedNumbers[index] = contact.number
             end
-            cb(numbers)
+
+            callback(blockedNumbers)
         end)
-
     elseif action == "toggleMute" then
-        if not activeCallId then
-            return cb(false)
+        if not currentCallId then
+            return callback(false)
         end
 
-        if activeCustomCall then
-            DispatchCustomCallAction(data.toggle and "mute" or "unmute")
-            return cb(data.toggle)
+        if currentCustomCall then
+            handleCustomCallAction(data.toggle and "mute" or "unmute")
+            return callback(data.toggle)
         end
 
-        if data.toggle then
-            RemoveFromCall(activeCallId)
-        else
-            AddToCall(activeCallId)
-        end
-        TriggerServerEvent("phone:phone:toggleMute", data.toggle)
-        cb(data.toggle)
-
+        SetCallMuted(data.toggle, currentCallId)
+        callback(data.toggle)
     elseif action == "toggleSpeaker" then
-        if not activeCallId then
-            return cb(false)
+        if not currentCallId then
+            return callback(false)
         end
 
-        if activeCustomCall then
-            DispatchCustomCallAction(data.toggle and "enable_speaker" or "disable_speaker")
-            return cb(data.toggle)
+        if currentCustomCall then
+            handleCustomCallAction(data.toggle and "enable_speaker" or "disable_speaker")
+            return callback(data.toggle)
         end
 
         TriggerServerEvent("phone:phone:toggleSpeaker", data.toggle)
         ToggleSpeaker(data.toggle)
-        cb(data.toggle)
-
+        callback(data.toggle)
     elseif action == "sendVoicemail" then
-        TriggerCallback("sendVoicemail", cb, data.data)
-
+        TriggerCallback("sendVoicemail", callback, data.data)
     elseif action == "getVoiceMails" then
-        TriggerCallback("getRecentVoicemails", cb, data.page)
-
+        TriggerCallback("getRecentVoicemails", callback, data.page)
     elseif action == "deleteVoiceMail" then
-        TriggerCallback("deleteVoiceMail", cb, data.id)
-
+        TriggerCallback("deleteVoiceMail", callback, data.id)
     elseif action == "keypad" then
-        cb("ok")
-        if activeCustomCall then
-            DispatchCustomCallAction("keypad_" .. data.key)
-        end
+        callback("ok")
 
-    elseif action == "call" then
-        -- Validate company call
+        if currentCustomCall then
+            handleCustomCallAction("keypad_" .. data.key)
+        end
+    end
+
+    if action == "call" then
         if data.company then
             if not Config.Companies.Enabled or data.videoCall then
-                return cb(false)
+                return callback(false)
             end
 
-            local isValidCompany = Config.Companies.Contacts[data.company] ~= nil
-            if not isValidCompany then
-                for _, service in ipairs(Config.Companies.Services) do
-                    if service.job == data.company then
-                        isValidCompany = true
+            if not Config.Companies.Contacts[data.company] then
+                local companyExists = false
+
+                for i = 1, #Config.Companies.Services do
+                    if Config.Companies.Services[i].job == data.company then
+                        companyExists = true
                         break
                     end
                 end
-            end
-            if not isValidCompany then
-                return cb(false)
+
+                if not companyExists then
+                    return callback(false)
+                end
             end
         end
 
         isVideoCall = data.videoCall
-        local result = AwaitCallback("call", data)
 
-        if result == "unknown_number" then
-            local handled = TryCustomCall(data.number)
-            if handled then
-                return cb("CUSTOM_NUMBER")
+        local response = AwaitCallback("call", data)
+
+        if response == "unknown_number" then
+            if startCustomNumberCall(data.number) then
+                return callback("CUSTOM_NUMBER")
             end
-            SendReactMessage("call:userUnavailable")
-            return cb(false)
+
+            SendNUIAction("call:userUnavailable")
+            return callback(false)
         end
 
-        return cb(result)
-
+        return callback(response)
     elseif action == "answerCall" then
         if IsInCall() then
             debugprint("answerCall: Already in call")
@@ -277,137 +286,115 @@ RegisterNUICallback("Phone", function(data, cb)
             TriggerCallback("instagram:endLive")
         elseif IsWatchingLive() then
             debugprint("answerCall: Leaving live")
-            SendReactMessage("instagram:liveEnded", IsWatchingLive())
+            SendNUIAction("instagram:liveEnded", IsWatchingLive())
         end
 
         debugprint("Answering call", data.callId)
         TriggerServerEvent("phone:sound:stopSound")
-        TriggerCallback("answerCall", cb, data.callId)
-        cb("ok")
-
+        TriggerCallback("answerCall", callback, data.callId)
+        callback("ok")
     elseif action == "endCall" then
         EndCall()
-        cb("ok")
-
+        callback("ok")
     elseif action == "flipCamera" then
         ToggleSelfieCam(not IsSelfieCam())
-
     elseif action == "requestVideoCall" then
-        TriggerCallback("requestVideoCall", cb, data.callId, data.peerId)
-
+        TriggerCallback("requestVideoCall", callback, data.callId, data.peerId)
     elseif action == "answerVideoRequest" then
-        TriggerCallback("answerVideoRequest", cb, data.callId, data.accept)
+        TriggerCallback("answerVideoRequest", callback, data.callId, data.accept)
+
         if data.accept then
             isVideoCall = true
             EnableWalkableCam()
         end
-
     elseif action == "stopVideoCall" then
-        TriggerCallback("stopVideoCall", cb, data.callId)
-
+        TriggerCallback("stopVideoCall", callback, data.callId)
     elseif action == "stopRingtone" then
         StopPhoneSound()
     end
 end)
 
--- =====================================================
---  EndCall (client-side)
--- =====================================================
 
 function EndCall()
     TriggerServerEvent("phone:sound:stopSound")
     TriggerServerEvent("phone:endCall")
-    if activeCustomCall then
-        DispatchCustomCallAction("end")
+
+    if currentCustomCall then
+        handleCustomCallAction("end")
     end
 end
-
--- =====================================================
---  Net Event: Incoming Call
--- =====================================================
 
 RegisterNetEvent("phone:phone:setCall", function(callData)
     if not HasPhoneItem(currentPhone) then
         debugprint("no phone, not showing call")
         return
     end
+
     if phoneDisabled then
         debugprint("phone is disabled, not showing call")
         return
     end
+
     if IsPhoneDead() then
         debugprint("phone is dead, not showing call")
         return
     end
 
-    if activeCustomCall or isInCall then
-        debugprint("in a (custom?) call", tostring(activeCustomCall), tostring(isInCall))
+    if currentCustomCall or inCall then
+        debugprint("in a (custom?) call", tostring(currentCustomCall), tostring(inCall))
         return
     end
 
     if IsPedDeadOrDying(PlayerPedId(), false) then
         debugprint("player is dead, not showing call")
         return
-    end
-
-    if CanOpenPhone and not CanOpenPhone() then
+    elseif CanOpenPhone and not CanOpenPhone() then
         debugprint("can't open phone, not showing call")
         return
     end
 
     isVideoCall = callData.videoCall
 
-    -- Resolve custom ringtone (if any)
-    local customRingtone = nil
-    if not callData.hideCallerId and settings and settings.sound and settings.sound.ringtones then
-        if callData.number then
-            customRingtone = settings.sound.ringtones[callData.number]
-        end
+    local ringtone = nil
+
+    if not callData.hideCallerId and settings and settings.sound and settings.sound.ringtones and callData.number then
+        ringtone = settings.sound.ringtones[callData.number]
     end
 
-    PlayPhoneSound("ringtone", customRingtone)
-    SendReactMessage("incomingCall", callData)
+    PlayPhoneSound("ringtone", ringtone)
+    SendNUIAction("incomingCall", callData)
 end)
-
--- =====================================================
---  Net Event: Export Call Enabled
--- =====================================================
 
 RegisterNetEvent("phone:phone:enableExportCall", function()
     InExportCall = true
 end)
 
--- =====================================================
---  Net Event: Call Connected
--- =====================================================
+RegisterNetEvent("phone:phone:connectCall", function(callId, skipUi)
+    debugprint("phone:phone:connectCall", callId, skipUi)
 
-RegisterNetEvent("phone:phone:connectCall", function(callId, isExportCall)
-    debugprint("phone:phone:connectCall", callId, isExportCall)
-
-    isInCall     = true
-    activeCallId = callId
+    inCall = true
+    currentCallId = callId
     AddToCall(callId)
 
-    if isExportCall then return end
+    if skipUi then
+        return
+    end
 
     StopPhoneSound()
     SetPhoneAction("call")
-    SendReactMessage("call:connected")
+    SendNUIAction("call:connected")
 
     if isVideoCall then
         EnableWalkableCam()
     end
 end)
 
--- =====================================================
---  Net Event: Call Ended
--- =====================================================
-
 RegisterNetEvent("phone:phone:endCall", function()
     debugprint("phone:phone:endCall")
 
-    local wasInCall = isInCall
-    isInCall    = false
+    local wasInCall = inCall
+
+    inCall = false
     isVideoCall = false
 
     SetPhoneAction("default")
@@ -419,65 +406,79 @@ RegisterNetEvent("phone:phone:endCall", function()
     end
 
     StopPhoneSound()
-    RemoveFromCall(activeCallId)
-    activeCallId = nil
+    RemoveFromCall(currentCallId)
+
+    currentCallId = nil
     InExportCall = false
 
     TriggerServerEvent("phone:sound:stopSound")
-    SendReactMessage("call:endCall")
+    SendNUIAction("call:endCall")
 end)
-
--- =====================================================
---  Net Events: Call Status
--- =====================================================
 
 RegisterNetEvent("phone:phone:userUnavailable", function()
     debugprint("phone:phone:userUnavailable")
-    SendReactMessage("call:userUnavailable")
+    SendNUIAction("call:userUnavailable")
 end)
 
 RegisterNetEvent("phone:phone:userBusy", function()
     debugprint("phone:phone:userBusy")
-    SendReactMessage("call:userBusy")
+    SendNUIAction("call:userBusy")
 end)
 
--- =====================================================
---  IsInCall export (client)
--- =====================================================
 
 function IsInCall()
-    return isInCall
+    return inCall
 end
+
 exports("IsInCall", IsInCall)
 
--- =====================================================
---  Export: AddContact (client)
--- =====================================================
-
 exports("AddContact", function(contact)
-    assert(type(contact) == "table",          "contact must be a table")
-    assert(type(contact.number) == "string",  "contact.number must be a string")
+    assert(type(contact) == "table", "contact must be a table")
+    assert(type(contact.number) == "string", "contact.number must be a string")
     assert(type(contact.firstname) == "string", "contact.firstname must be a string")
 
-    local success = AwaitCallback("saveContact", contact)
-    if success then
-        SendReactMessage("phone:contactAdded", contact)
+    local saved = AwaitCallback("saveContact", contact)
+
+    if saved then
+        SendNUIAction("phone:contactAdded", contact)
     end
-    return success
+
+    return saved
 end)
 
--- =====================================================
---  Video Call Net Events
--- =====================================================
+exports("UpdateContact", function(contact)
+    assert(type(contact) == "table", "contact must be a table")
+    assert(type(contact.number) == "string", "contact.number must be a string")
+    assert(type(contact.firstname) == "string", "contact.firstname must be a string")
 
-RegisterNetEvent("phone:phone:videoRequested", function(peerId)
-    debugprint("phone:phone:videoRequested", peerId)
-    SendReactMessage("call:videoRequested", peerId)
+    local updatedContact = table.clone(contact)
+
+    updatedContact.oldNumber = updatedContact.oldNumber or updatedContact.number
+
+    TriggerCallback("updateContact", nil, updatedContact)
+    SendNUIAction("phone:contactUpdated", contact)
+
+    return true
+end)
+
+exports("RemoveContact", function(phoneNumber)
+    assert(type(phoneNumber) == "string", "phoneNumber must be a string")
+
+    TriggerCallback("removeContact", nil, phoneNumber)
+    SendNUIAction("phone:contactRemoved", phoneNumber)
+
+    return true
+end)
+
+RegisterNetEvent("phone:phone:videoRequested", function(data)
+    debugprint("phone:phone:videoRequested", data)
+    SendNUIAction("call:videoRequested", data)
 end)
 
 RegisterNetEvent("phone:phone:videoRequestAnswered", function(accepted)
     debugprint("phone:phone:videoRequestAnswered", accepted)
-    SendReactMessage("call:videoRequestAnswered", accepted)
+    SendNUIAction("call:videoRequestAnswered", accepted)
+
     if accepted then
         isVideoCall = true
         EnableWalkableCam()
@@ -486,23 +487,17 @@ end)
 
 RegisterNetEvent("phone:phone:stopVideoCall", function()
     debugprint("phone:phone:stopVideoCall")
-    SendReactMessage("call:stopVideoCall")
+    SendNUIAction("call:stopVideoCall")
+
     isVideoCall = false
     DisableWalkableCam()
 end)
 
--- =====================================================
---  Net Event: Contact Added (server push)
--- =====================================================
-
-RegisterNetEvent("phone:phone:contactAdded", function(contactData)
-    debugprint("phone:phone:contactAdded", contactData)
-    SendReactMessage("phone:contactAdded", contactData)
+RegisterNetEvent("phone:phone:contactAdded", function(contact)
+    debugprint("phone:phone:contactAdded", contact)
+    SendNUIAction("phone:contactAdded", contact)
 end)
 
--- =====================================================
---  Export: CreateCall (client)
--- =====================================================
 
 function CreateCall(options)
     assert(type(options) == "table", "options must be a table")
@@ -512,9 +507,10 @@ function CreateCall(options)
         return debugprint("no phone")
     end
 
-    -- Apply hide-caller-id from settings if not explicitly set
     if options.hideNumber == nil then
-        if settings and settings.phone and settings.phone.showCallerId == false then
+        local showCallerId = settings and settings.phone and settings.phone.showCallerId
+
+        if showCallerId == false then
             options.hideNumber = true
         end
     end
@@ -524,51 +520,54 @@ function CreateCall(options)
             return debugprint("company calls are disabled in config")
         end
 
-        -- Resolve company label
-        local isValid, companyLabel = false, options.company
-        local contactEntry = Config.Companies.Contacts[options.company]
-        if contactEntry then
-            companyLabel = contactEntry.name
-            isValid = true
+        local validCompany = false
+        local companyLabel = options.company
+        local companyContact = Config.Companies.Contacts[options.company]
+
+        if companyContact then
+            companyLabel = companyContact.name
+            validCompany = true
         else
-            for _, service in ipairs(Config.Companies.Services) do
+            for i = 1, #Config.Companies.Services do
+                local service = Config.Companies.Services[i]
+
                 if service.job == options.company then
-                    isValid = true
+                    validCompany = true
                     companyLabel = service.name
                     break
                 end
             end
         end
-        if not isValid then
+
+        if not validCompany then
             return debugprint("invalid company")
         end
 
         debugprint("CreateCall: company", options)
-        SendReactMessage("call", {
-            company      = options.company,
+
+        SendNUIAction("call", {
+            company = options.company,
             companylabel = companyLabel,
-            hideCallerId = options.hideNumber == true,
+            hideCallerId = options.hideNumber == true
         })
     else
         debugprint("CreateCall: number", options)
-        SendReactMessage("call", {
-            number       = options.number,
-            videoCall    = options.videoCall == true,
-            hideCallerId = options.hideNumber == true,
+
+        SendNUIAction("call", {
+            number = options.number,
+            videoCall = options.videoCall == true,
+            hideCallerId = options.hideNumber == true
         })
     end
 end
+
 exports("CreateCall", CreateCall)
 
--- =====================================================
---  Export: CreateCustomNumber
--- =====================================================
-
 exports("CreateCustomNumber", function(number, data)
-    local invokingResource = GetInvokingResource()
+    local resource = GetInvokingResource()
 
-    assert(type(number) == "string",      "number must be a string")
-    assert(type(data) == "table",         "data must be a table")
+    assert(type(number) == "string", "number must be a string")
+    assert(type(data) == "table", "data must be a table")
     assert(type(data.onCall) == "function", "data.onCall must be a function")
 
     if customNumbers[number] then
@@ -576,112 +575,101 @@ exports("CreateCustomNumber", function(number, data)
     end
 
     customNumbers[number] = {
-        resource  = invokingResource,
-        number    = number,
-        onCall    = data.onCall,
-        onEnd     = data.onEnd,
-        onAction  = data.onAction,
-        onKeypad  = data.onKeypad,
+        resource = resource,
+        number = number,
+        onCall = data.onCall,
+        onEnd = data.onEnd,
+        onAction = data.onAction,
+        onKeypad = data.onKeypad
     }
+
     return true
 end)
 
--- =====================================================
---  Export: RemoveCustomNumber
--- =====================================================
-
 exports("RemoveCustomNumber", function(number)
-    local invokingResource = GetInvokingResource()
+    local resource = GetInvokingResource()
 
     assert(type(number) == "string", "number must be a string")
 
     if not customNumbers[number] then
         return false, "Number does not exist"
     end
-    if customNumbers[number].resource ~= invokingResource then
-        return false, "Number was not created by " .. invokingResource
+
+    if customNumbers[number].resource ~= resource then
+        return false, "Number was not created by " .. resource
     end
 
     customNumbers[number] = nil
+
     return true
 end)
 
--- =====================================================
---  Export: EndCustomCall
--- =====================================================
-
 exports("EndCustomCall", function()
-    if activeCustomCall then
-        EndCustomCall()
+    if currentCustomCall then
+        endCustomCall()
         return true
     end
+
     return false
 end)
 
--- =====================================================
---  Export: CreateDynamicCustomNumber
--- =====================================================
-
 exports("CreateDynamicCustomNumber", function(validator, data)
-    local invokingResource = GetInvokingResource()
+    local resource = GetInvokingResource()
 
-    assert(type(validator) == "function",   "validator must be a function")
-    assert(type(data) == "table",           "data must be a table")
+    assert(type(validator) == "function", "validator must be a function")
+    assert(type(data) == "table", "data must be a table")
     assert(type(data.onCall) == "function", "data.onCall must be a function")
 
-    dynamicNumberCount = dynamicNumberCount + 1
-    local id = dynamicNumberCount
+    dynamicCustomNumberId = dynamicCustomNumberId + 1
 
-    dynamicCustomNumbers[id] = {
-        isValid      = validator,
+    dynamicCustomNumbers[dynamicCustomNumberId] = {
+        isValid = validator,
         customNumber = data,
-        resource     = invokingResource,
+        resource = resource
     }
 
-    return id
+    return dynamicCustomNumberId
 end)
 
--- =====================================================
---  Export: RemoveDynamicCustomNumber
--- =====================================================
-
 exports("RemoveDynamicCustomNumber", function(id)
-    local invokingResource = GetInvokingResource()
+    local resource = GetInvokingResource()
 
     assert(type(id) == "number", "id must be a number")
 
-    if not dynamicCustomNumbers[id] then
+    local dynamicNumber = dynamicCustomNumbers[id]
+
+    if not dynamicNumber then
         return false, "Dynamic number does not exist"
     end
-    if dynamicCustomNumbers[id].resource ~= invokingResource then
-        return false, "Dynamic number was not created by " .. invokingResource
+
+    if dynamicNumber.resource ~= resource then
+        return false, "Dynamic number was not created by " .. resource
     end
 
     dynamicCustomNumbers[id] = nil
+
     return true
 end)
 
--- =====================================================
---  Cleanup on resource stop
--- =====================================================
-
 AddEventHandler("onResourceStop", function(resourceName)
-    if resourceName == GetCurrentResourceName() then return end
+    if resourceName == GetCurrentResourceName() then
+        return
+    end
 
-    -- Remove static custom numbers registered by this resource
-    for number, data in pairs(customNumbers) do
-        if data.resource == resourceName then
+    for number, customNumber in pairs(customNumbers) do
+        if customNumber.resource == resourceName then
             debugprint("Removed custom number", number, "due to resource stopping")
-            if activeCustomCall == data then
-                DispatchCustomCallAction("end")
+
+            if currentCustomCall == customNumber then
+                handleCustomCallAction("end")
             end
+
             customNumbers[number] = nil
         end
     end
 
-    -- Remove dynamic custom numbers registered by this resource
-    for id, data in pairs(dynamicCustomNumbers) do
-        if data.resource == resourceName then
+    for id, dynamicNumber in pairs(dynamicCustomNumbers) do
+        if dynamicNumber.resource == resourceName then
             debugprint("Removed dynamic custom number id", id, "due to resource stopping")
             dynamicCustomNumbers[id] = nil
         end

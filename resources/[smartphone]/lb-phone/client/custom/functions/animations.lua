@@ -16,6 +16,7 @@ local phoneVariation
 local textureVariation
 ---@type string?
 local oldFrameColor
+local playerPed = PlayerPedId()
 local phoneAnimations = {
     default = {
         onFoot = {
@@ -156,8 +157,11 @@ local function LoadDict(dict)
     return dict
 end
 
+local disableDoorAnimation = Interval:new(function()
+    SetPedResetFlag(playerPed, 58, true)
+end, 0, false)
+
 local handleAnimationsInterval = Interval:new(function(self)
-    local playerPed = PlayerPedId()
     local inCar = IsPedInAnyVehicle(playerPed, true)
 
     if not self.enabled then
@@ -177,10 +181,16 @@ end, 500, false)
 
 function handleAnimationsInterval.onStart()
     debugprint("Started phone animations interval")
+
+    playerPed = PlayerPedId()
+
+    disableDoorAnimation:toggle(true)
 end
 
 function handleAnimationsInterval.onStop()
     debugprint("Stopped phone animations interval")
+
+    disableDoorAnimation:toggle(false)
 end
 
 function RefreshAnimationsInterval()
@@ -243,7 +253,6 @@ local function CreatePhoneObject()
         return
     end
 
-    local playerPed = PlayerPedId()
     local coords = GetEntityCoords(playerPed, false)
 
     if Config.PropSpawn == "server" then
@@ -430,8 +439,8 @@ function SetPhoneVariation(variation)
 
     if phoneVariation == variation then
         if itemData.frameColor then
-            SendReactMessage("setFrameColor", itemData.frameColor)
-            SendReactMessage("updateConfigValue", {
+            SendNUIAction("setFrameColor", itemData.frameColor)
+            SendNUIAction("updateConfigValue", {
                 config = {
                     allowFrameColorChange = false,
                     frameColor = itemData.frameColor
@@ -457,8 +466,8 @@ function SetPhoneVariation(variation)
             oldFrameColor = settings?.display?.frameColor
         end
 
-        SendReactMessage("setFrameColor", itemData.frameColor)
-        SendReactMessage("updateConfigValue", {
+        SendNUIAction("setFrameColor", itemData.frameColor)
+        SendNUIAction("updateConfigValue", {
             config = {
                 allowFrameColorChange = false,
                 frameColor = itemData.frameColor
@@ -466,12 +475,12 @@ function SetPhoneVariation(variation)
         })
     else
         if oldFrameColor then
-            SendReactMessage("setFrameColor", oldFrameColor)
+            SendNUIAction("setFrameColor", oldFrameColor)
         else
-            SendReactMessage("setFrameColor", Config.FrameColor)
+            SendNUIAction("setFrameColor", Config.FrameColor)
         end
 
-        SendReactMessage("updateConfigValue", {
+        SendNUIAction("updateConfigValue", {
             config = {
                 allowFrameColorChange = Config.AllowFrameColorChange,
                 frameColor = Config.FrameColor

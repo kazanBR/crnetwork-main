@@ -33,9 +33,11 @@ if (!globalThis.componentsLoaded) {
     globalThis.useNuiEvent = onNuiEvent;
 
     let currentPopUpInputCb = null;
+    let popUpInputHandlers = [];
 
     function setPopUp(data) {
         currentPopUpInputCb = null;
+        popUpInputHandlers = [];
 
         if (!data?.buttons) return;
 
@@ -43,7 +45,15 @@ if (!globalThis.componentsLoaded) {
             if (data.buttons[i].cb) data.buttons[i].callbackId = i;
         }
 
-        if (data.input?.onChange) {
+        if (data.inputs) {
+            for (let i = 0; i < data.inputs.length; i++) {
+                if (data.inputs[i].onChange) {
+                    popUpInputHandlers[i] = data.inputs[i].onChange;
+                    data.inputs[i].onChange = true;
+                }
+            }
+        } else if (data.input?.onChange) {
+            popUpInputHandlers[0] = data.input.onChange;
             currentPopUpInputCb = data.input.onChange;
             data.input.onChange = true;
         }
@@ -144,7 +154,11 @@ if (!globalThis.componentsLoaded) {
         if (type === 'settingsUpdated') {
             settingsListeners.forEach((cb) => cb(data.settings));
         } else if (type === 'popUpInputChanged') {
-            if (currentPopUpInputCb) currentPopUpInputCb(data.value);
+            if (typeof data.index === 'number' && popUpInputHandlers[data.index]) {
+                popUpInputHandlers[data.index](data.value);
+            } else if (currentPopUpInputCb) {
+                currentPopUpInputCb(data.value);
+            }
         }
     });
 

@@ -1,240 +1,235 @@
--- ── Helper: decode JSON fields on a video row and normalise booleans ──
-local function normaliseVideoRow(video)
-    -- Decode metadata JSON if present
+-- =====================================================
+--  lb-phone · client/apps/social/tiktok.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
+local function FormatVideo(video)
     if video.metadata then
         video.metadata = json.decode(video.metadata)
     end
 
-    -- Decode and resolve music JSON if present
     if video.music then
         video.music = json.decode(video.music)
 
-        local songEntry = Music.Songs[video.music.path]
-        if songEntry then
-            -- Attach album cover to song entry if available
-            local albumEntry = Music.Albums[songEntry.album]
-            if albumEntry then
-                songEntry.Cover = albumEntry.Cover
+        local song = Music.Songs[video.music and video.music.path]
+
+        if song then
+            local album = Music.Albums[song.album]
+
+            if album and album.Cover then
+                song.Cover = album.Cover
             end
 
-            -- Flatten into a clean music table
             video.music = {
-                title  = songEntry.Title,
-                artist = songEntry.Artist,
-                cover  = songEntry.Cover,
+                title = song.Title,
+                artist = song.Artist,
+                cover = song.Cover,
                 volume = video.music.volume,
-                path   = video.music.path,
+                path = video.music.path
             }
         end
     end
 
-    -- Normalise integer booleans returned by MySQL (1 → true, else → false)
-    video.liked  = video.liked  == 1
-    video.saved  = video.saved  == 1
+    video.liked = video.liked == 1
+    video.saved = video.saved == 1
     video.viewed = video.viewed == 1
 
     return video
 end
 
--- ── NUI callback: route all TikTok actions from the React frontend ──
+local function EncodeUploadPayload(data)
+    if not (data.src and data.caption) then
+        return false, "invalid_caption"
+    end
+
+    if data.music then
+        if not (data.music.path and data.music.volume) then
+            return false, "invalid_music"
+        end
+
+        data.music = json.encode(data.music)
+    end
+
+    if data.metadata and type(data.metadata) == "table" and next(data.metadata) ~= nil then
+        data.metadata = json.encode(data.metadata)
+    else
+        data.metadata = nil
+    end
+
+    return true
+end
+
 RegisterNUICallback("TikTok", function(data, cb)
-    if not currentPhone then return end
+    if not currentPhone then
+        return
+    end
 
     local action = data.action
+
     debugprint("Trendy:" .. (action or ""))
 
-    -- Account actions
     if action == "login" then
-        TriggerCallback("tiktok:login", cb, data.data.username, data.data.password)
+        local loginData = data.data
 
+        TriggerCallback("tiktok:login", cb, loginData.username, loginData.password)
     elseif action == "signup" then
-        TriggerCallback("tiktok:signup", cb, data.data.username, data.data.password, data.data.name)
+        local signupData = data.data
 
+        TriggerCallback("tiktok:signup", cb, signupData.username, signupData.password, signupData.name)
     elseif action == "changePassword" then
         TriggerCallback("tiktok:changePassword", cb, data.oldPassword, data.newPassword)
-
     elseif action == "deleteAccount" then
         TriggerCallback("tiktok:deleteAccount", cb, data.password)
-
     elseif action == "logout" then
         TriggerCallback("tiktok:logout", cb)
-
     elseif action == "isLoggedIn" then
         TriggerCallback("tiktok:isLoggedIn", cb)
-
-    -- Profile actions
     elseif action == "getProfile" then
         TriggerCallback("tiktok:getProfile", cb, data.username)
-
     elseif action == "updateProfile" then
         TriggerCallback("tiktok:updateProfile", cb, data.data)
-
-    -- Social / follow actions
     elseif action == "searchAccounts" then
         TriggerCallback("tiktok:searchAccounts", cb, data.query, data.page)
-
     elseif action == "toggleFollow" then
-        TriggerCallback("tiktok:toggleFollow", cb, data.data.username, data.data.follow)
+        local followData = data.data
 
+        TriggerCallback("tiktok:toggleFollow", cb, followData.username, followData.follow)
     elseif action == "getFollowing" then
         TriggerCallback("tiktok:getFollowing", cb, data.username, data.page)
-
     elseif action == "getFollowers" then
         TriggerCallback("tiktok:getFollowers", cb, data.username, data.page)
-
-    -- Video actions
     elseif action == "uploadVideo" then
-        local videoData = data.data
+        local uploadData = data.data
+        local valid, error = EncodeUploadPayload(uploadData)
 
-        -- Validate required fields before sending to server
-        if not videoData.src or not videoData.caption then
-            return cb({ success = false, error = "invalid_caption" })
+        if not valid then
+            return cb({
+                success = false,
+                error = error
+            })
         end
 
-        -- Validate music object has required fields
-        if videoData.music then
-            if not videoData.music.path or not videoData.music.volume then
-                return cb({ success = false, error = "invalid_music" })
-            end
-            videoData.music = json.encode(videoData.music)
-        end
-
-        -- Encode metadata table (nil out if empty)
-        if videoData.metadata then
-            if type(videoData.metadata) == "table" then
-                local isEmpty = true
-                for _ in pairs(videoData.metadata) do
-                    isEmpty = false
-                    break
-                end
-                videoData.metadata = isEmpty and nil or json.encode(videoData.metadata)
-            end
-        else
-            videoData.metadata = nil
-        end
-
-        TriggerCallback("tiktok:uploadVideo", cb, videoData)
-
+        TriggerCallback("tiktok:uploadVideo", cb, uploadData)
     elseif action == "deleteVideo" then
         TriggerCallback("tiktok:deleteVideo", cb, data.id)
-
     elseif action == "togglePinnedVideo" then
         TriggerCallback("tiktok:togglePinnedVideo", cb, data.id, data.toggle)
-
     elseif action == "getVideos" then
-        local page = data.page or 0
-        -- Normalise each video row in the result before forwarding to NUI
-        TriggerCallback("tiktok:getVideos", function(rows)
-            for i = 1, #rows do
-                rows[i] = normaliseVideoRow(rows[i])
+        TriggerCallback("tiktok:getVideos", function(videos)
+            for i = 1, #videos do
+                videos[i] = FormatVideo(videos[i])
             end
-            cb(rows)
-        end, data.data, page)
 
+            cb(videos)
+        end, data.data, data.page or 0)
     elseif action == "getVideo" then
-        -- Normalise the single video row in the result before forwarding to NUI
-        TriggerCallback("tiktok:getVideo", function(result)
-            if result.video then
-                result.video = normaliseVideoRow(result.video)
+        TriggerCallback("tiktok:getVideo", function(response)
+            if response.video then
+                response.video = FormatVideo(response.video)
             end
-            cb(result)
-        end, data.id)
 
+            cb(response)
+        end, data.id)
     elseif action == "setViewed" then
         TriggerServerEvent("phone:tiktok:setViewed", data.id)
         cb("ok")
-
     elseif action == "toggleLike" then
         TriggerCallback("tiktok:toggleVideoAction", cb, "like", data.id, data.toggle)
-
     elseif action == "toggleSave" then
         TriggerCallback("tiktok:toggleVideoAction", cb, "save", data.id, data.toggle)
-
-    -- Comment actions
     elseif action == "postComment" then
-        TriggerCallback("tiktok:postComment", cb, data.data.id, data.data.replyTo, data.data.comment)
+        local commentData = data.data
 
+        TriggerCallback("tiktok:postComment", cb, commentData.id, commentData.replyTo, commentData.comment)
     elseif action == "getComments" then
-        TriggerCallback("tiktok:getComments", cb, data.data.id, data.data.replyTo, data.data.creator, data.page)
+        local commentData = data.data
 
+        TriggerCallback(
+            "tiktok:getComments",
+            cb,
+            commentData.id,
+            commentData.replyTo,
+            commentData.creator,
+            data.page
+        )
     elseif action == "deleteComment" then
         TriggerCallback("tiktok:deleteComment", cb, data.id, data.videoId)
-
     elseif action == "setPinnedComment" then
         TriggerCallback("tiktok:setPinnedComment", cb, data.commentId, data.videoId)
-
     elseif action == "toggleLikeComment" then
         TriggerCallback("tiktok:toggleLikeComment", cb, data.id, data.toggle)
-
-    -- Messaging actions
     elseif action == "getRecentMessages" then
         TriggerCallback("tiktok:getRecentMessages", cb)
-
     elseif action == "getMessages" then
         TriggerCallback("tiktok:getMessages", cb, data.id, data.page)
-
     elseif action == "sendMessage" then
-        -- Block sending if the player cannot currently interact (e.g. in a cutscene)
         if not CanInteract() then
             return cb(false)
         end
-        TriggerCallback("tiktok:sendMessage", cb, data.data)
 
+        TriggerCallback("tiktok:sendMessage", cb, data.data)
     elseif action == "getChannelId" then
         TriggerCallback("tiktok:getChannelId", cb, data.username)
-
-    -- Notification actions
     elseif action == "getNotifications" then
         TriggerCallback("tiktok:getNotifications", cb, data.page)
-
     elseif action == "getUnreadMessages" then
         TriggerCallback("tiktok:getUnreadMessages", cb)
-
     elseif action == "clearUnreadMessages" then
         TriggerServerEvent("phone:tiktok:clearUnreadMessages", data.id)
+        cb("ok")
+    else
+        cb("ok")
     end
 end)
 
--- ── Net event: server tells clients to update follower count for a user ──
 RegisterNetEvent("phone:tiktok:updateFollowers", function(username, method)
-    SendReactMessage("tiktok:updateFollowers", { username = username, method = method })
+    SendNUIAction("tiktok:updateFollowers", {
+        username = username,
+        method = method
+    })
 end)
 
--- ── Net event: server tells clients to update following count for a user ──
 RegisterNetEvent("phone:tiktok:updateFollowing", function(username, method)
-    SendReactMessage("tiktok:updateFollowing", { username = username, method = method })
+    SendNUIAction("tiktok:updateFollowing", {
+        username = username,
+        method = method
+    })
 end)
 
--- ── Net event: server tells clients to update like/save/comment counts on a video ──
-RegisterNetEvent("phone:tiktok:updateVideoStats", function(statType, videoId, method, count)
-    local payload = { id = videoId, method = method, count = count }
+RegisterNetEvent("phone:tiktok:updateVideoStats", function(action, id, method, count)
+    local data = {
+        id = id,
+        method = method,
+        count = count
+    }
 
-    if statType == "like" then
-        SendReactMessage("tiktok:updateLikes", payload)
-    elseif statType == "save" then
-        SendReactMessage("tiktok:updateSaves", payload)
-    elseif statType == "comment" then
-        SendReactMessage("tiktok:updateComments", payload)
+    if action == "like" then
+        SendNUIAction("tiktok:updateLikes", data)
+    elseif action == "save" then
+        SendNUIAction("tiktok:updateSaves", data)
+    elseif action == "comment" then
+        SendNUIAction("tiktok:updateComments", data)
     end
 end)
 
--- ── Net event: server tells clients to update reply/like counts on a comment ──
-RegisterNetEvent("phone:tiktok:updateCommentStats", function(statType, commentId, method)
-    local payload = { id = commentId, method = method }
-
-    if statType == "reply" then
-        SendReactMessage("tiktok:updateReplies", payload)
-    elseif statType == "like" then
-        SendReactMessage("tiktok:updateCommentLikes", payload)
+RegisterNetEvent("phone:tiktok:updateCommentStats", function(action, id, method)
+    if action == "reply" then
+        SendNUIAction("tiktok:updateReplies", {
+            id = id,
+            method = method
+        })
+    elseif action == "like" then
+        SendNUIAction("tiktok:updateCommentLikes", {
+            id = id,
+            method = method
+        })
     end
 end)
 
--- ── Net event: a new DM has arrived for this client ──
-RegisterNetEvent("phone:tiktok:receivedMessage", function(messageData)
-    SendReactMessage("tiktok:receivedMessage", messageData)
+RegisterNetEvent("phone:tiktok:receivedMessage", function(data)
+    SendNUIAction("tiktok:receivedMessage", data)
 end)
 
--- ── Net event: a new video was posted; forward to local event bus ──
-RegisterNetEvent("phone:tiktok:newVideo", function(postData)
-    TriggerEvent("lb-phone:trendy:newPost", postData)
+RegisterNetEvent("phone:tiktok:newVideo", function(data)
+    TriggerEvent("lb-phone:trendy:newPost", data)
 end)

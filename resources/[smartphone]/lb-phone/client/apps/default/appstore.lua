@@ -1,14 +1,18 @@
-RegisterNUICallback("AppStore", function(data, cb)
-    -- Ensure a phone is currently open/active
+-- =====================================================
+--  lb-phone · client/apps/default/appstore.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
+RegisterNUICallback("AppStore", function(data, callback)
     if not currentPhone then
         return
     end
 
     local action = data.action
+
     debugprint("AppStore:" .. (action or ""))
 
-    -- Route action to the appropriate handler
     if action == "buyApp" then
-        TriggerCallback("appstore:buyApp", cb, data.price)
+        TriggerCallback("appstore:buyApp", callback, data.price)
     end
 end)

@@ -1,4 +1,5 @@
 -- File provided by vames
+
 if Config.HouseScript ~= "vms_housing" then
     return
 end

@@ -109,7 +109,7 @@ Config.LandscapeOffset = vector3(-0.03, -0.005, -0.02) -- the offset of the phon
 
 Config.DisableOpenNUI = true -- disable the phone from opening if another script has NUI focus?
 
-Config.DynamicIsland = true -- if enabled, the phone will have a Iphone 14 Pro inspired Dynamic Island.
+Config.LiveTray = true
 Config.SetupScreen = true -- if enabled, the phone will have a setup screen when the player first uses the phone.
 Config.AppDownloadTime = 2000 -- time (in ms) it takes to download an app from the app store
 
@@ -143,7 +143,7 @@ Config.WhitelistApps = {
 }
 
 Config.BlacklistApps = {
-    ["DarkChat"] = {"LSPD","BCSO"}
+    ["DarkChat"] = {"Militar","BCSO"}
 }
 
 Config.ChangePassword = {
@@ -160,7 +160,7 @@ Config.DeleteAccount = {
     ["Birdy"] = false,
     ["DarkChat"] = false,
     ["Mail"] = false,
-    ["Spark"] = false
+    ["Spark"] = false,
 }
 
 Config.Companies = {}
@@ -200,7 +200,7 @@ Config.Companies.Services = {
                 y = -1393.64
             }
         }
-    }
+    },
 }
 
 Config.Companies.Contacts = { -- not needed if you use the services app, this will add the contact to the contacts app
@@ -240,6 +240,7 @@ Config.HouseScript = "auto" --[[
         * qb-houses
         * qs-housing
         * vms_housing
+        * rtx_housing
 ]]
 
 --[[ VOICE OPTIONS ]] --
@@ -562,35 +563,53 @@ Config.SyncFlash = true -- should flashlights be synced across all players? May 
 Config.EndLiveClose = false -- should InstaPic live end when you close the phone?
 
 Config.AllowExternal = { -- allow people to upload external images? (note: this means they can upload nsfw / gore etc)
-    Gallery = true, -- allow importing external links to the gallery?
-    Birdy = true, -- set to true to enable external images on that specific app, set to false to disable it.
-    InstaPic = true,
-    Spark = true,
-    Trendy = true,
-    Pages = true,
-    MarketPlace = true,
-    Mail = true,
-    Messages = true,
-    Other = true -- other apps that don't have a specific setting (ex: setting a profile picture for a contact, backgrounds for the phone etc)
+    Gallery = false, -- allow importing external links to the gallery?
+    Birdy = false, -- set to true to enable external images on that specific app, set to false to disable it.
+    InstaPic = false,
+    Spark = false,
+    Trendy = false,
+    Pages = false,
+    Marketplace = false,
+    Mail = false,
+    Messages = false,
+    Other = false, -- other apps that don't have a specific setting (ex: setting a profile picture for a contact, backgrounds for the phone etc)
 }
 
--- Blacklisted domains for external images. You will not be able to upload from these domains.
+-- Blocked hostnames for external images. You will not be able to upload from these hostnames.
+Config.ExternalBlacklistedHostnames = {}
+
+-- Blacklisted domains for external images (blocks all subdomains too)
 Config.ExternalBlacklistedDomains = {
     "imgur.com",
     "discord.com",
     "discordapp.com",
 }
 
--- Whitelisted domains for external images. If this is not empty/nil/false, you will only be able to upload images from these domains.
+-- Whitelisted hostnames for external images
+Config.ExternalWhitelistedHostnames = {
+    -- "*.fivemanage.com",
+    -- "*.fmfile.com",
+    "r2.qbox.re",
+}
+
+-- Whitelisted domains for external images (allows all subdomains too)
 Config.ExternalWhitelistedDomains = {
     -- "fivemanage.com"
 }
 
--- Set to false/empty to disable
-Config.UploadWhitelistedDomains = { -- domains that are allowed to upload images to the phone (prevent using devtools to upload images)
+-- Hostnames that are allowed to upload images to the phone (prevent using devtools to upload images)
+-- You can use "*" as a wildcard at the start of the hostname to allow all subdomains (e.g. "*.example.com" will allow uploads from "r2.example.com", "s3.example.com" etc)
+Config.UploadWhitelistedHostnames = {
+    -- "*.fivemanage.com",
+    -- "*.fmfile.com",
+    "r2.qbox.re", -- https://docs.qbox.re/dashboard/cdn
+}
+
+Config.UploadWhitelistedDomains = {
     "fivemanage.com",
     "fmfile.com",
-    "cfx.re" -- lb-upload
+    "cfx.re", -- lb-upload
+    "amazonaws.com", -- lb-presigned (S3)
 }
 
 Config.NameFilter = ".+"
@@ -605,10 +624,10 @@ Config.WordBlacklist.Apps = { -- apps that should use the word blacklist (if Con
     Spark = true,
     Messages = true,
     Pages = true,
-    MarketPlace = true,
+    Marketplace = true,
     DarkChat = true,
     Mail = true,
-    Other = true
+    Other = true,
 }
 
 Config.WordBlacklist.Words = {
@@ -664,11 +683,11 @@ Config.Post.InstaPic = true -- Anmnounce new posts on InstaPic?
 Config.Post.Accounts = {
     Birdy = {
         Username = "Birdy",
-        Avatar = "https://loaf-scripts.com/fivem/lb-phone/icons/Birdy.png"
+        Avatar = "https://assets.loaf-scripts.com/lb-phone/icons/Birdy.png"
     },
     InstaPic = {
         Username = "InstaPic",
-        Avatar = "https://loaf-scripts.com/fivem/lb-phone/icons/InstaPic.png"
+        Avatar = "https://assets.loaf-scripts.com/lb-phone/icons/InstaPic.png"
     }
 }
 
@@ -683,6 +702,21 @@ Config.PromoteBirdy = {}
 Config.PromoteBirdy.Enabled = true -- should you be able to promote post?
 Config.PromoteBirdy.Cost = 2500 -- how much does it cost to promote a post?
 Config.PromoteBirdy.Views = 100 -- how many views does a promoted post get?
+
+--- Verified badge tiers for Birdy (UI). `verified` on accounts can be `true` (treated as tier 1) or a tier number. Requires DB/support for integer `verified` for multiple tiers.
+Config.Verified = {}
+Config.Verified.Birdy = {
+    [1] = {
+        color = "#1d9af0",
+        label = "APPS.TWITTER.VERIFIED.LABEL",
+        description = "APPS.TWITTER.VERIFIED.DESCRIPTION"
+    },
+    [2] = {
+        color = "#d4a017",
+        label = "APPS.TWITTER.VERIFIED_GOVERNMENT.LABEL",
+        description = "APPS.TWITTER.VERIFIED_GOVERNMENT.DESCRIPTION"
+    }
+}
 
 Config.UsernameFilter = {
     Regex = "[a-zA-Z0-9]+", -- This regex is used to clean up usernames in mentions & account creation
@@ -727,13 +761,6 @@ Config.TrendyTTS = {
     {"Korean - Male 2", "kr_004"},
     {"Korean - Female", "kr_003"},
 
-    {"Ghostface (Scream)", "en_us_ghostface"},
-    {"Chewbacca (Star Wars)", "en_us_chewbacca"},
-    {"C3PO (Star Wars)", "en_us_c3po"},
-    {"Stitch (Lilo & Stitch)", "en_us_stitch"},
-    {"Stormtrooper (Star Wars)", "en_us_stormtrooper"},
-    {"Rocket (Guardians of the Galaxy)", "en_us_rocket"},
-
     {"Singing - Alto", "en_female_f08_salut_damour"},
     {"Singing - Tenor", "en_male_m03_lobby"},
     {"Singing - Sunshine Soon", "en_male_m03_sunshine_soon"},
@@ -743,6 +770,18 @@ Config.TrendyTTS = {
     {"Singing - Chipmunk", "en_male_m2_xhxs_m03_silly"},
     {"Singing - Dramatic", "en_female_ht_f08_wonderful_world"}
 }
+
+Config.Pages = {}
+Config.Pages.Cost = 0 -- how much should it cost to post on pages? set to false/0 to disable
+Config.Pages.RateLimit = 0 -- how many minutes do you have to wait before posting on pages again? set to false/0 to disable. There's an always enabled limit of 1 post/10s to prevent spamming
+Config.Pages.MaxPosts = 10 -- how many posts can a player have on pages at once? set to false to disable
+Config.Pages.DeleteOld = false -- posts that are more than X hours old will be automatically deleted. set to false to disable, or set to a number to enable (e.g. 7 * 24 to delete posts that are more than 1 week old)
+
+Config.Marketplace = {}
+Config.Marketplace.Cost = 0 -- how much should it cost to post on Marketplace? set to false/0 to disable
+Config.Marketplace.RateLimit = 0 -- how many minutes do you have to wait before posting on Marketplace again? set to false/0 to disable. There's an always enabled limit of 1 post/10s to prevent spamming
+Config.Marketplace.MaxPosts = 10 -- how many posts can a player have on Marketplace at once? set to false to disable.
+Config.Marketplace.DeleteOld = false -- posts that are more than X hours old will be automatically deleted. set to false to disable, or set to a number to enable (e.g. 7 * 24 to delete posts that are more than 1 week old)
 
 -- You can customize the function in lb-phone/server/custom/functions/webrtc.lua
 -- You can set your api key in lb-phone/server/apiKeys.lua
@@ -800,7 +839,7 @@ Config.Crypto.Coins = {
     }
 }
 
-Config.Crypto.QBit = false -- support QBit? (requires qb-crypto & qb-core)
+Config.Crypto.QBit = true -- support QBit? (requires qb-crypto & qb-core)
 Config.Crypto.Limits = {}
 Config.Crypto.Limits.Buy = 1000000 -- how much ($) you can buy for at once
 Config.Crypto.Limits.Sell = 1000000 -- how much ($) you can sell at once
@@ -830,8 +869,8 @@ Config.KeyBinds = {
     -- Find keybinds here: https://docs.fivem.net/docs/game-references/input-mapper-parameter-ids/keyboard/
     Open = { -- toggle the phone
         Command = "phone",
-        Bind = "K",
-        Description = "Navegar no telefone"
+        Bind = "F1",
+        Description = "Open your phone"
     },
     Focus = { -- keybind to toggle the mouse cursor.
         Command = "togglePhoneFocus",
@@ -843,6 +882,7 @@ Config.KeyBinds = {
         Bind = false,
         Description = "Stop all phone sounds"
     },
+
     FlipCamera = {
         Command = "flipCam",
         Bind = "UP",
@@ -897,7 +937,7 @@ Config.KeyBinds = {
     UnlockPhone = {
         Bind = "SPACE",
         Description = "Open your phone",
-    }
+    },
 }
 
 Config.KeepInput = true -- keep input when nui is focused (meaning you can walk around etc)
@@ -940,16 +980,20 @@ Config.Camera.Freeze.MaxTime = 60 -- max time the camera can be frozen for (in s
 -- Set your api keys in lb-phone/server/apiKeys.lua
 Config.UploadMethod = {}
 -- You can edit the upload methods in lb-phone/shared/upload.lua
--- We recommend Fivemanage, https://fivemanage.com
--- Use code LBPHONE10 for 10% off on Fivemanage
+-- The default and recommended upload method is Fivemanage
+-- Use code "LBPHONE25" for 25% off - forever
+-- You can get your API keys from https://refer.fivemanage.com/lb
+-- Affiliate link - purchases made through this link will give us a commission at no extra cost to you
 -- A video tutorial for how to set up Fivemanage can be found here: https://www.youtube.com/watch?v=y3bCaHS6Moc
--- If you want to host uploads yourself, you can use LBUpload: https://github.com/lbphone/lb-upload
-Config.UploadMethod.Video = "Fivemanage" -- "Fivemanage" or "LBUpload" or "Custom"
-Config.UploadMethod.Image = "Fivemanage" -- "Fivemanage" or "LBUpload" or "Custom
-Config.UploadMethod.Audio = "Fivemanage" -- "Fivemanage" or "LBUpload" or "Custom"
+-- If you want to use S3/R2, you can use "LBPresigned": https://github.com/lbphone/lb-presigned
+Config.UploadMethod.Video = "Fivemanage"
+Config.UploadMethod.Image = "Fivemanage"
+Config.UploadMethod.Audio = "Fivemanage"
 
 Config.Video = {}
-Config.Video.Bitrate = 400 -- video bitrate (kbps), increase to improve quality, at the cost of file size
+Config.Video.VariableBitrate = true
+Config.Video.Bitrate = 2000 -- video bitrate (kbps), increase to improve quality, at the cost of file size
+Config.Video.AudioBitrate = 128 -- audio bitrate (kbps), increase to improve quality, at the cost of file size. This bitrate is also used when recording audio files
 Config.Video.FrameRate = 24 -- video framerate (fps), 24 fps is a good mix between quality and file size used in most movies
 Config.Video.MaxSize = 25 -- max video size (MB)
 Config.Video.MaxDuration = 60 -- max video duration (seconds)

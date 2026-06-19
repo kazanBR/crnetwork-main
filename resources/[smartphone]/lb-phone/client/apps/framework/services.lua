@@ -153,8 +153,17 @@ RegisterNUICallback("Services", function(data, cb)
         TriggerCallback("services:deleteChannel", cb, data.id)
     end
 
+    if action == "getJobs" then
+        return cb(GetMultiJobs and GetMultiJobs() or false)
+    elseif action == "setActiveJob" then
+        return cb(SetActiveJob and SetActiveJob(data.job) or false)
+    elseif action == "leaveJob" then
+        return cb(LeaveJob and LeaveJob(data.job) or false)
+    end
+
     if Config.Framework == "qb" and GetResourceState("qb-menu") == "started" then
         local timer = GetGameTimer() + 1500
+
         while GetGameTimer() < timer do
             Wait(100)
             exports["qb-menu"]:closeMenu()
@@ -163,14 +172,14 @@ RegisterNUICallback("Services", function(data, cb)
 end)
 
 RegisterNetEvent("phone:services:updateOpen", function(job, open)
-    SendReactMessage("services:updateOpen", {
+    SendNUIAction("services:updateOpen", {
         job = job,
         open = open
     })
 end)
 
 RegisterNetEvent("phone:services:newMessage", function(data)
-    SendReactMessage("services:newMessage", data)
+    SendNUIAction("services:newMessage", data)
 end)
 
 ---@param company string
@@ -201,7 +210,7 @@ exports("SendCompanyCoords", function(company, coords, anonymous)
 end)
 
 RegisterNetEvent("phone:services:channelDeleted", function(channelId)
-    SendReactMessage("services:channelDeleted", channelId)
+    SendNUIAction("services:channelDeleted", channelId)
 end)
 
 ---@return boolean

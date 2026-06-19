@@ -1,109 +1,122 @@
--- Forward declarations for module-level functions
-local addVoiceLink, removeVoiceLink
+-- =====================================================
+--  lb-phone · server/misc/speakerphone.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- addVoiceLink(listenerSource, speakerSource, playFromSource)
--- Connects two players' voice targets so they can hear each other.
--- If playFromSource is provided, audio plays from that entity's position.
-function addVoiceLink(listenerSource, speakerSource, playFromSource)
-    local proxySuffix = playFromSource and (" (playing from %s)"):format(DebugPlayerName(playFromSource)) or ""
-    debugprint(DebugPlayerName(speakerSource) .. " is now speaking to " .. DebugPlayerName(listenerSource) .. proxySuffix)
+local function AddSpeakerphoneTarget(targetSource, listenerSource, playFromSource)
+    debugprint(
+        DebugPlayerName(listenerSource)
+            .. " is now speaking to "
+            .. DebugPlayerName(targetSource)
+            .. (playFromSource and (" (playing from %s)"):format(DebugPlayerName(playFromSource)) or "")
+    )
 
-    -- Let the listener hear the speaker
-    TriggerClientEvent("phone:phone:addVoiceTarget", speakerSource, {
-        sources = listenerSource
+    TriggerClientEvent("phone:phone:addVoiceTarget", listenerSource, {
+        sources = targetSource
     })
 
-    -- Let the speaker hear the listener, with phone call audio settings
-    TriggerClientEvent("phone:phone:addVoiceTarget", listenerSource, {
-        sources      = speakerSource,
-        audio        = true,
-        phoneCall    = true,
+    TriggerClientEvent("phone:phone:addVoiceTarget", targetSource, {
+        sources = listenerSource,
+        audio = true,
+        phoneCall = true,
         playFromSource = playFromSource
     })
 end
 
--- removeVoiceLink(listenerSource, speakerSource)
--- Disconnects two players' voice targets.
-function removeVoiceLink(listenerSource, speakerSource)
-    debugprint(DebugPlayerName(speakerSource) .. " stopped speaking to " .. DebugPlayerName(listenerSource))
+local function RemoveSpeakerphoneTarget(targetSource, listenerSource)
+    debugprint(DebugPlayerName(listenerSource) .. " stopped speaking to " .. DebugPlayerName(targetSource))
 
-    TriggerClientEvent("phone:phone:removeVoiceTarget", speakerSource, listenerSource, true)
-    TriggerClientEvent("phone:phone:removeVoiceTarget", listenerSource, speakerSource, true)
+    TriggerClientEvent("phone:phone:removeVoiceTarget", listenerSource, targetSource, true)
+    TriggerClientEvent("phone:phone:removeVoiceTarget", targetSource, listenerSource, true)
 end
 
--- ─── toggleMute ────────────────────────────────────────────────────────────────
--- Triggered by a client to mute/unmute themselves during an active call.
--- Updates player state and notifies all nearby listeners of the audibility change.
-RegisterNetEvent("phone:phone:toggleMute")
-AddEventHandler("phone:phone:toggleMute", function(isMuted)
+local function GetCallSides(call, participantSource)
+    local isCaller = call.caller.source == participantSource
+    local participant = isCaller and call.caller or call.callee
+    local otherParticipant = isCaller and call.callee or call.caller
+
+    return isCaller, participant, otherParticipant
+end
+
+local function CloneNearbyWithSource(nearby, source)
+    local list = table.clone(nearby)
+
+    list[#list + 1] = source
+
+    return list
+end
+
+RegisterNetEvent("phone:phone:toggleMute", function(muted)
     local playerSource = source
-    local _, _, callData = IsInCall(playerSource)
-    if not callData then return end
+    local _, _, call = IsInCall(playerSource)
 
-    -- Determine which side of the call we are, and get both nearby lists + other participant
-    local isCaller    = callData.caller.source == playerSource
-    local myNearby    = isCaller and callData.caller.nearby    or callData.callee.nearby
-    local otherNearby = isCaller and callData.callee.nearby    or callData.caller.nearby
-    local otherSource = isCaller and callData.callee.source    or callData.caller.source
-
-    -- Update this player's mute state
-    isMuted = isMuted == true
-    Player(playerSource).state.mutedCall = isMuted
-
-    if not callData.answered then return end
-
-    -- Build full listener lists (nearby + the direct participant)
-    local myListeners    = table.clone(myNearby)
-    myListeners[#myListeners + 1]    = playerSource
-
-    local otherListeners = table.clone(otherNearby)
-    otherListeners[#otherListeners + 1] = otherSource
-
-    -- Notify each person on the other side whether they can hear this player
-    for _, listenerSource in ipairs(otherListeners) do
-        local muteLabel = isMuted and "not " or ""
-        debugprint(DebugPlayerName(listenerSource), "set " .. muteLabel .. "audible for", myListeners)
-        TriggerClientEvent("phone:phone:setTargetsAudible", listenerSource, myListeners, not isMuted)
-    end
-end)
-
--- ─── toggleSpeaker ─────────────────────────────────────────────────────────────
--- Triggered by a client to turn speakerphone on or off.
-RegisterNetEvent("phone:phone:toggleSpeaker")
-AddEventHandler("phone:phone:toggleSpeaker", function(isEnabled)
-    Player(source).state.speakerphone = isEnabled == true
-end)
-
--- ─── enteredCallProximity ──────────────────────────────────────────────────────
--- Triggered when a bystander walks into range of a phone call participant.
--- If that participant has speakerphone on, connect the bystander to the call audio.
-RegisterNetEvent("phone:phone:enteredCallProximity")
-AddEventHandler("phone:phone:enteredCallProximity", function(callParticipantSource)
-    local bystanderSource = source
-    local _, _, callData  = IsInCall(callParticipantSource)
-
-    debugprint("phone:phone:enteredCallProximity:", DebugPlayerName(bystanderSource), "entered the proximity of", DebugPlayerName(callParticipantSource))
-
-    if not callData then
-        debugprint(DebugPlayerName(callParticipantSource), "is not in a call")
+    if not call then
         return
     end
 
-    if not callData.answered then
+    local _, participant, otherParticipant = GetCallSides(call, playerSource)
+    local otherSource = otherParticipant.source
+
+    if not otherSource then
+        return
+    end
+
+    muted = muted == true
+    Player(playerSource).state.mutedCall = muted
+
+    if not call.answered then
+        return
+    end
+
+    local audibleSources = CloneNearbyWithSource(participant.nearby, playerSource)
+    local listeners = CloneNearbyWithSource(otherParticipant.nearby, otherSource)
+
+    for i = 1, #listeners do
+        local listener = listeners[i]
+
+        debugprint(
+            DebugPlayerName(listener),
+            "set " .. (muted and "not " or "") .. "audible for",
+            audibleSources
+        )
+
+        TriggerClientEvent("phone:phone:setTargetsAudible", listener, audibleSources, not muted)
+    end
+end)
+
+RegisterNetEvent("phone:phone:toggleSpeaker", function(enabled)
+    Player(source).state.speakerphone = enabled == true
+end)
+
+RegisterNetEvent("phone:phone:enteredCallProximity", function(speakerSource)
+    local nearbySource = source
+    local _, _, call = IsInCall(speakerSource)
+
+    debugprint(
+        "phone:phone:enteredCallProximity:",
+        DebugPlayerName(nearbySource),
+        "entered the proximity of",
+        DebugPlayerName(speakerSource)
+    )
+
+    if not call then
+        debugprint(DebugPlayerName(speakerSource), "is not in a call")
+        return
+    end
+
+    if not call.answered then
         debugprint("call not answered yet")
         return
     end
 
-    -- Determine call sides relative to the participant we're near
-    local isCaller    = callData.caller.source == callParticipantSource
-    local myNearby    = isCaller and callData.caller.nearby    or callData.callee.nearby
-    local otherNearby = isCaller and callData.callee.nearby    or callData.caller.nearby
-    local otherSource = isCaller and callData.callee.source    or callData.caller.source
+    local _, speaker, otherParticipant = GetCallSides(call, speakerSource)
+    local speakerNearby = speaker.nearby
+    local otherNearby = otherParticipant.nearby
+    local otherSource = otherParticipant.source
+    local speakerState = Player(speakerSource).state
 
-    local participantState = Player(callParticipantSource).state
-
-    if not participantState.speakerphone then
-        debugprint(DebugPlayerName(callParticipantSource), "does not have speakerphone on")
+    if not speakerState.speakerphone then
+        debugprint(DebugPlayerName(speakerSource), "does not have speakerphone on")
         return
     end
 
@@ -114,97 +127,94 @@ AddEventHandler("phone:phone:enteredCallProximity", function(callParticipantSour
 
     local otherState = Player(otherSource).state
 
-    -- Connect the bystander to the call if neither side is muted
-    if not participantState.mutedCall then
-        addVoiceLink(otherSource, bystanderSource, otherSource)
+    if not speakerState.mutedCall then
+        AddSpeakerphoneTarget(otherSource, nearbySource, otherSource)
     end
+
     if not otherState.mutedCall then
-        addVoiceLink(bystanderSource, otherSource, callParticipantSource)
+        AddSpeakerphoneTarget(nearbySource, otherSource, speakerSource)
     end
 
-    -- Also connect any other nearby bystanders on the other side
-    for _, nearbySource in ipairs(otherNearby) do
-        if otherState.speakerphone then
-            if not participantState.mutedCall then
-                addVoiceLink(nearbySource, bystanderSource, otherSource)
-            end
-            if not otherState.mutedCall then
-                addVoiceLink(bystanderSource, nearbySource, callParticipantSource)
+    for i = 1, #otherNearby do
+        local otherNearbySource = otherNearby[i]
+
+        if otherState.speakerphone and not speakerState.mutedCall then
+            AddSpeakerphoneTarget(otherNearbySource, nearbySource, otherSource)
+        end
+
+        if otherState.speakerphone and not otherState.mutedCall then
+            AddSpeakerphoneTarget(nearbySource, otherNearbySource, speakerSource)
+        end
+    end
+
+    if table.contains(speakerNearby, nearbySource) then
+        return
+    end
+
+    speakerNearby[#speakerNearby + 1] = nearbySource
+end)
+
+RegisterNetEvent("phone:phone:leftCallProximity", function(speakerSource)
+    local nearbySource = source
+    local _, _, call = IsInCall(speakerSource)
+
+    if not call or not call.answered then
+        return
+    end
+
+    local _, speaker, otherParticipant = GetCallSides(call, speakerSource)
+    local speakerNearby = speaker.nearby
+    local inProximity, index = table.contains(speakerNearby, nearbySource)
+
+    if not inProximity then
+        return
+    end
+
+    local otherSource = otherParticipant.source
+
+    if not otherSource then
+        return
+    end
+
+    debugprint("phone:phone:leftCallProximity", DebugPlayerName(nearbySource), DebugPlayerName(speakerSource))
+
+    RemoveSpeakerphoneTarget(otherSource, nearbySource)
+    table.remove(speakerNearby, index)
+
+    local otherNearby = otherParticipant.nearby
+
+    for i = 1, #otherNearby do
+        RemoveSpeakerphoneTarget(otherNearby[i], nearbySource)
+    end
+end)
+
+AddEventHandler("lb-phone:callEnded", function(call)
+    local callerSource = call.caller.source
+    local calleeSource = call.callee.source
+    local callerNearby = call.caller.nearby and table.clone(call.caller.nearby)
+    local calleeNearby = call.callee.nearby and table.clone(call.callee.nearby)
+
+    if callerNearby and calleeSource and #callerNearby > 0 then
+        TriggerClientEvent("phone:phone:removeVoiceTarget", calleeSource, callerNearby, true)
+
+        for i = 1, #callerNearby do
+            TriggerClientEvent("phone:phone:removeVoiceTarget", callerNearby[i], calleeSource, true)
+
+            if calleeNearby and #calleeNearby > 0 then
+                TriggerClientEvent("phone:phone:removeVoiceTarget", callerNearby[i], calleeNearby, true)
             end
         end
     end
 
-    -- Track this bystander in the nearby list if not already present
-    if not table.contains(myNearby, bystanderSource) then
-        myNearby[#myNearby + 1] = bystanderSource
-    end
-end)
+    if calleeNearby and callerSource and #calleeNearby > 0 then
+        TriggerClientEvent("phone:phone:removeVoiceTarget", callerSource, calleeNearby, true)
 
--- ─── leftCallProximity ─────────────────────────────────────────────────────────
--- Triggered when a bystander walks out of range of a phone call participant.
--- Disconnects the bystander from the call audio.
-RegisterNetEvent("phone:phone:leftCallProximity")
-AddEventHandler("phone:phone:leftCallProximity", function(callParticipantSource)
-    local bystanderSource = source
-    local _, _, callData  = IsInCall(callParticipantSource)
+        for i = 1, #calleeNearby do
+            TriggerClientEvent("phone:phone:removeVoiceTarget", calleeNearby[i], callerSource, true)
 
-    if not callData or not callData.answered then return end
-
-    local isCaller  = callData.caller.source == callParticipantSource
-    local myNearby  = isCaller and callData.caller.nearby or callData.callee.nearby
-
-    -- Only proceed if this bystander is tracked in the nearby list
-    local found, idx = table.contains(myNearby, bystanderSource)
-    if not found then return end
-
-    local otherSource = isCaller and callData.callee.source or callData.caller.source
-    if not otherSource then return end
-
-    debugprint("phone:phone:leftCallProximity", DebugPlayerName(bystanderSource), DebugPlayerName(callParticipantSource))
-
-    -- Disconnect bystander from the other call participant
-    removeVoiceLink(otherSource, bystanderSource)
-    table.remove(myNearby, idx)
-
-    -- Disconnect bystander from all nearby listeners on the other side
-    local otherNearby = isCaller and callData.callee.nearby or callData.caller.nearby
-    for _, nearbySource in ipairs(otherNearby) do
-        removeVoiceLink(nearbySource, bystanderSource)
-    end
-end)
-
--- ─── callEnded ─────────────────────────────────────────────────────────────────
--- Fired when a call ends. Cleans up all voice targets for any nearby bystanders
--- who were connected to the call via speakerphone.
-AddEventHandler("lb-phone:callEnded", function(callData)
-    local callerSource  = callData.caller.source
-    local calleeSource  = callData.callee.source
-
-    -- Clone nearby lists before the call data is cleaned up
-    local callerNearby = callData.caller.nearby and table.clone(callData.caller.nearby) or nil
-    local calleeNearby = callData.callee.nearby and table.clone(callData.callee.nearby) or nil
-
-    -- Helper: remove all voice links between a nearby group and a participant
-    local function cleanupNearby(nearbyList, participantSource, crossList)
-        if not nearbyList or #nearbyList == 0 then return end
-
-        TriggerClientEvent("phone:phone:removeVoiceTarget", participantSource, nearbyList, true)
-
-        for _, nearbySource in ipairs(nearbyList) do
-            TriggerClientEvent("phone:phone:removeVoiceTarget", nearbySource, participantSource, true)
-
-            -- Also disconnect from the cross-side nearby list if present
-            if crossList and #crossList > 0 then
-                TriggerClientEvent("phone:phone:removeVoiceTarget", nearbySource, crossList, true)
+            if callerNearby and #callerNearby > 0 then
+                TriggerClientEvent("phone:phone:removeVoiceTarget", calleeNearby[i], callerNearby, true)
             end
         end
-    end
-
-    if callerNearby and calleeSource then
-        cleanupNearby(callerNearby, calleeSource, calleeNearby)
-    end
-
-    if calleeNearby and callerSource then
-        cleanupNearby(calleeNearby, callerSource, callerNearby)
     end
 end)

@@ -1,165 +1,161 @@
--- Cached state
-local cachedPin = nil       -- currently verified PIN (cleared on reset)
-local cachedFaceId = nil    -- cached face identifier for fast re-auth
-local cachedIdentifier = nil -- cached player identifier
+-- =====================================================
+--  lb-phone · client/misc/security.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- Resets all cached security state and optionally notifies the UI
-function ResetSecurity(silent)
+local cachedPin = nil
+local cachedFaceIdentifier = nil
+local cachedIdentifier = nil
+
+function ResetSecurity(skipNuiReset)
     debugprint("ResetSecurity triggered")
+
     cachedPin = nil
-    cachedFaceId = nil
+    cachedFaceIdentifier = nil
     cachedIdentifier = nil
-    if not silent then
-        SendReactMessage("resetSecurity")
+
+    if not skipNuiReset then
+        SendNUIAction("resetSecurity")
     end
 end
 
--- Returns the player's unique identifier, fetching and caching it if needed
 function GetIdentifier()
     if not cachedIdentifier then
         cachedIdentifier = AwaitCallback("security:getIdentifier")
         debugprint("getIdentifier:", cachedIdentifier)
     end
+
     return cachedIdentifier or "unknown"
 end
 
--- Validates that a PIN value is a 4-digit numeric string
-local function isValidPin(pin)
+local function IsValidPin(pin)
     if type(pin) ~= "string" then
         return false
     end
+
     if #pin ~= 4 then
         debugprint("invalid data.pin: invalid length", pin)
         return false
     end
+
     if not tonumber(pin) then
         debugprint("invalid data.pin: failed to convert to number", pin)
         return false
     end
+
     return true
 end
 
--- NUI callback handler for all security actions
-RegisterNUICallback("Security", function(data, cb)
+RegisterNUICallback("Security", function(data, callback)
     local action = data.action
+
     debugprint("Security:" .. (action or ""), data)
 
     if action == "setPin" then
-        -- Reject if new PIN matches old cached PIN
         if data.pin == cachedPin then
             debugprint("Failed to set pin: new pin is the same as the old pin")
-            return cb(false)
+            return callback(false)
         end
-        if not isValidPin(data.pin) then
+
+        if not IsValidPin(data.pin) then
             debugprint("Failed to set pin: invalid pin")
-            return cb(false)
+            return callback(false)
         end
-        -- Server expects: (phoneNumber, newPin, oldPin)
-        local success = AwaitCallback("security:setPin", currentPhone, data.pin, cachedPin)
+
+        local success = AwaitCallback("security:setPin", data.pin, cachedPin)
+
         if success then
             debugprint("Successfully set pin to", data.pin)
             cachedPin = data.pin
         else
             debugprint("Failed to set pin")
         end
-        cb(success)
 
+        callback(success)
     elseif action == "removePin" then
-        -- Server expects: (phoneNumber, currentPin)
-        local success = AwaitCallback("security:removePin", currentPhone, cachedPin)
+        local success = AwaitCallback("security:removePin", cachedPin)
+
         if success then
             ResetSecurity()
         end
-        cb(success)
 
+        callback(success)
     elseif action == "verifyPin" then
-        -- If we have a cached PIN, compare locally without a server round-trip
         if cachedPin then
             debugprint("Has cached pin", cachedPin, data.pin)
-            return cb(cachedPin == data.pin)
+            return callback(cachedPin == data.pin)
         end
-        if not isValidPin(data.pin) then
+
+        if not IsValidPin(data.pin) then
             debugprint("Failed to verify pin: invalid pin")
-            return cb(false)
+            return callback(false)
         end
-        -- Server expects: (phoneNumber, inputPin)
-        local success = AwaitCallback("security:verifyPin", currentPhone, data.pin)
+
+        local success = AwaitCallback("security:verifyPin", data.pin)
+
         debugprint("security:verifyPin returned:", success)
+
         if success then
             debugprint("Correct pin, caching it", data.pin)
             cachedPin = data.pin
         end
-        cb(success)
-    end
 
-    if action == "setFaceId" then
-        -- Require a matching cached PIN before enabling Face ID
-        if cachedPin and cachedPin == data.pin then
-            debugprint("Correct pin, triggering enableFaceUnlock")
-            -- Server expects: (phoneNumber, pin)
-            TriggerCallback("security:enableFaceUnlock", cb, currentPhone, data.pin)
-        else
+        callback(success)
+    elseif action == "setFaceId" then
+        if not cachedPin or cachedPin ~= data.pin then
             debugprint("Failed to enable Face Unlock: incorrect pin")
             debugprint(cachedPin, data.pin)
-            cb(false)
+            return callback(false)
         end
 
+        debugprint("Correct pin, triggering enableFaceUnlock")
+        TriggerCallback("security:enableFaceUnlock", callback, data.pin)
     elseif action == "removeFaceId" then
-        -- Require a matching cached PIN before disabling Face ID
-        if cachedPin and cachedPin == data.pin then
-            debugprint("Correct pin, triggering disableFaceUnlock")
-            -- Server expects: (phoneNumber, pin)
-            TriggerCallback("security:disableFaceUnlock", cb, currentPhone, data.pin)
-        else
+        if not cachedPin or cachedPin ~= data.pin then
             debugprint("Failed to disable Face Unlock: incorrect pin")
-            cb(false)
+            return callback(false)
         end
 
+        debugprint("Correct pin, triggering disableFaceUnlock")
+        TriggerCallback("security:disableFaceUnlock", callback, data.pin)
     elseif action == "verifyFace" then
         if IsFaceObstructed() then
             debugprint("Face is obstructed")
-            return cb(false)
+            return callback(false)
         end
-        -- Ensure identifier is loaded
+
         if not cachedIdentifier then
             GetIdentifier()
         end
-        -- Use cached face result if available
-        if cachedFaceId then
-            debugprint("Has cached face, returning:", cachedFaceId == cachedIdentifier)
-            return cb(cachedFaceId == cachedIdentifier)
-        end
-        -- Server expects: (phoneNumber)
-        local success = AwaitCallback("security:verifyFace", currentPhone)
-        debugprint("security:verifyFace returned:", success)
-        if success then
-            cachedFaceId = cachedIdentifier
-        end
-        cb(success)
-    end
 
-    if action == "factoryReset" then
+        if cachedFaceIdentifier then
+            local verified = cachedFaceIdentifier == cachedIdentifier
+
+            debugprint("Has cached face, returning:", verified)
+            return callback(verified)
+        end
+
+        local success = AwaitCallback("security:verifyFace")
+
+        debugprint("security:verifyFace returned:", success)
+
+        if success then
+            cachedFaceIdentifier = cachedIdentifier
+        end
+
+        callback(success)
+    elseif action == "factoryReset" then
         TriggerServerEvent("phone:factoryReset")
     end
 end)
 
--- Server-triggered full factory reset: clears state and re-fetches phone data
-RegisterNetEvent("phone:factoryReset")
-AddEventHandler("phone:factoryReset", function()
-    -- OnDeath closes the phone and clears phone state; guard against nil
-    -- in case the global wasn't exported yet (e.g. load-order edge case)
-    if OnDeath then
-        OnDeath()
-    elseif ToggleOpen then
-        ToggleOpen(false)
-    end
+RegisterNetEvent("phone:factoryReset", function()
+    OnDeath()
     ResetSecurity()
     FetchPhone()
 end)
 
--- Server-triggered security reset for a specific phone number
-RegisterNetEvent("phone:security:reset")
-AddEventHandler("phone:security:reset", function(phoneNumber)
+RegisterNetEvent("phone:security:reset", function(phoneNumber)
     if phoneNumber == currentPhone then
         ResetSecurity()
         Wait(500)

@@ -1,87 +1,70 @@
--- NUI callback handler: routes all DarkChat UI actions to the appropriate server callbacks
-RegisterNUICallback("DarkChat", function(data, cb)
-    if not currentPhone then return end
+-- =====================================================
+--  lb-phone · client/apps/other/darkchat.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
+RegisterNUICallback("DarkChat", function(data, callback)
+    if not currentPhone then
+        return
+    end
 
     local action = data.action
+
     debugprint("DarkChat:" .. (action or ""))
 
     if action == "getUsername" then
-        TriggerCallback("darkchat:getUsername", cb)
-
+        TriggerCallback("darkchat:getUsername", callback)
     elseif action == "setPassword" then
-        TriggerCallback("darkchat:setPassword", cb, data.password)
-
+        TriggerCallback("darkchat:setPassword", callback, data.password)
     elseif action == "login" then
-        TriggerCallback("darkchat:login", cb, data.username, data.password)
-
+        TriggerCallback("darkchat:login", callback, data.username, data.password)
     elseif action == "logout" then
-        TriggerCallback("darkchat:logout", cb)
-
+        TriggerCallback("darkchat:logout", callback)
     elseif action == "changePassword" then
-        TriggerCallback("darkchat:changePassword", cb, data.oldPassword, data.newPassword)
-
+        TriggerCallback("darkchat:changePassword", callback, data.oldPassword, data.newPassword)
     elseif action == "deleteAccount" then
-        TriggerCallback("darkchat:deleteAccount", cb, data.password)
-
+        TriggerCallback("darkchat:deleteAccount", callback, data.password)
     elseif action == "register" then
-        TriggerCallback("darkchat:register", cb, data.username, data.password)
-
+        TriggerCallback("darkchat:register", callback, data.username, data.password)
     elseif action == "getChannels" then
-        TriggerCallback("darkchat:getChannels", cb)
-
+        TriggerCallback("darkchat:getChannels", callback)
     elseif action == "createChannel" then
-        TriggerCallback("darkchat:createChannel", cb, data.channel, data.password)
-
+        TriggerCallback("darkchat:createChannel", callback, data.channel, data.password)
     elseif action == "joinChannel" then
-        TriggerCallback("darkchat:joinChannel", cb, data.channel, data.password)
-
+        TriggerCallback("darkchat:joinChannel", callback, data.channel, data.password)
     elseif action == "getMessages" then
-        TriggerCallback("darkchat:getMessages", cb, data.channel, data.lastId)
-
+        TriggerCallback("darkchat:getMessages", callback, data.channel, data.lastId)
     elseif action == "sendMessage" then
-        -- Check interaction cooldown before allowing send
         if not CanInteract() then
-            return cb(false)
+            return callback(false)
         end
-        TriggerCallback("darkchat:sendMessage", cb, data.channel, data.content)
 
+        TriggerCallback("darkchat:sendMessage", callback, data.channel, data.content)
     elseif action == "leaveChannel" then
-        TriggerCallback("darkchat:leaveChannel", cb, data.channel)
+        TriggerCallback("darkchat:leaveChannel", callback, data.channel)
     end
 end)
 
-
--- Net event: new message received in a channel
-RegisterNetEvent("phone:darkChat:newMessage")
-AddEventHandler("phone:darkChat:newMessage", function(channelName, sender, content)
-    SendReactMessage("darkChat:newMessage", {
-        channel = channelName,
-        sender  = sender,
-        content = content,
+RegisterNetEvent("phone:darkChat:newMessage", function(channel, sender, content)
+    SendNUIAction("darkChat:newMessage", {
+        channel = channel,
+        sender = sender,
+        content = content
     })
 end)
 
-
--- Net event: a user joined or left a channel
-RegisterNetEvent("phone:darkChat:updateChannel")
-AddEventHandler("phone:darkChat:updateChannel", function(channelName, username, action)
-    SendReactMessage("darkChat:updateChannel", {
-        action   = action,
-        channel  = channelName,
-        username = username,
+RegisterNetEvent("phone:darkChat:updateChannel", function(channel, username, action)
+    SendNUIAction("darkChat:updateChannel", {
+        action = action,
+        channel = channel,
+        username = username
     })
 end)
 
-
--- Net event: this client was added to a new channel
-RegisterNetEvent("phone:darkChat:joinChannel")
-AddEventHandler("phone:darkChat:joinChannel", function(channelData)
-    SendReactMessage("darkChat:addChannel", channelData)
+RegisterNetEvent("phone:darkChat:joinChannel", function(channel)
+    SendNUIAction("darkChat:addChannel", channel)
 end)
 
-
--- Net event: this client was removed from a channel
-RegisterNetEvent("phone:darkChat:leaveChannel")
-AddEventHandler("phone:darkChat:leaveChannel", function(channelName)
-    SendReactMessage("darkChat:leaveChannel", channelName)
+RegisterNetEvent("phone:darkChat:leaveChannel", function(channel)
+    SendNUIAction("darkChat:leaveChannel", channel)
 end)

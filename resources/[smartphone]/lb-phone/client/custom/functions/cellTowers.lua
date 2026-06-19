@@ -24,7 +24,7 @@ exports("SetServiceBars", function(bars)
 
     staticService = bars
 
-    SendReactMessage("updateService", staticService or currentService)
+    SendNUIAction("updateService", staticService or currentService)
 end)
 
 local cellTowers = CellTowers
@@ -85,7 +85,7 @@ CreateThread(function()
             currentService = math.max(CalculateServiceBars(playerCoords), Config.CellTowers.MinService or 0)
 
             if lastService ~= currentService then
-                SendReactMessage("updateService", staticService or currentService)
+                SendNUIAction("updateService", staticService or currentService)
             end
         end
 

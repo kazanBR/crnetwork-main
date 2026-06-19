@@ -1,11 +1,14 @@
-RegisterLegacyCallback("appstore:buyApp", function(source, cb, price)
-    -- Verify the player has a phone equipped
+-- =====================================================
+--  lb-phone · server/apps/default/appstore.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
+RegisterLegacyCallback("appstore:buyApp", function(source, callback, price)
     local phoneNumber = GetEquippedPhoneNumber(source)
+
     if not phoneNumber then
-        return cb(false)
+        return callback(false)
     end
 
-    -- Attempt to charge the player and return the result
-    local success, result, extra = RemoveMoney(source, price)
-    cb(success, result, extra)
+    callback(RemoveMoney(source, price))
 end)

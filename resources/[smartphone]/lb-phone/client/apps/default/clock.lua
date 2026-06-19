@@ -1,26 +1,22 @@
-RegisterNUICallback("Clock", function(data, cb)
+-- =====================================================
+--  lb-phone · client/apps/default/clock.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
+RegisterNUICallback("Clock", function(data, callback)
     local action = data.action
+
     debugprint("Clock:" .. (action or ""))
 
     if action == "getAlarms" then
-        TriggerCallback("clock:getAlarms", cb)
-
+        TriggerCallback("clock:getAlarms", callback)
     elseif action == "createAlarm" then
-        TriggerCallback("clock:createAlarm", cb, data.label, data.hours, data.minutes)
-
+        TriggerCallback("clock:createAlarm", callback, data.label, data.hours, data.minutes)
     elseif action == "deleteAlarm" then
-        TriggerCallback("clock:deleteAlarm", cb, data.id)
-
+        TriggerCallback("clock:deleteAlarm", callback, data.id)
     elseif action == "toggleAlarm" then
-        TriggerCallback("clock:toggleAlarm", cb, data.id, data.enabled)
-
+        TriggerCallback("clock:toggleAlarm", callback, data.id, data.enabled)
     elseif action == "updateAlarm" then
-        TriggerCallback("clock:updateAlarm", cb, data.id, data.label, data.hours, data.minutes)
-
-    else
-        -- Timer, stopwatch and other purely UI-side actions do not need a
-        -- server round-trip. Respond immediately so the UI fetch resolves
-        -- and the timer/stopwatch can start without hanging.
-        cb("ok")
+        TriggerCallback("clock:updateAlarm", callback, data.id, data.label, data.hours, data.minutes)
     end
 end)

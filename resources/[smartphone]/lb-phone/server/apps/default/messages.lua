@@ -1,290 +1,354 @@
--- Returns the channel id or nil.
-local function FindDMChannel(numberA, numberB)
+-- =====================================================
+--  lb-phone · server/apps/default/messages.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
+
+local function GetDirectChannel(firstNumber, secondNumber)
     return MySQL.scalar.await([[
         SELECT c.id FROM phone_message_channels c
         WHERE c.is_group = 0
             AND EXISTS (SELECT TRUE FROM phone_message_members m WHERE m.channel_id = c.id AND m.phone_number = ?)
             AND EXISTS (SELECT TRUE FROM phone_message_members m WHERE m.channel_id = c.id AND m.phone_number = ?)
-    ]], { numberA, numberB })
+    ]], { firstNumber, secondNumber })
 end
 
--- Internal: validate inputs, create channel if needed, persist message,
--- notify recipients, and fire events.
--- Parameters: sender, recipient, content, attachments, callback, channelId
--- Returns: { channelId, messageId } or nil
-local function SendMessage(sender, recipient, content, attachments, callback, channelId)
-    -- Need at least a recipient or a channelId to know where to send
-    if not (channelId or recipient) or not sender then
+local function GetFirstAttachment(attachments)
+    if not attachments then
+        return nil
+    end
+
+    if type(attachments) == "table" then
+        return attachments[1]
+    end
+
+    if type(attachments) == "string" then
+        local decoded = json.decode(attachments)
+
+        return decoded and decoded[1]
+    end
+
+    return nil
+end
+
+local function HasContent(content, attachments)
+    if content and #content > 0 then
+        return true
+    end
+
+    return attachments and #attachments > 0
+end
+
+local function IsBlocked(sender, recipient)
+    if not recipient then
+        return false
+    end
+
+    return MySQL.scalar.await([[
+        SELECT 1 FROM phone_phone_blocked_numbers
+        WHERE (phone_number = ? AND blocked_number = ?)
+            OR (phone_number = ? AND blocked_number = ?)
+    ]], { sender, recipient, recipient, sender }) ~= nil
+end
+
+local function CreateDirectChannel(sender, recipient, content)
+    local channelId = MySQL.insert.await("INSERT INTO phone_message_channels (is_group) VALUES (0)")
+
+    MySQL.update.await(
+        "INSERT INTO phone_message_members (channel_id, phone_number) VALUES (?, ?), (?, ?)",
+        { channelId, sender, channelId, recipient }
+    )
+
+    local senderSource = GetSourceFromNumber(sender)
+    local recipientSource = GetSourceFromNumber(recipient)
+    local timestamp = os.time() * 1000
+
+    if senderSource then
+        TriggerClientEvent("phone:messages:newChannel", senderSource, {
+            id = channelId,
+            lastMessage = content,
+            timestamp = timestamp,
+            number = recipient,
+            isGroup = false,
+            unread = false
+        })
+    end
+
+    if recipientSource then
+        TriggerClientEvent("phone:messages:newChannel", recipientSource, {
+            id = channelId,
+            lastMessage = content,
+            timestamp = timestamp,
+            number = sender,
+            isGroup = false,
+            unread = true
+        })
+    end
+
+    return channelId
+end
+
+local function LogMessage(senderSource, sender, recipient, content)
+    if not senderSource or not recipient then
         return
     end
 
-    -- Require content or non-empty attachments
-    if not content then
-        if not attachments or #attachments == 0 then
-            debugprint("No message or attachments provided")
-            return
-        end
+    Log(
+        "Messages",
+        senderSource,
+        "info",
+        L("BACKEND.LOGS.MESSAGE_TITLE"),
+        L("BACKEND.LOGS.NEW_MESSAGE", {
+            sender = FormatNumber(sender),
+            recipient = FormatNumber(recipient),
+            message = content or "Attachment"
+        })
+    )
+end
+
+function SendMessage(sender, recipient, content, attachments, callback, channelId, replyTo)
+    if not sender or (not channelId and not recipient) then
+        return
     end
 
-    -- Normalise empty content string to nil
+    if not HasContent(content, attachments) then
+        debugprint("No message or attachments provided")
+        return
+    end
+
     if content and #content == 0 then
         content = nil
-        if not attachments or #attachments == 0 then
+
+        if not HasContent(content, attachments) then
             debugprint("No attachments provided")
             return
         end
     end
 
-    -- Block if either party has the other blocked
-    local blocked = MySQL.scalar.await([[
-        SELECT 1 FROM phone_phone_blocked_numbers
-        WHERE (phone_number = ? AND blocked_number = ?)
-            OR (phone_number = ? AND blocked_number = ?)
-    ]], { sender, recipient, recipient, sender })
-
-    if blocked then
+    if IsBlocked(sender, recipient) then
         debugprint("Message blocked between " .. sender .. " and " .. recipient)
         return
     end
 
-    -- Resolve or create the channel
     if not channelId then
-        channelId = FindDMChannel(sender, recipient)
+        channelId = GetDirectChannel(sender, recipient)
     end
 
-    local senderSrc    = GetSourceFromNumber(sender)
-    local recipientSrc = GetSourceFromNumber(recipient)
+    local senderSource = GetSourceFromNumber(sender)
 
     if not channelId then
-        -- Create a new DM channel and add both members
-        channelId = MySQL.insert.await("INSERT INTO phone_message_channels (is_group) VALUES (0)")
-        MySQL.update.await(
-            "INSERT IGNORE INTO phone_message_members (channel_id, phone_number) VALUES (?, ?), (?, ?)",
-            { channelId, sender, channelId, recipient }
-        )
-
-        local now = os.time() * 1000
-
-        if senderSrc then
-            TriggerClientEvent("phone:messages:newChannel", senderSrc, {
-                id          = channelId,
-                lastMessage = content,
-                timestamp   = now,
-                number      = recipient,
-                isGroup     = false,
-                unread      = false,
-            })
-        end
-
-        if recipientSrc then
-            TriggerClientEvent("phone:messages:newChannel", recipientSrc, {
-                id          = channelId,
-                lastMessage = content,
-                timestamp   = now,
-                number      = sender,
-                isGroup     = false,
-                unread      = true,
-            })
-        end
+        channelId = CreateDirectChannel(sender, recipient, content)
     end
 
-    -- Log the outgoing message
-    if senderSrc and recipient then
-        Log("Messages", senderSrc, "info",
-            L("BACKEND.LOGS.MESSAGE_TITLE"),
-            L("BACKEND.LOGS.NEW_MESSAGE", {
-                sender    = FormatNumber(sender),
-                recipient = FormatNumber(recipient),
-                message   = content or "Attachment",
-            })
-        )
-    end
+    LogMessage(senderSource, sender, recipient, content)
 
-    -- Encode attachments table to JSON string if needed
     if type(attachments) == "table" then
         attachments = json.encode(attachments)
     end
 
-    -- Persist the message
+    local replyData
+
+    if replyTo then
+        replyData = MySQL.single.await(
+            "SELECT id, content, sender, attachments FROM phone_message_messages WHERE id = ? AND channel_id = ?",
+            { replyTo, channelId }
+        )
+
+        if not replyData then
+            debugprint("Reply message with id", replyTo, "not found in channel", channelId)
+            replyTo = nil
+        end
+    end
+
     local messageId = MySQL.insert.await(
-        "INSERT INTO phone_message_messages (channel_id, sender, content, attachments) VALUES (@channelId, @sender, @content, @attachments)",
+        "INSERT INTO phone_message_messages (channel_id, sender, content, attachments, reply_to) VALUES (@channelId, @sender, @content, @attachments, @reply_to)",
         {
-            ["@channelId"]   = channelId,
-            ["@sender"]      = sender,
-            ["@content"]     = content,
-            ["@attachments"] = attachments,
+            channelId = channelId,
+            sender = sender,
+            content = content,
+            attachments = attachments,
+            reply_to = replyTo
         }
     )
 
     if not messageId then
-        if callback then callback(false) end
+        if callback then
+            callback(false)
+        end
+
         return
     end
 
-    -- Update channel preview, unread counts, and restore soft-deleted visibility
     MySQL.update(
         "UPDATE phone_message_channels SET last_message = ? WHERE id = ?",
         { string.sub(content or "Attachment", 1, 50), channelId }
     )
+
     MySQL.update(
         "UPDATE phone_message_members SET unread = unread + 1 WHERE channel_id = ? AND phone_number != ?",
         { channelId, sender }
     )
+
     MySQL.update(
         "UPDATE phone_message_members SET deleted = 0 WHERE channel_id = ?",
         { channelId }
     )
 
-    -- Notify all other channel members
-    local members = MySQL.query.await(
+    local recipients = MySQL.query.await(
         "SELECT phone_number FROM phone_message_members WHERE channel_id = ? AND phone_number != ?",
         { channelId, sender }
     )
+    local attachmentThumbnail = GetFirstAttachment(attachments)
+    local packedMessage = msgpack.pack_args(channelId, messageId, sender, content, attachments, replyData)
+    local packedLength = #packedMessage
 
-    for _, member in ipairs(members) do
-        local number    = member.phone_number
-        local memberSrc = GetSourceFromNumber(number)
+    for i = 1, #recipients do
+        local phoneNumber = recipients[i].phone_number
+        local source = GetSourceFromNumber(phoneNumber)
 
-        if memberSrc then
-            TriggerClientEvent("phone:messages:newMessage", memberSrc,
-                channelId, messageId, sender, content, attachments)
+        if source then
+            TriggerClientEventInternal("phone:messages:newMessage", source, packedMessage, packedLength)
         end
 
-        -- Skip notification for automated call-no-answer system messages
         if content ~= "<!CALL-NO-ANSWER!>" then
-            local contact = GetContact(sender, number)
-            local displayName = (contact and contact.name) or sender
-            local thumbnail = nil
-            if attachments then
-                local decoded = json.decode(attachments)
-                thumbnail = decoded and decoded[1]
-            end
+            local contact = GetContact(phoneNumber, sender)
 
-            SendNotification(number, {
-                app        = "Messages",
-                title      = displayName,
-                content    = content,
-                thumbnail  = thumbnail,
-                avatar     = contact and contact.avatar,
-                showAvatar = true,
+            SendNotification(phoneNumber, {
+                app = "Messages",
+                title = (contact and contact.name) or sender,
+                content = content,
+                thumbnail = attachmentThumbnail,
+                avatar = contact and contact.avatar,
+                showAvatar = true
             })
         end
     end
 
-    if callback then callback(channelId) end
+    if callback then
+        callback(channelId)
+    end
 
     TriggerEvent("lb-phone:messages:messageSent", {
-        channelId   = channelId,
-        messageId   = messageId,
-        sender      = sender,
-        recipient   = recipient,
-        message     = content,
-        attachments = attachments,
+        channelId = channelId,
+        messageId = messageId,
+        sender = sender,
+        recipient = recipient,
+        message = content,
+        attachments = attachments
     })
 
-    return { channelId = channelId, messageId = messageId }
+    return {
+        channelId = channelId,
+        messageId = messageId
+    }
 end
 
-SendMessage = SendMessage
-
--- Export: send a payment notification message between two numbers
 exports("SentMoney", function(sender, recipient, amount)
-    assert(type(sender)    == "string", "Expected string for argument 1, got " .. type(sender))
+    assert(type(sender) == "string", "Expected string for argument 1, got " .. type(sender))
     assert(type(recipient) == "string", "Expected string for argument 2, got " .. type(recipient))
-    assert(type(amount)    == "number", "Expected number for argument 3, got " .. type(amount))
+    assert(type(amount) == "number", "Expected number for argument 3, got " .. type(amount))
+
     SendMessage(sender, recipient, "<!SENT-PAYMENT-" .. math.floor(amount + 0.5) .. "!>")
 end)
 
--- Export: send a location pin between two numbers
 exports("SendCoords", function(sender, recipient, coords)
-    assert(type(sender)    == "string",  "Expected string for argument 1, got "  .. type(sender))
-    assert(type(recipient) == "string",  "Expected string for argument 2, got "  .. type(recipient))
-    assert(type(coords)    == "vector2", "Expected vector2 for argument 3, got " .. type(coords))
+    assert(type(sender) == "string", "Expected string for argument 1, got " .. type(sender))
+    assert(type(recipient) == "string", "Expected string for argument 2, got " .. type(recipient))
+
+    local coordsType = type(coords)
+
+    assert(coordsType == "vector2" or coordsType == "vector3" or coordsType == "vector4", "Expected vector or table with x & y for argument 3, got " .. coordsType)
+
     SendMessage(sender, recipient, "<!SENT-LOCATION-X=" .. coords.x .. "Y=" .. coords.y .. "!>")
 end)
 
--- Export: public API for sending a message programmatically
 exports("SendMessage", function(sender, recipient, content, attachments, callback, channelId)
-    assert(type(sender)    == "string",   "Expected string for argument 1, got "            .. type(sender))
-    assert(type(recipient) == "string",   "Expected string or nil for argument 2, got "     .. type(recipient))
-    assert(type(content)   == "string",   "Expected string or nil for argument 3, got "     .. type(content))
-    assert(type(attachments) == "table",  "Expected table, string or nil for argument 4, got " .. type(attachments))
-    assert(type(callback)  == "function", "Expected function or nil for argument 5, got "   .. type(callback))
+    assert(type(sender) == "string", "Expected string for argument 1, got " .. type(sender))
+    assert(recipient == nil or type(recipient) == "string", "Expected string or nil for argument 2, got " .. type(recipient))
+    assert(content == nil or type(content) == "string", "Expected string or nil for argument 3, got " .. type(content))
+    assert(attachments == nil or type(attachments) == "table" or type(attachments) == "string", "Expected table, string or nil for argument 4, got " .. type(attachments))
+    assert(callback == nil or type(callback) == "function", "Expected function or nil for argument 5, got " .. type(callback))
+
     return SendMessage(sender, recipient, content, attachments, callback, channelId)
 end)
 
--- Callback: send a message from a player (blacklist-checked)
-BaseCallback("messages:sendMessage", function(src, phoneNumber, recipient, content, attachments, channelId)
-    if ContainsBlacklistedWord(src, "Messages", content) then
+BaseCallback("messages:sendMessage", function(source, phoneNumber, recipient, content, attachments, replyTo, channelId)
+    if ContainsBlacklistedWord(source, "Messages", content) then
         return false
     end
-    return SendMessage(phoneNumber, recipient, content, attachments, nil, channelId)
+
+    return SendMessage(phoneNumber, recipient, content, attachments, nil, channelId, replyTo)
 end)
 
--- Callback: create a new group channel with initial members and first message
-BaseCallback("messages:createGroup", function(src, phoneNumber, memberNumbers, content, attachments)
+BaseCallback("messages:createGroup", function(source, phoneNumber, members, content, attachments)
     local channelId = MySQL.insert.await("INSERT INTO phone_message_channels (is_group) VALUES (1)")
+
     if not channelId then
         return false
     end
 
-    -- Add the creator as owner
-    local members = { { number = phoneNumber, isOwner = true } }
+    local memberRows = {
+        {
+            number = phoneNumber,
+            isOwner = true
+        }
+    }
+
     MySQL.update.await(
         "INSERT INTO phone_message_members (channel_id, phone_number, is_owner) VALUES (?, ?, 1)",
         { channelId, phoneNumber }
     )
 
-    -- Add each invited member
-    for i, number in ipairs(memberNumbers) do
+    for i = 1, #members do
+        local memberNumber = members[i]
+
         MySQL.update.await(
             "INSERT INTO phone_message_members (channel_id, phone_number, is_owner) VALUES (?, ?, 0)",
-            { channelId, number }
+            { channelId, memberNumber }
         )
-        members[i + 1] = { number = number, isOwner = false }
+
+        memberRows[i + 1] = {
+            number = memberNumber,
+            isOwner = false
+        }
     end
 
     local channelData = {
-        id          = channelId,
+        id = channelId,
         lastMessage = content,
-        timestamp   = os.time() * 1000,
-        name        = nil,
-        isGroup     = true,
-        members     = members,
-        unread      = false,
+        timestamp = os.time() * 1000,
+        name = nil,
+        isGroup = true,
+        members = memberRows,
+        unread = false
     }
 
-    -- Notify invited members who are online
-    for _, number in ipairs(memberNumbers) do
-        local memberSrc = GetSourceFromNumber(number)
-        if memberSrc then
-            TriggerClientEvent("phone:messages:newChannel", memberSrc, channelData)
+    for i = 1, #members do
+        local memberSource = GetSourceFromNumber(members[i])
+
+        if memberSource then
+            TriggerClientEvent("phone:messages:newChannel", memberSource, channelData)
         end
     end
 
-    -- Notify the creator
-    TriggerClientEvent("phone:messages:newChannel", src, channelData)
+    TriggerClientEvent("phone:messages:newChannel", source, channelData)
 
-    -- Send the first message into the group
     return SendMessage(phoneNumber, nil, content, attachments, nil, channelId)
 end)
 
--- Callback: rename a group channel
-BaseCallback("messages:renameGroup", function(src, phoneNumber, channelId, newName)
-    local affected = MySQL.update.await(
+BaseCallback("messages:renameGroup", function(source, phoneNumber, channelId, name)
+    local renamed = MySQL.update.await(
         "UPDATE phone_message_channels SET `name` = ? WHERE id = ? AND is_group = 1",
-        { newName, channelId }
-    )
-    local ok = affected > 0
-    if ok then
-        TriggerClientEvent("phone:messages:renameGroup", -1, channelId, newName)
+        { name, channelId }
+    ) > 0
+
+    if renamed then
+        TriggerClientEvent("phone:messages:renameGroup", -1, channelId, name)
     end
-    return ok
+
+    return renamed
 end)
 
--- Callback: fetch the recent conversation list for a player.
--- Returns raw join rows; the client reshapes them into channel objects.
-BaseCallback("messages:getRecentMessages", function(src, phoneNumber)
+BaseCallback("messages:getRecentMessages", function(source, phoneNumber)
     return MySQL.query.await([[
         SELECT
             channel.id AS channel_id,
@@ -296,56 +360,120 @@ BaseCallback("messages:getRecentMessages", function(src, phoneNumber)
             channel_member.is_owner,
             channel_member.unread,
             channel_member.deleted
-        FROM phone_message_members target_member
+        FROM
+            phone_message_members target_member
+
         INNER JOIN phone_message_channels channel
             ON channel.id = target_member.channel_id
+
         INNER JOIN phone_message_members channel_member
             ON channel_member.channel_id = channel.id
-        WHERE target_member.phone_number = ?
-        ORDER BY channel.last_message_timestamp DESC
+
+        WHERE
+            target_member.phone_number = ?
+
+        ORDER BY
+            channel.last_message_timestamp DESC
     ]], { phoneNumber })
 end)
 
--- Callback: fetch paginated messages for a channel
-BaseCallback("messages:getMessages", function(src, phoneNumber, channelId, lastId)
+BaseCallback("messages:getMessages", function(source, phoneNumber, channelId, lastId)
     local query = [[
-        SELECT id, sender, content, attachments, `timestamp`
-        FROM phone_message_messages
+        SELECT
+            m.id,
+            m.sender,
+            m.content,
+            m.attachments,
+            m.`timestamp`,
+            m.reply_to,
+            reply_message.content AS reply_message,
+            reply_message.attachments IS NOT NULL AS reply_attachment,
+            reply_message.sender AS reply_sender
+
+        FROM phone_message_messages m
+
+        LEFT JOIN phone_message_messages reply_message
+            ON reply_message.id = m.reply_to
+            AND m.reply_to IS NOT NULL
+
         WHERE
-            channel_id = @channelId
-            AND EXISTS (SELECT TRUE FROM phone_message_members m WHERE m.channel_id = @channelId AND m.phone_number = @phoneNumber)
+            m.channel_id = @channelId
+            AND EXISTS (SELECT TRUE FROM phone_message_members mem WHERE m.channel_id = @channelId AND mem.phone_number = @phoneNumber)
             {PAGINATION}
-        ORDER BY id DESC
+
+        ORDER BY m.id DESC
         LIMIT 25
     ]]
 
-    query = query:gsub("{PAGINATION}", lastId and "AND id < @lastId" or "")
+    if lastId then
+        query = query:gsub("{PAGINATION}", "AND m.id < @lastId")
+    else
+        query = query:gsub("{PAGINATION}", "")
+    end
 
-    return MySQL.query.await(query, {
-        channelId   = channelId,
+    local messages = MySQL.query.await(query, {
+        channelId = channelId,
         phoneNumber = phoneNumber,
-        lastId      = lastId,
+        lastId = lastId
     })
+
+    if #messages == 0 then
+        return messages
+    end
+
+    local messageIds = {}
+    local messagesById = {}
+
+    for i = 1, #messages do
+        local message = messages[i]
+
+        messageIds[i] = message.id
+        messagesById[message.id] = message
+        message.reactions = {}
+    end
+
+    local reactions = MySQL.query.await([[
+        SELECT
+            message_id,
+            reaction,
+            COUNT(*) AS reactions,
+            CAST(SUM(phone_number = ?) AS INT) AS reacted
+        FROM phone_message_reactions
+        WHERE message_id IN (?)
+        GROUP BY message_id, reaction
+    ]], { phoneNumber, messageIds })
+
+    for i = 1, #reactions do
+        local reaction = reactions[i]
+        local message = messagesById[reaction.message_id]
+
+        if message then
+            message.reactions[reaction.reaction] = {
+                reactions = reaction.reactions,
+                reacted = reaction.reacted > 0
+            }
+        end
+    end
+
+    return messages
 end)
 
--- Callback: delete a specific message (sender-only, config-gated)
-BaseCallback("messages:deleteMessage", function(src, phoneNumber, messageId, channelId)
+BaseCallback("messages:deleteMessage", function(source, phoneNumber, messageId, channelId)
     if not Config.DeleteMessages then
         return false
     end
 
-    -- Check if this is the channel's last message (affects preview update)
-    local maxId      = MySQL.scalar.await("SELECT MAX(id) FROM phone_message_messages WHERE channel_id = ?", { channelId })
-    local isLastMsg  = maxId == messageId
+    local isLastMessage = MySQL.scalar.await(
+        "SELECT MAX(id) FROM phone_message_messages WHERE channel_id = ?",
+        { channelId }
+    ) == messageId
 
-    local affected = MySQL.update.await(
+    local deleted = MySQL.update.await(
         "DELETE FROM phone_message_messages WHERE id = ? AND sender = ? AND channel_id = ?",
         { messageId, phoneNumber, channelId }
-    )
-    local deleted = affected > 0
+    ) > 0
 
-    -- Update channel preview if the deleted message was the last one
-    if deleted and isLastMsg then
+    if deleted and isLastMessage then
         MySQL.update.await(
             "UPDATE phone_message_channels SET last_message = ? WHERE id = ?",
             { L("APPS.MESSAGES.MESSAGE_DELETED"), channelId }
@@ -353,105 +481,102 @@ BaseCallback("messages:deleteMessage", function(src, phoneNumber, messageId, cha
     end
 
     if deleted then
-        TriggerClientEvent("phone:messages:messageDeleted", -1, channelId, messageId, isLastMsg)
+        TriggerClientEvent("phone:messages:messageDeleted", -1, channelId, messageId, isLastMessage)
     end
 
     return deleted
 end)
 
--- Callback: add a member to a group (respects optional member limit)
-BaseCallback("messages:addMember", function(src, phoneNumber, channelId, newMemberNumber)
-    -- Enforce group member limit if configured
+BaseCallback("messages:addMember", function(source, phoneNumber, channelId, memberNumber)
     if type(Config.GroupMessageMemberLimit) == "number" then
-        local count = MySQL.scalar.await(
+        local memberCount = MySQL.scalar.await(
             "SELECT COUNT(1) FROM phone_message_members WHERE channel_id = ?",
             { channelId }
         ) or 0
 
-        if count >= Config.GroupMessageMemberLimit then
+        if memberCount >= Config.GroupMessageMemberLimit then
             SendNotification(phoneNumber, {
-                app        = "Messages",
-                title      = L("APPS.MESSAGES.GROUP_MEMBER_LIMIT_NOTIFICATION.TITLE"),
-                content    = L("APPS.MESSAGES.GROUP_MEMBER_LIMIT_NOTIFICATION.CONTENT", { limit = Config.GroupMessageMemberLimit }),
-                showAvatar = false,
+                app = "Messages",
+                title = L("APPS.MESSAGES.GROUP_MEMBER_LIMIT_NOTIFICATION.TITLE"),
+                content = L("APPS.MESSAGES.GROUP_MEMBER_LIMIT_NOTIFICATION.CONTENT", {
+                    limit = Config.GroupMessageMemberLimit
+                }),
+                showAvatar = false
             })
+
             return false
         end
     end
 
-    local affected = MySQL.update.await(
+    local added = MySQL.update.await(
         "INSERT IGNORE INTO phone_message_members (channel_id, phone_number) VALUES (?, ?)",
-        { channelId, newMemberNumber }
-    )
-    if affected <= 0 then
+        { channelId, memberNumber }
+    ) > 0
+
+    if not added then
         return false
     end
 
-    TriggerClientEvent("phone:messages:memberAdded", -1, channelId, newMemberNumber)
+    local memberSource = GetSourceFromNumber(memberNumber)
 
-    -- If the new member is online, push the full channel data so their UI updates
-    local newMemberSrc = GetSourceFromNumber(newMemberNumber)
-    if not newMemberSrc then
+    TriggerClientEvent("phone:messages:memberAdded", -1, channelId, memberNumber)
+
+    if not memberSource then
         return true
     end
 
-    local members   = MySQL.Sync.fetchAll(
+    local members = MySQL.Sync.fetchAll(
         "SELECT phone_number AS `number`, is_owner AS isOwner FROM phone_message_members WHERE channel_id = ?",
         { channelId }
     )
-    local channelInfo = MySQL.single.await(
+    local channel = MySQL.single.await(
         "SELECT `name`, last_message, last_message_timestamp FROM phone_message_channels WHERE id = ?",
         { channelId }
     )
 
-    if #members > 0 and channelInfo then
-        TriggerClientEvent("phone:messages:newChannel", newMemberSrc, {
-            id          = channelId,
-            lastMessage = channelInfo.last_message,
-            timestamp   = channelInfo.last_message_timestamp,
-            name        = channelInfo.name,
-            isGroup     = true,
-            members     = members,
-            unread      = false,
+    if #members > 0 and channel then
+        TriggerClientEvent("phone:messages:newChannel", memberSource, {
+            id = channelId,
+            lastMessage = channel.last_message,
+            timestamp = channel.last_message_timestamp,
+            name = channel.name,
+            isGroup = true,
+            members = members,
+            unread = false
         })
     end
 
     return true
 end)
 
--- Callback: remove a specific member from a group (owner-only action)
-BaseCallback("messages:removeMember", function(src, phoneNumber, channelId, targetNumber)
-    -- Verify the requesting player is actually the owner
+BaseCallback("messages:removeMember", function(source, phoneNumber, channelId, memberNumber)
     local isOwner = MySQL.scalar.await(
         "SELECT is_owner FROM phone_message_members WHERE channel_id = ? AND phone_number = ?",
         { channelId, phoneNumber }
     )
+
     if not isOwner then
         return false
     end
 
-    local affected = MySQL.update.await(
+    local removed = MySQL.update.await(
         "DELETE FROM phone_message_members WHERE channel_id = ? AND phone_number = ?",
-        { channelId, targetNumber }
-    )
-    local removed = affected > 0
+        { channelId, memberNumber }
+    ) > 0
 
     if removed then
-        TriggerClientEvent("phone:messages:memberRemoved", -1, channelId, targetNumber)
+        TriggerClientEvent("phone:messages:memberRemoved", -1, channelId, memberNumber)
     end
 
     return removed
 end)
 
--- Callback: leave a group; transfers ownership if the leaver was owner,
--- and deletes the channel entirely if it becomes empty
-BaseCallback("messages:leaveGroup", function(src, phoneNumber, channelId)
+BaseCallback("messages:leaveGroup", function(source, phoneNumber, channelId)
     local isOwner = MySQL.scalar.await(
         "SELECT is_owner FROM phone_message_members WHERE channel_id = ? AND phone_number = ?",
         { channelId, phoneNumber }
     )
 
-    -- Transfer ownership to another member before leaving
     if isOwner then
         MySQL.update.await([[
             UPDATE phone_message_members m
@@ -465,45 +590,46 @@ BaseCallback("messages:leaveGroup", function(src, phoneNumber, channelId)
             "SELECT phone_number FROM phone_message_members WHERE channel_id = ? AND is_owner = TRUE",
             { channelId }
         )
+
         TriggerClientEvent("phone:messages:ownerChanged", -1, channelId, newOwner)
     end
 
-    local affected = MySQL.update.await(
+    local removed = MySQL.update.await(
         "DELETE FROM phone_message_members WHERE channel_id = ? AND phone_number = ?",
         { channelId, phoneNumber }
-    )
-    local left = affected > 0
+    ) > 0
 
-    local remaining = MySQL.scalar.await(
+    local isEmpty = MySQL.scalar.await(
         "SELECT COUNT(1) FROM phone_message_members WHERE channel_id = ?",
         { channelId }
-    )
-    local isEmpty = remaining == 0
+    ) == 0
 
-    if left then
+    if removed then
         TriggerClientEvent("phone:messages:memberRemoved", -1, channelId, phoneNumber)
     end
 
-    -- Clean up the channel row if no members remain
     if isEmpty then
-        MySQL.update.await("DELETE FROM phone_message_channels WHERE id = ?", { channelId })
+        MySQL.update.await(
+            "DELETE FROM phone_message_channels WHERE id = ?",
+            { channelId }
+        )
+
         debugprint("Deleted group " .. channelId, "due to it being empty")
     end
 
-    return left
+    return removed
 end)
 
--- Callback: mark all messages in a channel as read for the player
-BaseCallback("messages:markRead", function(src, phoneNumber, channelId)
+BaseCallback("messages:markRead", function(source, phoneNumber, channelId)
     MySQL.update.await(
         "UPDATE phone_message_members SET unread = 0 WHERE channel_id = ? AND phone_number = ?",
         { channelId, phoneNumber }
     )
+
     return true
 end)
 
--- Callback: soft-delete a list of conversations for the player
-BaseCallback("messages:deleteConversations", function(src, phoneNumber, channelIds)
+BaseCallback("messages:deleteConversations", function(source, phoneNumber, channelIds)
     if type(channelIds) ~= "table" then
         debugprint("expected table, got " .. type(channelIds))
         return false
@@ -513,5 +639,70 @@ BaseCallback("messages:deleteConversations", function(src, phoneNumber, channelI
         "UPDATE phone_message_members SET deleted = 1 WHERE channel_id IN (?) AND phone_number = ?",
         { channelIds, phoneNumber }
     )
+
     return true
 end)
+
+BaseCallback("messages:toggleReaction", function(source, phoneNumber, messageId, reaction, toggle)
+    local message = MySQL.single.await(
+        "SELECT channel_id, sender FROM phone_message_messages WHERE id = ?",
+        { messageId }
+    )
+
+    if not message or not message.channel_id or not message.sender then
+        return false
+    end
+
+    if toggle then
+        MySQL.update.await(
+            "INSERT INTO phone_message_reactions (message_id, reaction, phone_number) VALUES (?, ?, ?) ON DUPLICATE KEY UPDATE reaction = VALUES(reaction)",
+            { messageId, reaction, phoneNumber }
+        )
+    else
+        MySQL.update.await(
+            "DELETE FROM phone_message_reactions WHERE message_id = ? AND phone_number = ?",
+            { messageId, phoneNumber }
+        )
+    end
+
+    local recipients = MySQL.query.await(
+        "SELECT phone_number FROM phone_message_members WHERE channel_id = ? AND phone_number != ?",
+        { message.channel_id, phoneNumber }
+    )
+    local packedReaction = msgpack.pack_args({
+        channelId = message.channel_id,
+        messageId = messageId,
+        reaction = reaction,
+        toggle = toggle,
+        reactor = phoneNumber
+    })
+    local packedLength = #packedReaction
+
+    for i = 1, #recipients do
+        local recipient = recipients[i].phone_number
+        local recipientSource = GetSourceFromNumber(recipient)
+
+        if recipientSource then
+            TriggerClientEventInternal("phone:messages:toggleReaction", recipientSource, packedReaction, packedLength)
+        end
+    end
+
+    if toggle and message.sender ~= phoneNumber then
+        local contact = GetContact(message.sender, phoneNumber)
+
+        SendNotification(message.sender, {
+            app = "Messages",
+            title = L("APPS.MESSAGES.REACT_NOTIFICATION.TITLE"),
+            content = L("APPS.MESSAGES.REACT_NOTIFICATION.CONTENT", {
+                name = (contact and contact.name) or phoneNumber,
+                reaction = reaction
+            }),
+            avatar = contact and contact.avatar,
+            showAvatar = true
+        })
+    end
+
+    return true
+end, false, {
+    preventSpam = true
+})

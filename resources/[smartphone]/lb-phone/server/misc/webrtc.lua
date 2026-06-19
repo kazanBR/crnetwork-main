@@ -1,129 +1,126 @@
-local peerOwner  = {}
-local playerPeers = {}
-local peerLinks  = {}
+-- =====================================================
+--  lb-phone · server/misc/webrtc.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- ─── disconnectPeers ───────────────────────────────────────────────────────────
--- Ends the WebRTC connection between two peers and clears their link entry.
-local function disconnectPeers(peerA, peerB)
-    if not (peerLinks[peerA] and peerLinks[peerA][peerB]) then return end
+local peerOwners = {}
+local peersBySource = {}
+local activeCalls = {}
 
-    -- Notify peerA's owner that the call ended
-    local ownerA = peerOwner[peerB]
-    if ownerA then
-        TriggerClientEvent("phone:webrtc:endCall", ownerA, peerA)
+local function EndCall(peerId, targetPeerId)
+    if not activeCalls[peerId] or not activeCalls[peerId][targetPeerId] then
+        return
     end
 
-    peerLinks[peerA][peerB] = nil
-    peerLinks[peerB][peerA] = nil
+    local targetSource = peerOwners[targetPeerId]
+
+    if targetSource then
+        TriggerClientEvent("phone:webrtc:endCall", targetSource, peerId)
+    end
+
+    activeCalls[peerId][targetPeerId] = nil
+
+    if activeCalls[targetPeerId] then
+        activeCalls[targetPeerId][peerId] = nil
+    end
 end
 
--- ─── cleanupPlayer ─────────────────────────────────────────────────────────────
--- Removes all peers and connections belonging to a player source.
-local function cleanupPlayer(playerSource)
-    if not peerOwner[playerSource] then return end
+local function DeletePeer(peerId)
+    local playerId = peerOwners[peerId]
 
-    -- Disconnect all active peer links for this player's peers
-    local playerPeerLinks = peerLinks[playerSource]
-    if playerPeerLinks then
-        for linkedPeer in pairs(playerPeerLinks) do
-            disconnectPeers(playerSource, linkedPeer)
-        end
-        peerLinks[playerSource] = nil
+    if not playerId then
+        return
     end
 
-    -- Remove this player from their owner's peer list
-    local ownerSource = peerOwner[playerSource]
-    local ownerList   = playerPeers[ownerSource]
-    if ownerList then
-        for i, peerId in ipairs(ownerList) do
-            if peerId == playerSource then
-                table.remove(ownerList, i)
+    local calls = activeCalls[peerId]
+
+    if calls then
+        for targetPeerId in pairs(calls) do
+            EndCall(peerId, targetPeerId)
+        end
+
+        activeCalls[peerId] = nil
+    end
+
+    local playerPeers = peersBySource[playerId]
+
+    if playerPeers then
+        for i = 1, #playerPeers do
+            if playerPeers[i] == peerId then
+                table.remove(playerPeers, i)
                 break
             end
         end
-        -- Clean up the owner entry entirely if no peers remain
-        if #ownerList == 0 then
-            playerPeers[ownerSource] = nil
+
+        if #playerPeers == 0 then
+            peersBySource[playerId] = nil
         end
     end
 
-    peerOwner[playerSource] = nil
+    peerOwners[peerId] = nil
 end
 
--- ─── createdPeer ───────────────────────────────────────────────────────────────
--- Fired by a client when it creates a new WebRTC peer.
--- Registers the peer and associates it with the calling player.
-RegisterNetEvent("phone:webrtc:createdPeer")
-AddEventHandler("phone:webrtc:createdPeer", function(peerId)
-    local playerSource = source
+RegisterNetEvent("phone:webrtc:createdPeer", function(peerId)
+    local playerId = source
 
-    -- Ignore if this peer ID is already registered
-    if peerOwner[peerId] then return end
-
-    peerOwner[peerId] = playerSource
-
-    -- Add to the owner's peer list, creating it if needed
-    if not playerPeers[playerSource] then
-        playerPeers[playerSource] = {}
+    if peerOwners[peerId] then
+        return
     end
-    table.insert(playerPeers[playerSource], peerId)
+
+    peerOwners[peerId] = playerId
+    peersBySource[playerId] = peersBySource[playerId] or {}
+
+    table.insert(peersBySource[playerId], peerId)
 end)
 
--- ─── deletedPeer ───────────────────────────────────────────────────────────────
--- Fired by a client when it destroys one of its WebRTC peers.
--- Only the peer's actual owner may delete it.
-RegisterNetEvent("phone:webrtc:deletedPeer")
-AddEventHandler("phone:webrtc:deletedPeer", function(peerId)
-    local playerSource = source
+RegisterNetEvent("phone:webrtc:deletedPeer", function(peerId)
+    if peerOwners[peerId] ~= source then
+        return
+    end
 
-    -- Reject if the caller doesn't own this peer
-    if peerOwner[peerId] ~= playerSource then return end
-
-    cleanupPlayer(peerId)
+    DeletePeer(peerId)
 end)
 
--- ─── signal ────────────────────────────────────────────────────────────────────
--- Routes a WebRTC signal (offer, answer, ICE candidate, etc.) from one peer to another.
--- Both peers must exist and the sender must own the source peer.
-RegisterNetEvent("phone:webrtc:signal")
-AddEventHandler("phone:webrtc:signal", function(fromPeer, toPeer, signalData)
-    local playerSource = source
+RegisterNetEvent("phone:webrtc:signal", function(fromPeerId, targetPeerId, signalData)
+    local playerId = source
 
-    -- Validate: fromPeer must exist and be owned by the sender
-    if not (peerOwner[fromPeer] and peerOwner[fromPeer] == playerSource) then return end
+    if peerOwners[fromPeerId] ~= playerId then
+        return
+    end
 
-    -- Validate: toPeer must exist and fromPeer must still be owned by the sender
-    if not (peerOwner[toPeer] and peerOwner[fromPeer] == playerSource) then return end
+    local targetSource = peerOwners[targetPeerId]
 
-    -- If this is an offer, establish a bidirectional link between the two peers
+    if not targetSource then
+        return
+    end
+
     if signalData.type == "offer" then
-        if not peerLinks[fromPeer] then peerLinks[fromPeer] = {} end
-        if not peerLinks[toPeer]   then peerLinks[toPeer]   = {} end
-        peerLinks[fromPeer][toPeer] = true
-        peerLinks[toPeer][fromPeer] = true
+        activeCalls[fromPeerId] = activeCalls[fromPeerId] or {}
+        activeCalls[targetPeerId] = activeCalls[targetPeerId] or {}
+        activeCalls[fromPeerId][targetPeerId] = true
+        activeCalls[targetPeerId][fromPeerId] = true
     end
 
-    -- Forward the signal to the target peer's owner
-    TriggerClientEvent("phone:webrtc:signal", peerOwner[toPeer], {
+    TriggerClientEvent("phone:webrtc:signal", targetSource, {
         signalData = signalData,
-        from       = fromPeer,
-        target     = toPeer,
+        from = fromPeerId,
+        target = targetPeerId
     })
 end)
 
--- ─── playerDropped ─────────────────────────────────────────────────────────────
--- When a player disconnects, clean up all of their peers.
 AddEventHandler("playerDropped", function()
-    local playerSource = source
+    local playerId = source
+    local playerPeers = peersBySource[playerId]
 
-    local peers = playerPeers[playerSource]
-    if not peers then return end
-
-    -- Clone the list since cleanupPlayer mutates it during iteration
-    local peersSnapshot = table.clone(peers)
-    for _, peerId in ipairs(peersSnapshot) do
-        cleanupPlayer(peerId)
+    if not playerPeers then
+        return
     end
 
-    playerPeers[playerSource] = nil
+    local peers = table.clone(playerPeers)
+
+    for i = 1, #peers do
+        DeletePeer(peers[i])
+    end
+
+    peersBySource[playerId] = nil
 end)

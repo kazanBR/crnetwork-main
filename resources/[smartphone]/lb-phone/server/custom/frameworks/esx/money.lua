@@ -12,15 +12,8 @@ end
 ---@return integer
 function GetBalance(source)
     local xPlayer = ESX.GetPlayerFromId(source)
-    if not xPlayer then return 0 end
 
-    -- Try bank account first, fall back to money (cash)
-    local bankAccount = xPlayer.getAccount and xPlayer.getAccount("bank")
-    if bankAccount then
-        return bankAccount.money or 0
-    end
-
-    return xPlayer.getMoney and xPlayer.getMoney() or 0
+    return xPlayer?.getAccount("bank")?.money or 0
 end
 
 ---Add money to a player's bank account
@@ -34,13 +27,7 @@ function AddMoney(source, amount)
         return false
     end
 
-    -- Try bank account first, fall back to cash
-    local bankAccount = xPlayer.getAccount and xPlayer.getAccount("bank")
-    if bankAccount then
-        xPlayer.addAccountMoney("bank", amount)
-    else
-        xPlayer.addMoney(amount)
-    end
+    xPlayer.addAccountMoney("bank", amount)
 
     return true
 end
@@ -70,13 +57,7 @@ function RemoveMoney(source, amount)
         return false
     end
 
-    -- Try bank account first, fall back to cash
-    local bankAccount = xPlayer.getAccount and xPlayer.getAccount("bank")
-    if bankAccount then
-        xPlayer.removeAccountMoney("bank", amount)
-    else
-        xPlayer.removeMoney(amount)
-    end
+    xPlayer.removeAccountMoney("bank", amount)
 
     return true
 end

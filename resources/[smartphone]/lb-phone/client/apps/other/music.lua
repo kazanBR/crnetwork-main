@@ -1,60 +1,58 @@
--- playlists and groups their songs into a Songs array.
-local function FetchPlaylists()
-    local rows     = AwaitCallback("music:getPlaylists")
-    local playlists = {}
-    local seen     = {}  -- tracks playlist IDs already added
+-- =====================================================
+--  lb-phone · client/apps/other/music.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
-    for _, row in ipairs(rows) do
-        -- Add playlist entry the first time we encounter its ID
-        if not seen[row.id] then
-            seen[row.id] = true
-            playlists[#playlists + 1] = {
-                Id      = row.id,
-                Title   = row.name,
-                Cover   = row.cover,
+local function GetPlaylists()
+    local rows = AwaitCallback("music:getPlaylists")
+    local playlists = {}
+    local playlistsById = {}
+
+    for i = 1, #rows do
+        local row = rows[i]
+        local playlist = playlistsById[row.id]
+
+        if not playlist then
+            playlist = {
+                Id = row.id,
+                Title = row.name,
+                Cover = row.cover,
                 IsOwner = row.phone_number == currentPhone,
-                Songs   = {},
+                Songs = {}
             }
+
+            playlistsById[row.id] = playlist
+            playlists[#playlists + 1] = playlist
         end
 
-        -- Append song to the most recently added playlist (current group)
         if row.song_id then
-            local current = playlists[#playlists]
-            current.Songs[#current.Songs + 1] = row.song_id
+            playlist.Songs[#playlist.Songs + 1] = row.song_id
         end
     end
 
     return playlists
 end
 
-
--- NUI callback handler: routes all Music UI actions to the appropriate server callbacks
-RegisterNUICallback("Music", function(data, cb)
+RegisterNUICallback("Music", function(data, callback)
     local action = data.action
+
     debugprint("Music:" .. (action or ""))
 
     if action == "getConfig" then
-        cb(Music)
-
+        callback(Music)
     elseif action == "createPlaylist" then
-        TriggerCallback("music:createPlaylist", cb, data.name)
-
+        TriggerCallback("music:createPlaylist", callback, data.name)
     elseif action == "editPlaylist" then
-        TriggerCallback("music:editPlaylist", cb, data.id, data.title, data.cover)
-
+        TriggerCallback("music:editPlaylist", callback, data.id, data.title, data.cover)
     elseif action == "getPlaylists" then
-        cb(FetchPlaylists())
-
+        callback(GetPlaylists())
     elseif action == "deletePlaylist" then
-        TriggerCallback("music:deletePlaylist", cb, data.id)
-
+        TriggerCallback("music:deletePlaylist", callback, data.id)
     elseif action == "savePlaylist" then
-        TriggerCallback("music:savePlaylist", cb, data.id)
-
+        TriggerCallback("music:savePlaylist", callback, data.id)
     elseif action == "addSong" then
-        TriggerCallback("music:addSong", cb, data.id, data.song)
-
+        TriggerCallback("music:addSong", callback, data.id, data.song)
     elseif action == "removeSong" then
-        TriggerCallback("music:removeSong", cb, data.id, data.song)
+        TriggerCallback("music:removeSong", callback, data.id, data.song)
     end
 end)

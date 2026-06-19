@@ -32,11 +32,7 @@ ESX.RegisterCommand("toggleverified", "admin", function(xPlayer, args, showError
         return showError("No username provided")
     end
 
-    if verified ~= 1 and verified ~= 0 then
-        return showError("Verified must be 1 or 0")
-    end
-
-    ToggleVerified(app, username, verified == 1)
+    ToggleVerified(app, username, verified)
 end, false, {
     help = "Toggle verified for a user profile",
     arguments = {

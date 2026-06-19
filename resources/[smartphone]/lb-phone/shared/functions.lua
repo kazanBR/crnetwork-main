@@ -29,7 +29,7 @@ end
 ---@param source number
 ---@return string
 function DebugPlayerName(source)
-    return GetPlayerName(source) .. " (" .. source .. ")"
+    return (GetPlayerName(source) or "") .. " (" .. source .. ")"
 end
 
 function debugprint(...)
@@ -70,7 +70,8 @@ if Config.HouseScript == "auto" then
         "loaf_housing",
         "qb-houses",
         "qs-housing",
-        "vms_housing"
+        "vms_housing",
+        "rtx_housing"
     }
 
     for i = 1, #houseScripts do
@@ -171,6 +172,10 @@ function table.deep_clone(og)
     return copy
 end
 
+---@param t any[]
+---@param v any
+---@return boolean
+---@return number? index
 function table.contains(t, v)
     for i = 1, #t do
         if t[i] == v then
@@ -181,6 +186,10 @@ function table.contains(t, v)
     return false
 end
 
+---@param value number
+---@param min number
+---@param max number
+---@return number
 function math.clamp(value, min, max)
     if value < min then
         return min

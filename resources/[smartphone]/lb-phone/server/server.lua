@@ -1,22 +1,21 @@
--- ─── Phone ↔ player lookup tables ────────────────────────────────────────────
-local numberToSource = {}  
-local sourceToNumber = {}  
-local settingsCache  = {}  
-local dirtySettings  = {}  
+-- =====================================================
+--  lb-phone · server/server.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- ─── GenerateString ──────────────────────────────────────────────────────────
--- Returns a random alphanumeric string of the given length (default 15).
 function GenerateString(length)
-    length = length or 15
     local result = ""
+
+    length = length or 15
 
     for _ = 1, length do
         if math.random(1, 2) == 1 then
-            -- Random letter a-z, optionally uppercased
             local char = string.char(math.random(97, 122))
+
             if math.random(1, 2) == 1 then
                 char = char:upper()
             end
+
             result = result .. char
         else
             result = result .. math.random(1, 9)
@@ -26,97 +25,121 @@ function GenerateString(length)
     return result
 end
 
--- ─── GenerateId ───────────────────────────────────────────────────────────────
--- Returns a unique ID for a given table/column that doesn't already exist in the DB.
-function GenerateId(tableName, column)
-    local uniqueId
-    local exists = true
+function GenerateId(tableName, columnName)
+    local isUnique = false
+    local id
 
-    while exists do
-        local candidate = GenerateString(5)
-        uniqueId = candidate
+    while not isUnique do
+        id = GenerateString(5)
 
-        local query  = ("SELECT `%s` FROM `%s` WHERE `%s` = @id"):format(column, tableName, column)
-        local result = MySQL.Sync.fetchScalar(query, { ["@id"] = candidate })
-        exists = (result ~= nil)
+        local existingId = MySQL.Sync.fetchScalar(
+            ("SELECT `%s` FROM `%s` WHERE `%s` = @id"):format(columnName, tableName, columnName),
+            {
+                ["@id"] = id
+            }
+        )
 
-        if exists then Wait(50) end
+        isUnique = existingId == nil
+
+        if not isUnique then
+            Wait(50)
+        end
     end
 
-    return uniqueId
+    return id
 end
 
--- ─── GeneratePhoneNumber ──────────────────────────────────────────────────────
--- Generates a unique phone number using Config.PhoneNumber settings.
 function GeneratePhoneNumber()
     local prefixes = Config.PhoneNumber.Prefixes
-    local numLen   = Config.PhoneNumber.Length
-    local number
-    local unique = false
+    local isUnique = false
+    local phoneNumber
 
-    while not unique do
-        -- Build random digit string
-        local digits = ""
-        for _ = 1, numLen do
-            digits = digits .. math.random(0, 9)
+    while not isUnique do
+        local number = ""
+
+        for _ = 1, Config.PhoneNumber.Length do
+            number = number .. math.random(0, 9)
         end
 
-        -- Prepend a random prefix if any are configured
         if #prefixes == 0 then
-            number = digits
+            phoneNumber = number
         else
-            local prefix = prefixes[math.random(1, #prefixes)]
-            number = prefix .. digits
+            phoneNumber = prefixes[math.random(1, #prefixes)] .. number
         end
 
-        -- Check uniqueness
-        local existing = MySQL.Sync.fetchScalar(
+        local existingNumber = MySQL.Sync.fetchScalar(
             "SELECT phone_number FROM phone_phones WHERE phone_number = @number",
-            { ["@number"] = number }
+            {
+                ["@number"] = phoneNumber
+            }
         )
-        unique = (existing == nil)
-        if not unique then Wait(0) end
+
+        isUnique = existingNumber == nil
+
+        if not isUnique then
+            Wait(0)
+        end
     end
 
-    return number
+    return phoneNumber
 end
 
--- ─── Settings helpers ─────────────────────────────────────────────────────────
+local phoneNumberToSource = {}
+local sourceToPhoneNumberStore = {}
+local sourceToPhoneNumber = setmetatable({}, {
+    __index = sourceToPhoneNumberStore,
+    __newindex = function(_, source, phoneNumber)
+        local oldPhoneNumber = sourceToPhoneNumberStore[source]
+
+        if phoneNumber == oldPhoneNumber then
+            return
+        end
+
+        TriggerEvent("lb-phone:numberChanged", source, phoneNumber, oldPhoneNumber)
+        debugprint("sourceToPhoneNumber: " .. source .. " changed from " .. tostring(oldPhoneNumber) .. " to " .. tostring(phoneNumber))
+
+        sourceToPhoneNumberStore[source] = phoneNumber
+    end
+})
+
+local settingsCache = {}
+local dirtySettings = {}
 
 function GetSettings(phoneNumber)
     return settingsCache[phoneNumber]
 end
+
 exports("GetSettings", GetSettings)
 
--- Sets (or clears) settings for a phone number.
--- If newSettings is nil, writes the cached value to the DB (if CacheSettings is enabled).
-function SetSettings(phoneNumber, newSettings)
-    if not newSettings then
-        -- Flush cached settings to DB if marked dirty
-        if dirtySettings[phoneNumber] then
-            dirtySettings[phoneNumber] = nil
-            if Config.CacheSettings ~= false then
-                debugprint("Updating settings in database for", phoneNumber)
-                MySQL.update(
-                    "UPDATE phone_phones SET settings = ? WHERE phone_number = ?",
-                    { json.encode(settingsCache[phoneNumber]), phoneNumber }
-                )
-            end
+function SetSettings(phoneNumber, settings)
+    if not settings and dirtySettings[phoneNumber] then
+        dirtySettings[phoneNumber] = nil
+
+        if Config.CacheSettings ~= false then
+            debugprint("Updating settings in database for", phoneNumber)
+
+            MySQL.update(
+                "UPDATE phone_phones SET settings = ? WHERE phone_number = ?",
+                { json.encode(settingsCache[phoneNumber]), phoneNumber }
+            )
         end
     end
-    settingsCache[phoneNumber] = newSettings
+
+    settingsCache[phoneNumber] = settings
 end
 
--- Writes all dirty settings to the DB.
 function SaveAllSettings()
-    if Config.CacheSettings == false then return end
+    if Config.CacheSettings == false then
+        return
+    end
+
     infoprint("info", "Saving all settings")
 
-    for phoneNumber, settingsData in pairs(settingsCache) do
+    for phoneNumber, settings in pairs(settingsCache) do
         if dirtySettings[phoneNumber] then
             MySQL.update(
                 "UPDATE phone_phones SET settings = ? WHERE phone_number = ?",
-                { json.encode(settingsData), phoneNumber }
+                { json.encode(settings), phoneNumber }
             )
         else
             debugprint("Not saving settings for", phoneNumber, "because no changes were made")
@@ -124,353 +147,319 @@ function SaveAllSettings()
     end
 end
 
--- ─── playerLoaded callback ────────────────────────────────────────────────────
--- Resolves which phone number belongs to the connecting player.
-RegisterLegacyCallback("playerLoaded", function(source, cb)
-    local identifier = GetIdentifier(source)
+RegisterLegacyCallback("playerLoaded", function(playerSource, callback)
+    local identifier = GetIdentifier(playerSource)
+
     if not identifier then
-        debugprint("playerLoaded: no identifier for source", source)
-        return cb()
+        debugprint("playerLoaded: no identifier for source", playerSource)
+        return callback()
     end
 
-    debugprint(GetPlayerName(source), source, identifier, "triggered phone:playerLoaded")
+    debugprint(GetPlayerName(playerSource), playerSource, identifier, "triggered phone:playerLoaded")
 
-    -- ── Non-unique item mode (one phone per identifier) ──────────────────────
     if not Config.Item.Unique then
         local phoneNumber = MySQL.scalar.await(
             "SELECT phone_number FROM phone_phones WHERE id = ?",
             { identifier }
         )
-        if phoneNumber then
-            if HasPhoneItem(source, phoneNumber) then
-                numberToSource[phoneNumber] = source
-                sourceToNumber[source]      = phoneNumber
-                TriggerEvent("lb-phone:numberChanged", source, phoneNumber)
-                MySQL.update(
-                    "UPDATE phone_phones SET last_seen = CURRENT_TIMESTAMP WHERE phone_number = ?",
-                    { phoneNumber }
-                )
-            end
+
+        if phoneNumber and HasPhoneItem(playerSource, phoneNumber) then
+            phoneNumberToSource[phoneNumber] = playerSource
+            sourceToPhoneNumber[playerSource] = phoneNumber
+
+            MySQL.update(
+                "UPDATE phone_phones SET last_seen = CURRENT_TIMESTAMP WHERE phone_number = ?",
+                { phoneNumber }
+            )
         end
-        return cb(phoneNumber)
+
+        return callback(phoneNumber)
     end
 
-    -- ── Unique item mode: look up the last phone the player used ─────────────
-    local lastPhone = MySQL.scalar.await(
+    local lastPhoneNumber = MySQL.scalar.await(
         "SELECT phone_number FROM phone_last_phone WHERE id = ?",
         { identifier }
     )
-    debugprint("result from phone_last_phone: ", lastPhone)
 
-    if lastPhone then
-        debugprint("checking if", source, "has phone with metadata for last phone number equipped")
+    debugprint("result from phone_last_phone: ", lastPhoneNumber)
 
-        if HasPhoneItem(source, lastPhone) then
-            debugprint(source .. "has phone with metadata")
-            numberToSource[lastPhone] = source
-            sourceToNumber[source]    = lastPhone
-            TriggerEvent("lb-phone:numberChanged", source, lastPhone)
+    if lastPhoneNumber then
+        debugprint("checking if " .. playerSource .. " has phone with metadata for last phone number equipped")
+
+        if HasPhoneItem(playerSource, lastPhoneNumber) then
+            debugprint(playerSource .. "has phone with metadata")
+
+            phoneNumberToSource[lastPhoneNumber] = playerSource
+            sourceToPhoneNumber[playerSource] = lastPhoneNumber
+
             MySQL.update(
                 "UPDATE phone_phones SET last_seen = CURRENT_TIMESTAMP WHERE phone_number = ?",
-                { lastPhone }
+                { lastPhoneNumber }
             )
-            return cb(lastPhone)
+
+            return callback(lastPhoneNumber)
         end
 
-        debugprint(source .. " doesn't have phone with metadata for last phone number equipped")
-        return cb()
+        debugprint(playerSource .. " doesn't have phone with metadata for last phone number equipped")
+        return callback()
     end
 
-    -- No last-phone record: check if the player has a blank phone item
-    debugprint("checking if", source, "has an empty phone")
-    if not HasPhoneItem(source) then
-        debugprint(source .. " does not have an empty phone")
-        return cb()
+    debugprint("checking if " .. playerSource .. " has an empty phone")
+
+    if not HasPhoneItem(playerSource) then
+        debugprint(playerSource .. " does not have an empty phone")
+        return callback()
     end
 
-    -- Player has a blank phone; check for a pre-unique-phone record
-    debugprint(source .. " does have an empty phone, checking if they have an existing phone from pre-unique phone")
-    local existingNumber = MySQL.scalar.await(
+    debugprint(playerSource .. " does have an empty phone, checking if they have an existing phone from pre-unique phone")
+
+    local oldPhoneNumber = MySQL.scalar.await(
         "SELECT phone_number FROM phone_phones WHERE id = ? AND assigned = FALSE",
         { identifier }
     )
 
-    if existingNumber then
-        local assigned = SetPhoneNumber(source, existingNumber)
-        if assigned then
-            debugprint(source .. " does have an existing phone from pre-unique phone")
-            MySQL.update(
-                "UPDATE phone_phones SET assigned = TRUE, last_seen = CURRENT_TIMESTAMP WHERE phone_number = ?",
-                { existingNumber }
-            )
-            MySQL.update(
-                "INSERT INTO phone_last_phone (id, phone_number) VALUES (?, ?)",
-                { identifier, existingNumber }
-            )
-            numberToSource[existingNumber] = source
-            sourceToNumber[source]         = existingNumber
-            TriggerEvent("lb-phone:numberChanged", source, existingNumber)
-            return cb(existingNumber)
-        end
+    if not oldPhoneNumber or not SetPhoneNumber(playerSource, oldPhoneNumber) then
+        debugprint(playerSource .. " does not have an existing phone from pre-unique phone, or failed to set number to item metadata")
+        return callback()
     end
 
-    debugprint(source .. " does not have an existing phone from pre-unique phone, or failed to set number to item metadata")
-    return cb()
+    debugprint(playerSource .. " does have an existing phone from pre-unique phone")
+
+    MySQL.update(
+        "UPDATE phone_phones SET assigned = TRUE, last_seen = CURRENT_TIMESTAMP WHERE phone_number = ?",
+        { oldPhoneNumber }
+    )
+
+    MySQL.update(
+        "INSERT INTO phone_last_phone (id, phone_number) VALUES (?, ?)",
+        { identifier, oldPhoneNumber }
+    )
+
+    phoneNumberToSource[oldPhoneNumber] = playerSource
+    sourceToPhoneNumber[playerSource] = oldPhoneNumber
+
+    callback(oldPhoneNumber)
 end)
 
--- ─── setLastPhone callback ────────────────────────────────────────────────────
--- Called when a player equips or un-equips a phone.
-RegisterLegacyCallback("setLastPhone", function(source, cb, newNumber)
-    local identifier  = GetIdentifier(source)
-    local oldNumber   = GetEquippedPhoneNumber(source)
+RegisterLegacyCallback("setLastPhone", function(playerSource, callback, newPhoneNumber)
+    local identifier = GetIdentifier(playerSource)
+    local oldPhoneNumber = GetEquippedPhoneNumber(playerSource)
 
-    debugprint(DebugPlayerName(source), identifier, "triggered phone:setLastPhone. old number:", oldNumber, "new number:", newNumber)
-    SaveBattery(source)
+    debugprint(DebugPlayerName(playerSource), identifier, "triggered phone:setLastPhone. old number:", oldPhoneNumber, "new number:", newPhoneNumber)
+    SaveBattery(playerSource)
 
-    -- Un-equip (newNumber is nil) ─────────────────────────────────────────────
-    if not newNumber then
+    if not newPhoneNumber then
         if identifier then
-            MySQL.update("DELETE FROM phone_last_phone WHERE id = ?", { identifier })
+            MySQL.update(
+                "DELETE FROM phone_last_phone WHERE id = ?",
+                { identifier }
+            )
         end
-        if oldNumber then
-            numberToSource[oldNumber]      = nil
-            sourceToNumber[source]         = nil
-            TriggerEvent("lb-phone:numberChanged", source)
-            local state        = Player(source).state
-            state.phoneOpen    = false
-            state.phoneName    = nil
-            state.phoneNumber  = nil
-            if GetSettings(oldNumber) then
-                SetSettings(oldNumber, nil)
+
+        if oldPhoneNumber then
+            phoneNumberToSource[oldPhoneNumber] = nil
+            sourceToPhoneNumber[playerSource] = nil
+
+            local playerState = Player(playerSource).state
+
+            playerState.phoneOpen = false
+            playerState.phoneName = nil
+            playerState.phoneNumber = nil
+
+            if GetSettings(oldPhoneNumber) then
+                SetSettings(oldPhoneNumber, nil)
             end
         end
-        return cb()
+
+        return callback()
     end
 
-    -- Equip (newNumber provided) ──────────────────────────────────────────────
     if not identifier then
-        debugprint("setLastPhone: no identifier for source", source)
-        return cb()
+        debugprint("setLastPhone: no identifier for source", playerSource)
+        return callback()
     end
 
-    -- Prevent stealing a number already active on another source
-    if numberToSource[newNumber] and numberToSource[newNumber] ~= source then
-        return cb()
+    if phoneNumberToSource[newPhoneNumber] and phoneNumberToSource[newPhoneNumber] ~= playerSource then
+        return callback()
     end
 
-    -- Verify the number exists in the DB
-    local exists = MySQL.scalar.await(
+    local phoneExists = MySQL.scalar.await(
         "SELECT 1 FROM phone_phones WHERE phone_number = ?",
-        { newNumber }
+        { newPhoneNumber }
     )
-    if not exists then
-        local playerLabel = GetPlayerName(source) .. " | " .. source
-        infoprint("warning", playerLabel
-            .. " tried to use a phone with a number that doesn't exist. "
-            .. "This usually happens when you delete the phone from phone_phones, "
-            .. "without deleting the phone item from the player's inventory. Phone number: "
-            .. newNumber)
-        return cb()
+
+    if not phoneExists then
+        infoprint("warning", GetPlayerName(playerSource) .. " | " .. playerSource .. " tried to use a phone with a number that doesn't exist. This usually happens when you delete the phone from phone_phones, without deleting the phone item from the player's inventory. Phone number: " .. newPhoneNumber)
+        return callback()
     end
 
-    -- Upsert last-phone record
     MySQL.update.await(
         "INSERT INTO phone_last_phone (id, phone_number) VALUES (?, ?) ON DUPLICATE KEY UPDATE phone_number = ?",
-        { identifier, newNumber, newNumber }
+        { identifier, newPhoneNumber, newPhoneNumber }
     )
 
-    -- Clear old number mappings and settings
-    if oldNumber then
-        numberToSource[oldNumber] = nil
-        sourceToNumber[source]    = nil
-        if GetSettings(oldNumber) then
-            SetSettings(oldNumber, nil)
+    if oldPhoneNumber then
+        phoneNumberToSource[oldPhoneNumber] = nil
+        sourceToPhoneNumber[playerSource] = nil
+
+        if GetSettings(oldPhoneNumber) then
+            SetSettings(oldPhoneNumber, nil)
         end
     end
 
-    -- Register new number
-    numberToSource[newNumber] = source
-    sourceToNumber[source]    = newNumber
-    TriggerEvent("lb-phone:numberChanged", source, newNumber)
-    cb()
+    phoneNumberToSource[newPhoneNumber] = playerSource
+    sourceToPhoneNumber[playerSource] = newPhoneNumber
+
+    callback()
 end)
 
--- ─── generatePhoneNumber callback ────────────────────────────────────────────
-RegisterLegacyCallback("generatePhoneNumber", function(source, cb)
-    local identifier = GetIdentifier(source)
-    debugprint(GetPlayerName(source), source, identifier, "wants to generate a phone number")
+RegisterLegacyCallback("generatePhoneNumber", function(playerSource, callback)
+    local identifier = GetIdentifier(playerSource)
+    local phoneId = identifier
 
-    local phoneId = identifier  -- used as the DB row ID
+    debugprint(GetPlayerName(playerSource), playerSource, identifier, "wants to generate a phone number")
 
     if Config.Item.Unique then
-        debugprint("unique phones enabled, checking if "
-            .. GetPlayerName(source)
-            .. " has a phone item without a number assigned")
+        debugprint("unique phones enabled, checking if " .. GetPlayerName(playerSource) .. " has a phone item without a number assigned")
 
-        if not HasPhoneItem(source) then
-            debugprint(GetPlayerName(source) .. " does not have a phone item without a number assigned")
-            return cb()
+        if not HasPhoneItem(playerSource) then
+            debugprint(GetPlayerName(playerSource) .. " does not have a phone item without a number assigned")
+            return callback()
         end
 
         phoneId = GenerateId("phone_phones", "id")
     else
-        -- Non-unique: check if they already have a number
-        local existingNumber = MySQL.scalar.await(
+        local existingPhoneNumber = MySQL.scalar.await(
             "SELECT phone_number FROM phone_phones WHERE id = ?",
             { identifier }
         )
-        if existingNumber then
-            infoprint("warning",
-                GetPlayerName(source)
-                .. " wants to generate a phone number, but they already have one. "
-                .. "Please set Config.Debug to true, and send the full log in customer-support if this happens again.")
-            numberToSource[existingNumber] = source
-            sourceToNumber[source]         = existingNumber
-            TriggerEvent("lb-phone:numberChanged", source, existingNumber)
-            return cb(existingNumber)
+
+        if existingPhoneNumber then
+            infoprint("warning", GetPlayerName(playerSource) .. " wants to generate a phone number, but they already have one. Please set Config.Debug to true, and send the full log in customer-support if this happens again.")
+
+            phoneNumberToSource[existingPhoneNumber] = playerSource
+            sourceToPhoneNumber[playerSource] = existingPhoneNumber
+
+            return callback(existingPhoneNumber)
         end
     end
 
-    local newNumber = GeneratePhoneNumber()
+    local phoneNumber = GeneratePhoneNumber()
 
     MySQL.update.await(
         "INSERT INTO phone_phones (id, owner_id, phone_number) VALUES (?, ?, ?)",
-        { phoneId, identifier, newNumber }
+        { phoneId, identifier, phoneNumber }
     )
-    TriggerEvent("lb-phone:phoneNumberGenerated", source, newNumber)
+
+    TriggerEvent("lb-phone:phoneNumberGenerated", playerSource, phoneNumber)
 
     if Config.Item.Unique then
-        SetPhoneNumber(source, newNumber)
+        SetPhoneNumber(playerSource, phoneNumber)
+
         MySQL.update.await(
             "UPDATE phone_phones SET assigned = TRUE WHERE phone_number = ?",
-            { newNumber }
+            { phoneNumber }
         )
+
         MySQL.update.await(
             "INSERT INTO phone_last_phone (id, phone_number) VALUES (?, ?) ON DUPLICATE KEY UPDATE phone_number = ?",
-            { GetIdentifier(source), newNumber, newNumber }
+            { GetIdentifier(playerSource), phoneNumber, phoneNumber }
         )
     end
 
-    numberToSource[newNumber] = source
-    sourceToNumber[source]    = newNumber
-    TriggerEvent("lb-phone:numberChanged", source, newNumber)
-    cb(newNumber)
+    phoneNumberToSource[phoneNumber] = playerSource
+    sourceToPhoneNumber[playerSource] = phoneNumber
+
+    callback(phoneNumber)
 end)
 
--- ─── getPhone callback ────────────────────────────────────────────────────────
--- Returns full phone row data for a given phone number.
-RegisterLegacyCallback("getPhone", function(source, cb, phoneNumber)
-    debugprint(GetPlayerName(source), "triggered phone:getPhone. checking if they have an item")
+RegisterLegacyCallback("getPhone", function(playerSource, callback, phoneNumber)
+    debugprint(GetPlayerName(playerSource), "triggered phone:getPhone. checking if they have an item")
 
-    if not HasPhoneItem(source, phoneNumber) then
-        debugprint(GetPlayerName(source), "does not have an item")
-        return cb()
+    if not HasPhoneItem(playerSource, phoneNumber) then
+        debugprint(GetPlayerName(playerSource), "does not have an item")
+        return callback()
     end
 
-    debugprint(GetPlayerName(source), "has an item, getting phone data")
+    debugprint(GetPlayerName(playerSource), "has an item, getting phone data")
 
-    local row = MySQL.single.await(
+    local phoneData = MySQL.single.await(
         "SELECT owner_id, is_setup, settings, `name`, battery FROM phone_phones WHERE phone_number = ?",
         { phoneNumber }
     )
-    if not row then
-        debugprint(GetPlayerName(source), "does not have any phone data")
-        return cb()
+
+    if not phoneData then
+        debugprint(GetPlayerName(playerSource), "does not have any phone data")
+        return callback()
     end
 
-    -- Resolve settings: prefer in-memory cache, then decode from DB
-    if row.settings then
-        local cached = GetSettings(phoneNumber)
-        if not cached then
-            cached = json.decode(row.settings)
-            SetSettings(phoneNumber, cached)
+    if phoneData.settings then
+        local cachedSettings = GetSettings(phoneNumber)
+
+        phoneData.settings = cachedSettings or json.decode(phoneData.settings)
+
+        if not cachedSettings then
+            SetSettings(phoneNumber, phoneData.settings)
         end
-        row.settings = cached
     end
 
-    -- Update player state bag
-    Player(source).state.phoneName   = row.name
-    Player(source).state.phoneNumber = phoneNumber
+    Player(playerSource).state.phoneName = phoneData.name
 
-    -- Ensure source↔number mappings are registered so GetEquippedPhoneNumber(source)
-    -- works correctly for subsequent callbacks (e.g. setSettings from settings/events.js).
-    -- playerLoaded may have skipped this if HasPhoneItem returned false at login time.
-    if not sourceToNumber[source] then
-        numberToSource[phoneNumber] = source
-        sourceToNumber[source]      = phoneNumber
-        debugprint(GetPlayerName(source), "registered source↔number mapping from getPhone:", phoneNumber)
-    end
+    debugprint(GetPlayerName(playerSource), "has phone data")
 
-    debugprint(GetPlayerName(source), "has phone data")
+    if not phoneData.owner_id then
+        local identifier = GetIdentifier(playerSource)
 
-    -- Ensure owner_id is set
-    if not row.owner_id then
-        local ownerId = GetIdentifier(source)
-        debugprint(GetPlayerName(source)
-            .. "'s phone does not have an owner, setting owner to "
-            .. ownerId)
+        debugprint(GetPlayerName(playerSource) .. "'s phone does not have an owner, setting owner to " .. identifier)
+
         MySQL.update(
             "UPDATE phone_phones SET owner_id = ? WHERE phone_number = ?",
-            { ownerId, phoneNumber }
+            { identifier, phoneNumber }
         )
     end
 
-    return cb(row)
+    return callback(phoneData)
 end)
 
--- ─── GetEquippedPhoneNumber ───────────────────────────────────────────────────
--- Returns the phone number currently equipped by the given source.
--- Falls back to the player state bag if the in-memory lookup is missing,
--- which can happen if the mapping was cleared (e.g. after factory reset)
--- but the player re-opened the phone via FetchPhone → getPhone.
-function GetEquippedPhoneNumber(source)
-    local number = sourceToNumber[source]
-    if not number then
-        -- Try state bag fallback set in getPhone callback
-        local ok, val = pcall(function()
-            return Player(source).state.phoneNumber
-        end)
-        if ok and val then
-            -- Re-register the mapping so subsequent lookups are fast
-            number = val
-            sourceToNumber[source]  = number
-            numberToSource[number]  = source
-            debugprint("GetEquippedPhoneNumber: restored mapping from state bag for source", source, "→", number)
-        end
-    end
-    return number
+function GetEquippedPhoneNumber(playerSource)
+    return sourceToPhoneNumber[playerSource]
 end
 
--- ─── GetSourceFromNumber ──────────────────────────────────────────────────────
 function GetSourceFromNumber(phoneNumber)
-    if not phoneNumber then return false end
-    return numberToSource[phoneNumber] or false
+    if not phoneNumber then
+        return false
+    end
+
+    return phoneNumberToSource[phoneNumber] or false
 end
+
 exports("GetSourceFromNumber", GetSourceFromNumber)
 
--- ─── isAdmin callback ─────────────────────────────────────────────────────────
-RegisterLegacyCallback("isAdmin", function(source, cb)
-    cb(IsAdmin(source))
+RegisterLegacyCallback("isAdmin", function(playerSource, callback)
+    callback(IsAdmin(playerSource))
 end)
 
--- ─── getCharacterName callback ────────────────────────────────────────────────
-RegisterLegacyCallback("getCharacterName", function(source, cb)
-    local first, last = GetCharacterName(source)
-    cb({ firstname = first, lastname = last })
+RegisterLegacyCallback("getCharacterName", function(playerSource, callback)
+    local firstName, lastName = GetCharacterName(playerSource)
+
+    callback({
+        firstname = firstName,
+        lastname = lastName
+    })
 end)
 
--- ─── Version check ────────────────────────────────────────────────────────────
 local latestVersion = nil
 
-PerformHttpRequest("https://loaf-scripts.com/versions/phone/version.json", function(status, body, headers, err)
-    if status ~= 200 then
+PerformHttpRequest("https://version.loaf-scripts.com/phone/version.json", function(statusCode, body, headers, errorData)
+    if statusCode ~= 200 then
         debugprint("Failed to get latest script version")
-        debugprint("Status:", status)
+        debugprint("Status:", statusCode)
         debugprint("Body:", body)
         debugprint("Headers:", headers)
-        debugprint("Error:", err)
+        debugprint("Error:", errorData)
         return
     end
+
     latestVersion = json.decode(body).latest
 end, "GET")
 
@@ -478,208 +467,158 @@ RegisterCallback("getLatestVersion", function()
     return latestVersion
 end)
 
--- ─── phone:finishedSetup ──────────────────────────────────────────────────────
-RegisterNetEvent("phone:finishedSetup")
-AddEventHandler("phone:finishedSetup", function(setupData)
-    local src         = source
-    local phoneNumber = GetEquippedPhoneNumber(src)
-    if not phoneNumber then return end
+RegisterNetEvent("phone:finishedSetup", function(settings)
+    local playerSource = source
+    local phoneNumber = GetEquippedPhoneNumber(playerSource)
 
-    SetSettings(phoneNumber, setupData)
-    MySQL.update(
-        "UPDATE phone_phones SET is_setup = true, settings = ? WHERE phone_number = ?",
-        { json.encode(setupData), phoneNumber }
-    )
-
-    if Config.AutoCreateEmail then
-        GenerateEmailAccount(src, phoneNumber)
-    end
-end)
-
--- ─── phone:setName ────────────────────────────────────────────────────────────
-RegisterNetEvent("phone:setName")
-AddEventHandler("phone:setName", function(newName)
-    local src         = source
-    local phoneNumber = GetEquippedPhoneNumber(src)
     if not phoneNumber then
-        debugprint("phone:setName: no phone number for source", src)
         return
     end
 
-    -- Validate name against filter regex if configured
-    if Config.NameFilter then
-        if not newName:match(Config.NameFilter) then
-            infoprint("warning",
-                "Player " .. GetPlayerName(src)
-                .. " tried to set an invalid phone name: "
-                .. newName)
-            local first, last = GetCharacterName(src)
-            newName = L("BACKEND.MISC.X_PHONE", { name = first, lastname = last })
-        end
+    SetSettings(phoneNumber, settings)
+
+    MySQL.update(
+        "UPDATE phone_phones SET is_setup = true, settings = ? WHERE phone_number = ?",
+        { json.encode(settings), phoneNumber }
+    )
+
+    if Config.AutoCreateEmail then
+        GenerateEmailAccount(playerSource, phoneNumber)
+    end
+end)
+
+RegisterNetEvent("phone:setName", function(phoneName)
+    local playerSource = source
+    local phoneNumber = GetEquippedPhoneNumber(playerSource)
+
+    if not phoneNumber then
+        debugprint("phone:setName: no phone number for source", playerSource)
+        return
+    end
+
+    if Config.NameFilter and not phoneName:match(Config.NameFilter) then
+        infoprint("warning", "Player " .. GetPlayerName(playerSource) .. " tried to set an invalid phone name: " .. phoneName)
+
+        local firstName, lastName = GetCharacterName(playerSource)
+
+        phoneName = L("BACKEND.MISC.X_PHONE", {
+            name = firstName,
+            lastname = lastName
+        })
     end
 
     MySQL.Async.execute(
         "UPDATE phone_phones SET `name`=@name WHERE phone_number=@phoneNumber",
-        { ["@phoneNumber"] = phoneNumber, ["@name"] = newName }
+        {
+            ["@phoneNumber"] = phoneNumber,
+            ["@name"] = phoneName
+        }
     )
 
     if Config.Item.Unique and SetItemName then
-        SetItemName(src, phoneNumber, newName)
+        SetItemName(playerSource, phoneNumber, phoneName)
     end
 
-    local currentSettings = GetSettings(phoneNumber)
-    if currentSettings then currentSettings.name = newName end
+    local settings = GetSettings(phoneNumber)
 
-    Player(src).state.phoneName = newName
+    if settings then
+        settings.name = phoneName
+    end
+
+    Player(playerSource).state.phoneName = phoneName
 end)
 
--- ─── setSettings callback ─────────────────────────────────────────────────────
--- BaseCallback already resolves phoneNumber server-side via GetEquippedPhoneNumber.
--- The client sends (phoneNumber, newSettings) as args, so we receive an extra
--- phoneNumber arg before newSettings -- skip it and use the server-resolved one.
-BaseCallback("setSettings", function(source, phoneNumber, _clientPhoneNumber, newSettings)
-    -- Guard: if only one extra arg was passed (no client phoneNumber prefix), shift args
-    if newSettings == nil and type(_clientPhoneNumber) == "table" then
-        newSettings = _clientPhoneNumber
-    end
+BaseCallback("setSettings", function(playerSource, phoneNumber, settings)
+    debugprint(playerSource, "saving settings for phone number", phoneNumber)
 
-    if not newSettings then
-        debugprint(source, "setSettings: received nil settings for phone number", phoneNumber)
-        return
-    end
-
-    debugprint(source, "saving settings for phone number", phoneNumber)
     dirtySettings[phoneNumber] = true
-    SetSettings(phoneNumber, newSettings)
+    SetSettings(phoneNumber, settings)
 
-    -- If caching is disabled, write through immediately
     if Config.CacheSettings == false then
         MySQL.update(
             "UPDATE phone_phones SET settings = ? WHERE phone_number = ?",
-            { json.encode(newSettings), phoneNumber }
+            { json.encode(settings), phoneNumber }
         )
     end
 end)
 
--- ─── phone:togglePhone ───────────────────────────────────────────────────────
-RegisterNetEvent("phone:togglePhone")
-AddEventHandler("phone:togglePhone", function(isOpen)
-    local src         = source
-    local state       = Player(src).state
-    state.phoneOpen   = isOpen
+RegisterNetEvent("phone:togglePhone", function(isOpen)
+    local playerSource = source
+    local playerState = Player(playerSource).state
 
-    local phoneNumber = GetEquippedPhoneNumber(src)
+    playerState.phoneOpen = isOpen
+
+    local phoneNumber = GetEquippedPhoneNumber(playerSource)
+
     if not phoneNumber then
-        debugprint("phone:togglePhone: no phone number for source", src)
+        debugprint("phone:togglePhone: no phone number for source", playerSource)
         return
     end
-    state.phoneNumber = phoneNumber
+
+    playerState.phoneNumber = phoneNumber
 end)
 
--- ─── phone:toggleFlashlight ───────────────────────────────────────────────────
-RegisterNetEvent("phone:toggleFlashlight")
-AddEventHandler("phone:toggleFlashlight", function(enabled)
+RegisterNetEvent("phone:toggleFlashlight", function(enabled)
     Player(source).state.flashlight = enabled
 end)
 
--- ─── playerDropped ────────────────────────────────────────────────────────────
 AddEventHandler("playerDropped", function()
-    local src         = source
-    local phoneNumber = GetEquippedPhoneNumber(src)
-    if not phoneNumber then return end
+    local playerSource = source
+    local phoneNumber = GetEquippedPhoneNumber(playerSource)
 
-    Wait(1000)
-    SetSettings(phoneNumber, nil)
-    numberToSource[phoneNumber] = nil
-    sourceToNumber[src]         = nil
-    TriggerEvent("lb-phone:numberChanged", src)
+    if phoneNumber then
+        Wait(1000)
+
+        SetSettings(phoneNumber, nil)
+
+        phoneNumberToSource[phoneNumber] = nil
+        sourceToPhoneNumber[playerSource] = nil
+    end
 end)
 
--- ─── onResourceStop ───────────────────────────────────────────────────────────
 AddEventHandler("onResourceStop", function(resourceName)
-    if resourceName ~= GetCurrentResourceName() then return end
+    if resourceName ~= GetCurrentResourceName() then
+        return
+    end
+
     SaveAllSettings()
 end)
 
--- ─── txAdmin: server shutting down ────────────────────────────────────────────
 AddEventHandler("txAdmin:events:serverShuttingDown", function()
     SaveAllSettings()
 end)
 
--- ─── FactoryReset ─────────────────────────────────────────────────────────────
--- Wipes ALL of a phone's data from the DB and notifies the client.
 local function FactoryReset(phoneNumber)
-    debugprint("FactoryReset triggered for", phoneNumber)
+    MySQL.update.await(
+        "DELETE FROM phone_logged_in_accounts WHERE phone_number = ?",
+        { phoneNumber }
+    )
 
-    -- ── Delete all phone-number-linked data ───────────────────────────────────
-    -- These tables have a phone_number column referencing this phone
-    local tablesWithPhoneNumber = {
-        "phone_logged_in_accounts",
-        "phone_photo_albums",       -- cascade deletes album members & album photos
-        "phone_photos",
-        "phone_notes",
-        "phone_notifications",
-        "phone_twitter_accounts",   -- cascade deletes tweets, likes, follows, messages etc.
-        "phone_phone_contacts",
-        "phone_phone_blocked_numbers",
-        "phone_instagram_accounts", -- cascade deletes posts, likes, follows, stories etc.
-        "phone_clock_alarms",
-        "phone_tinder_accounts",    -- cascade deletes swipes, matches, messages
-        "phone_tinder_swipes",
-        "phone_tinder_matches",
-        "phone_tinder_messages",
-        "phone_message_members",    -- removes player from all group chats
-        "phone_darkchat_accounts",  -- cascade deletes darkchat data
-        "phone_wallet_transactions",
-        "phone_yellow_pages_posts",
-        "phone_backups",
-        "phone_marketplace_posts",
-        "phone_music_playlists",
-        "phone_music_saved_playlists",
-        "phone_services_channels",
-        "phone_maps_locations",
-        "phone_tiktok_accounts",    -- cascade deletes tiktok data
-        "phone_voice_memos_recordings",
-    }
-
-    for _, tableName in ipairs(tablesWithPhoneNumber) do
-        local ok, err = pcall(function()
-            MySQL.update.await(
-                ("DELETE FROM `%s` WHERE phone_number = ?"):format(tableName),
-                { phoneNumber }
-            )
-        end)
-        if not ok then
-            debugprint("FactoryReset: failed to delete from", tableName, ":", err)
-        end
-    end
-
-    -- ── Reset phone_phones row ────────────────────────────────────────────────
-    local rowsChanged = MySQL.update.await(
-        "UPDATE phone_phones SET is_setup = false, settings = NULL, pin = NULL, face_id = NULL, `name` = NULL WHERE phone_number = ?",
+    local reset = MySQL.update.await(
+        "UPDATE phone_phones SET is_setup = false, settings = NULL, pin = NULL, face_id = NULL WHERE phone_number = ?",
         { phoneNumber }
     ) > 0
 
-    -- ── Notify client and clear server-side state ─────────────────────────────
-    local playerSource = numberToSource[phoneNumber]
-    if rowsChanged and playerSource then
+    local playerSource = phoneNumberToSource[phoneNumber]
+
+    if reset and playerSource then
         TriggerEvent("lb-phone:factoryReset", playerSource, phoneNumber)
         TriggerClientEvent("phone:factoryReset", playerSource)
-        SetSettings(phoneNumber, nil)
-        dirtySettings[phoneNumber]    = nil
-        settingsCache[phoneNumber]    = nil
-        numberToSource[phoneNumber]   = nil
-        sourceToNumber[playerSource]  = nil
-        TriggerEvent("lb-phone:numberChanged", playerSource)
-    end
 
-    debugprint("FactoryReset complete for", phoneNumber)
+        SetSettings(phoneNumber, nil)
+
+        phoneNumberToSource[phoneNumber] = nil
+        sourceToPhoneNumber[playerSource] = nil
+    end
 end
 
-RegisterNetEvent("phone:factoryReset")
-AddEventHandler("phone:factoryReset", function()
+RegisterNetEvent("phone:factoryReset", function()
     local phoneNumber = GetEquippedPhoneNumber(source)
-    if not phoneNumber then return end
+
+    if not phoneNumber then
+        return
+    end
+
     FactoryReset(phoneNumber)
 end)
 

@@ -42,15 +42,27 @@ if major < 10 or (major == 10 and minor < 11) then
     return
 end
 
+---@class DatabaseColumn
+---@field type string
+---@field collation string
+---@field allowNull boolean
+---@field default any
+---@field length number
+---@field isKey boolean
+---@field keyType string
+---@field columnType string
+
 local defaultTables = GetDefaultDatabaseTables()
+---@type { [string]: { [string]: DatabaseColumn } }
 local tables = {}
 
 local function FetchTables()
     table.wipe(tables)
 
-    local rows = MySQL.query.await("SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLLATION_NAME, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME LIKE ?", {
-        shouldGenerateTables and "generate_lb" or database, "phone_%"
-    })
+    local rows = MySQL.query.await(
+        "SELECT TABLE_NAME, COLUMN_NAME, DATA_TYPE, COLLATION_NAME, CHARACTER_MAXIMUM_LENGTH, IS_NULLABLE, COLUMN_DEFAULT, COLUMN_KEY, COLUMN_TYPE FROM INFORMATION_SCHEMA.COLUMNS WHERE TABLE_SCHEMA = ? AND TABLE_NAME LIKE ?",
+        { shouldGenerateTables and "generate_lb" or database, "phone_%" }
+    )
 
     for i = 1, #rows do
         local row = rows[i]
@@ -74,7 +86,8 @@ local function FetchTables()
             default = default,
             length = characterMaximumLength,
             isKey = isKey,
-            keyType = row.COLUMN_KEY:upper()
+            keyType = row.COLUMN_KEY:upper(),
+            columnType = row.COLUMN_TYPE,
         }
     end
 
@@ -94,6 +107,7 @@ if shouldGenerateTables then
             luaTable = luaTable .. ("\t\t\ttype = \"%s\",\n"):format(column.type)
             luaTable = luaTable .. ("\t\t\tallowNull = %s,\n"):format(column.allowNull and "true" or "false")
             luaTable = luaTable .. ("\t\t\tisKey = %s,\n"):format(column.isKey and "true" or "false")
+            luaTable = luaTable .. ("\t\t\tcolumnType = \"%s\",\n"):format(column.columnType)
 
             if column.default then
                 luaTable = luaTable .. ("\t\t\tdefault = \"%s\",\n"):format(column.default)
@@ -122,12 +136,7 @@ if shouldGenerateTables then
     return
 end
 
-if not tables.phone_phones then
-    if not Config.DatabaseChecker.AutoFix then
-        DatabaseCheckerFinished = true
-        return error("Database checker: Missing table lbtablet_tablets. Please run tablet.sql manually using HeidiSQL")
-    end
-
+local function RunPhoneSQL()
     local sqlFile = LoadResourceFile(GetCurrentResourceName(), "phone.sql")
 
     if not sqlFile then
@@ -170,8 +179,26 @@ if not tables.phone_phones then
     else
         infoprint("success", "Database checker: Created tables successfully")
     end
+end
 
+if not tables.phone_phones then
+    if not Config.DatabaseChecker.AutoFix then
+        DatabaseCheckerFinished = true
+        return error("Database checker: Missing table phone_phones. Please run phone.sql manually using HeidiSQL")
+    end
+
+    RunPhoneSQL()
     FetchTables()
+end
+
+for tableName, columns in pairs(defaultTables) do
+    if not tables[tableName] then
+        infoprint("warning", ("The table ^5%s^7 is missing in the database. Automatically running the sql file."):format(tableName))
+        RunPhoneSQL()
+        FetchTables()
+
+        break
+    end
 end
 
 local fixQueries = {}
@@ -869,6 +896,18 @@ local function AddCryptoCoins()
     updateChanges = true
 end
 
+local function ValidateBirdyVerified()
+    if not tables.phone_twitter_accounts then
+        return
+    end
+
+    if tables.phone_twitter_accounts.verified.columnType == "tinyint(1)" then
+        MySQL.rawExecute.await("ALTER TABLE `phone_twitter_accounts` MODIFY COLUMN `verified` TINYINT(4) DEFAULT 0")
+
+        updateChanges = true
+    end
+end
+
 if Config.DatabaseChecker.AutoFix then
     ValidatePhotoAlbums()
     ValidateNotificationsId()
@@ -880,6 +919,7 @@ if Config.DatabaseChecker.AutoFix then
     AddSharedAlbums()
     AddIndexes()
     AddCryptoCoins()
+    ValidateBirdyVerified()
 end
 
 if updateChanges then

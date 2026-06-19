@@ -58,7 +58,7 @@ RegisterNetEvent("QBCore:Client:OnMoneyChange", function(moneyType)
         return
     end
 
-    SendReactMessage("wallet:setBalance", math.floor(PlayerData.money.bank))
+    SendNUIAction("wallet:setBalance", math.floor(PlayerData.money.bank))
 end)
 
 AddCheck("openPhone", function()

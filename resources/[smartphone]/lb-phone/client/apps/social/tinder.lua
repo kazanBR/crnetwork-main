@@ -1,32 +1,34 @@
--- Actions that require CanInteract() check before proceeding
-local interactRequiredActions = { "createAccount", "saveProfile", "sendMessage" }
+-- =====================================================
+--  lb-phone · client/apps/social/tinder.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- =====================================================
--- getMatchList (internal helper)
--- Fetches matches from the server and normalises the
--- raw DB rows into clean client-facing objects.
--- hasMessages: true = conversations, false = new matches
--- =====================================================
-local function getMatchList(hasMessages, page)
-    local rows = AwaitCallback("spark:getMatches", hasMessages, page)
+local interactionActions = {
+    "createAccount",
+    "saveProfile",
+    "sendMessage"
+}
+
+local function GetMatches(onlyRecent, page)
+    local rows = AwaitCallback("spark:getMatches", onlyRecent, page)
     local matches = {}
 
     for i = 1, #rows do
         local row = rows[i]
         local match = {
-            name      = row.name,
-            number    = row.phone_number,
-            photos    = json.decode(row.photos),
-            dob       = row.dob,
-            bio       = row.bio,
-            isMale    = row.is_male,
+            name = row.name,
+            number = row.phone_number,
+            photos = json.decode(row.photos),
+            dob = row.dob,
+            bio = row.bio,
+            isMale = row.is_male,
             timestamp = row.latest_message_timestamp,
-            unread    = row.unread == true,
+            unread = row.unread == true
         }
 
         if row.latest_message then
             match.lastMessage = row.latest_message
-            match.lastSender  = row.latest_sender
+            match.lastSender = row.latest_sender
         end
 
         matches[i] = match
@@ -35,120 +37,78 @@ local function getMatchList(hasMessages, page)
     return matches
 end
 
--- =====================================================
--- NUI Callback: "Tinder"
--- Central dispatcher for all Spark NUI actions.
--- =====================================================
-RegisterNUICallback("Tinder", function(data, cb)
-    if not currentPhone then return end
-
-    local action = data.action
-    debugprint("Spark:" .. (action or ""))
-
-    -- Certain actions require the player to be able to interact
-    if table.contains(interactRequiredActions, action) then
-        if not CanInteract() then
-            return cb(false)
-        end
+RegisterNUICallback("Tinder", function(data, callback)
+    if not currentPhone then
+        return
     end
 
-    -- ------------------------------------------------
+    local action = data.action
+
+    debugprint("Spark:" .. (action or ""))
+
+    if table.contains(interactionActions, action) and not CanInteract() then
+        return callback(false)
+    end
+
     if action == "createAccount" then
-        TriggerCallback("spark:createAccount", cb, data.data)
-
-    -- ------------------------------------------------
+        return TriggerCallback("spark:createAccount", callback, data.data)
     elseif action == "deleteAccount" then
-        TriggerCallback("spark:deleteAccount", cb)
-
-    -- ------------------------------------------------
+        return TriggerCallback("spark:deleteAccount", callback)
     elseif action == "saveProfile" then
-        TriggerCallback("spark:updateAccount", cb, data.data)
-
-    -- ------------------------------------------------
+        return TriggerCallback("spark:updateAccount", callback, data.data)
     elseif action == "isLoggedIn" then
-        local account = AwaitCallback("spark:isLoggedIn", data.phoneNumber)
-        cb(account or false)
-
-    -- ------------------------------------------------
+        return callback(AwaitCallback("spark:isLoggedIn", data.phoneNumber) or false)
     elseif action == "getFeed" then
         local rows = AwaitCallback("spark:getFeed", data.page)
-        local feed  = {}
+        local feed = {}
 
         for i = 1, #rows do
             local row = rows[i]
+
             feed[i] = {
-                name   = row.name,
-                dob    = row.dob,
-                bio    = row.bio,
+                name = row.name,
+                dob = row.dob,
+                bio = row.bio,
                 photos = json.decode(row.photos),
-                number = row.phone_number,
+                number = row.phone_number
             }
         end
 
-        cb(feed)
-
-    -- ------------------------------------------------
+        callback(feed)
     elseif action == "swipe" then
-        TriggerCallback("spark:swipe", cb, data.number, data.like)
-
-    -- ------------------------------------------------
+        TriggerCallback("spark:swipe", callback, data.number, data.like)
     elseif action == "getNewMatchesCount" then
-        TriggerCallback("spark:getNewMatchesCount", cb)
-
-    -- ------------------------------------------------
+        TriggerCallback("spark:getNewMatchesCount", callback)
     elseif action == "getMatches" then
-        -- New (un-messaged) matches
-        cb(getMatchList(false, data.page))
-
-    -- ------------------------------------------------
+        return callback(GetMatches(false, data.page))
     elseif action == "getRecentMessages" then
-        -- Matches that already have a conversation
-        cb(getMatchList(true, data.page))
-
-    -- ------------------------------------------------
+        return callback(GetMatches(true, data.page))
     elseif action == "sendMessage" then
-        local msgData = data.data
+        local message = data.data
 
-        -- Clear attachments if the table is empty so the server receives nil
-        if type(msgData.attachments) == "table" and #msgData.attachments == 0 then
-            msgData.attachments = nil
+        if type(message.attachments) ~= "table" or #message.attachments == 0 then
+            message.attachments = nil
         end
 
-        TriggerCallback("spark:sendMessage", cb, msgData.recipient, msgData.content, msgData.attachments)
-
-    -- ------------------------------------------------
+        TriggerCallback("spark:sendMessage", callback, message.recipient, message.content, message.attachments)
     elseif action == "getMessages" then
         local messages = AwaitCallback("spark:getMessages", data.number, data.lastId)
 
-        -- Decode attachment JSON for each message
         for i = 1, #messages do
-            local msg = messages[i]
-            if msg.attachments then
-                msg.attachments = json.decode(msg.attachments)
+            if messages[i].attachments then
+                messages[i].attachments = json.decode(messages[i].attachments)
             else
-                msg.attachments = {}
+                messages[i].attachments = {}
             end
         end
 
-        cb(messages)
-
-    -- ------------------------------------------------
+        callback(messages)
     elseif action == "markAsRead" then
-        TriggerCallback("spark:markAsRead", cb, data.number)
+        TriggerCallback("spark:markAsRead", callback, data.number)
     end
 end)
 
--- =====================================================
--- phone:spark:newMessage
--- Fired by the server when the player receives a new
--- message while online. Forwards it to the React NUI.
--- =====================================================
-RegisterNetEvent("phone:spark:newMessage")
-AddEventHandler("phone:spark:newMessage", function(messageData)
-    -- Ensure attachments is always a table, even when empty
-    if not messageData.attachments then
-        messageData.attachments = {}
-    end
-
-    SendReactMessage("tinder:newMessage", messageData)
+RegisterNetEvent("phone:spark:newMessage", function(message)
+    message.attachments = message.attachments or {}
+    SendNUIAction("tinder:newMessage", message)
 end)

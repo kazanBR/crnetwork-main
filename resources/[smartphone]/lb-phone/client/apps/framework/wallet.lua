@@ -19,5 +19,5 @@ end)
 RegisterNetEvent("phone:wallet:addTransaction", function(transaction)
     debugprint("phone:wallet:addTransaction:", transaction)
 
-    SendReactMessage("wallet:addTransaction", transaction)
+    SendNUIAction("wallet:addTransaction", transaction)
 end)

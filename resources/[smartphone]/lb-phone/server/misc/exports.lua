@@ -1,167 +1,165 @@
--- Supported social apps for verified/password exports
-local socialApps = {}
-socialApps.twitter   = true
-socialApps.instagram = true
-socialApps.tiktok    = true
+-- =====================================================
+--  lb-phone · server/misc/exports.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- Map of alternate app identifiers to canonical names
-local appAliases = {}
-appAliases.birdy    = "twitter"
-appAliases.instapic = "instagram"
-appAliases.trendy   = "tiktok"
+local verifiedApps = {
+    twitter = true,
+    instagram = true,
+    tiktok = true
+}
 
--- Display names for social apps (used in notifications)
-local socialAppNames = {}
-socialAppNames.twitter   = "Twitter"
-socialAppNames.instagram = "Instagram"
-socialAppNames.tiktok    = "TikTok"
+local socialAliases = {
+    birdy = "twitter",
+    instapic = "instagram",
+    trendy = "tiktok"
+}
 
--- Canonical app names for account-switcher-compatible apps
-local accountSwitcherApps = {}
-accountSwitcherApps.twitter   = "Twitter"
-accountSwitcherApps.instagram = "Instagram"
-accountSwitcherApps.mail      = "Mail"
-accountSwitcherApps.tiktok    = "TikTok"
-accountSwitcherApps.darkchat  = "DarkChat"
+local verifiedNotificationApps = {
+    twitter = "Twitter",
+    instagram = "Instagram",
+    tiktok = "TikTok"
+}
 
--- The DB column used to identify a user in each app's accounts table
-local appUsernameField = {}
-appUsernameField.twitter   = "username"
-appUsernameField.instagram = "username"
-appUsernameField.tiktok    = "username"
-appUsernameField.mail      = "address"
-appUsernameField.darkchat  = "username"
+local accountAppNames = {
+    twitter = "Twitter",
+    instagram = "Instagram",
+    mail = "Mail",
+    tiktok = "TikTok",
+    darkchat = "DarkChat"
+}
 
--- ─── Helpers ─────────────────────────────────────────────────────────────────
+local usernameColumns = {
+    twitter = "username",
+    instagram = "username",
+    tiktok = "username",
+    mail = "address",
+    darkchat = "username"
+}
 
--- Resolve an app identifier (including aliases) to its canonical lowercase name.
--- Returns the resolved name, or the input unchanged if no alias found.
-local function resolveApp(app)
-  assert(type(app) == "string", "Invalid app")
-  local lower = app:lower()
-  -- If not a direct match, check aliases
-  if not socialApps[lower] then
-    local alias = appAliases[lower]
-    lower = tostring(alias)
-  end
-  return lower
+local function NormalizeVerifiedApp(app)
+    assert(type(app) == "string", "Invalid app")
+
+    app = app:lower()
+    app = verifiedApps[app] and app or tostring(socialAliases[app])
+
+    assert(verifiedApps[app], "Invalid app")
+
+    return app
 end
 
--- ─── Exports ─────────────────────────────────────────────────────────────────
+local function NormalizeAccountApp(app)
+    assert(type(app) == "string", "Invalid app")
 
--- Toggle the verified badge on a social media account.
--- Notifies all actively logged-in players if verifying.
-local function toggleVerified(app, username, verified)
-  app = resolveApp(app)
-  assert(socialApps[app],          "Invalid app")
-  assert(type(username) == "string", "Invalid username")
+    app = app:lower()
+    app = usernameColumns[app] and app or socialAliases[app]
 
-  TriggerEvent("lb-phone:toggleVerified", app, username, verified)
+    assert(usernameColumns[app], "Invalid app")
 
-  local rowsAffected = MySQL.Sync.execute(
-    ("UPDATE phone_%s_accounts SET verified=@verified WHERE username=@username"):format(app),
-    { ["@username"] = username, ["@verified"] = verified }
-  )
+    return app
+end
 
-  local success = rowsAffected > 0
+function ToggleVerified(app, username, verified)
+    app = NormalizeVerifiedApp(app)
 
-  -- If verifying and the app supports notifications, notify all active sessions
-  if success and verified and socialAppNames[app] then
-    local rows = MySQL.query.await(
-      "SELECT phone_number FROM phone_logged_in_accounts WHERE app = ? AND username = ? AND `active` = 1",
-      { app, username }
-    )
+    assert(type(username) == "string", "Invalid username")
 
-    for i = 1, #rows do
-      SendNotification(rows[i].phone_number, {
-        app   = socialAppNames[app],
-        title = L("BACKEND.MISC.VERIFIED"),
-      })
+    TriggerEvent("lb-phone:toggleVerified", app, username, verified)
+
+    if app ~= "twitter" then
+        verified = verified ~= 0
     end
-  end
 
-  return success
+    local success = MySQL.update.await(
+        ("UPDATE phone_%s_accounts SET verified = ? WHERE username = ?"):format(app),
+        { verified, username }
+    ) > 0
+
+    if success and verified and verifiedNotificationApps[app] then
+        local accounts = MySQL.query.await(
+            "SELECT phone_number FROM phone_logged_in_accounts WHERE app = ? AND username = ? AND `active` = 1",
+            { app, username }
+        )
+
+        for i = 1, #accounts do
+            SendNotification(accounts[i].phone_number, {
+                app = verifiedNotificationApps[app],
+                title = L("BACKEND.MISC.VERIFIED")
+            })
+        end
+    end
+
+    return success
 end
-ToggleVerified = toggleVerified
-exports("ToggleVerified", toggleVerified)
 
--- Check whether a social media account has the verified badge
+exports("ToggleVerified", ToggleVerified)
+
 exports("IsVerified", function(app, username)
-  app = resolveApp(app)
-  assert(socialApps[app],           "Invalid app")
-  assert(type(username) == "string", "Invalid username")
+    app = NormalizeVerifiedApp(app)
 
-  local result = MySQL.Sync.fetchScalar(
-    ("SELECT verified FROM phone_%s_accounts WHERE username=@username"):format(app),
-    { ["@username"] = username }
-  )
+    assert(type(username) == "string", "Invalid username")
 
-  return result or false
+    return MySQL.Sync.fetchScalar(
+        ("SELECT verified FROM phone_%s_accounts WHERE username=@username"):format(app),
+        { ["@username"] = username }
+    ) or false
 end)
 
--- Change the password for a social/account-switcher app account.
--- Pass silent=true to skip logout notifications (e.g. when called internally).
-local function changePassword(app, username, newPassword, silent)
-  assert(type(app) == "string",         "Invalid app")
-  local lowerApp = app:lower()
+function ChangePassword(app, username, password, skipLogout)
+    app = NormalizeAccountApp(app)
 
-  -- Resolve to canonical app name via appUsernameField or aliases
-  local resolvedApp = appUsernameField[lowerApp] and lowerApp
-    or (appAliases[lowerApp] and appAliases[lowerApp])
-    or lowerApp
-  local usernameField = appUsernameField[resolvedApp]
-  assert(usernameField,                     "Invalid app")
-  assert(type(username) == "string",        "Invalid username")
-  assert(type(newPassword) == "string",     "Invalid password")
+    assert(type(username) == "string", "Invalid username")
+    assert(type(password) == "string", "Invalid password")
 
-  local rowsAffected = MySQL.update.await(
-    ("UPDATE phone_%s_accounts SET password = ? WHERE %s = ?"):format(resolvedApp, usernameField),
-    { GetPasswordHash(newPassword), username }
-  )
+    local success = MySQL.update.await(
+        ("UPDATE phone_%s_accounts SET password = ? WHERE %s = ?"):format(app, usernameColumns[app]),
+        { GetPasswordHash(password), username }
+    ) > 0
 
-  if rowsAffected <= 0 then return false end
+    if not success then
+        return false
+    end
 
-  -- Unless silent, log out all active sessions and notify them
-  if not silent then
-    local canonicalName = accountSwitcherApps[resolvedApp]
-    NotifyLoggedInAccounts(canonicalName, username, {
-      title   = L("BACKEND.MISC.LOGGED_OUT_PASSWORD.TITLE"),
-      content = L("BACKEND.MISC.LOGGED_OUT_PASSWORD.DESCRIPTION"),
-    })
-    ClearActiveAccountsCache(canonicalName, username)
-    TriggerClientEvent("phone:logoutFromApp", -1, {
-      username = username,
-      app      = resolvedApp,
-      reason   = "password",
-    })
-    MySQL.update(
-      "DELETE FROM phone_logged_in_accounts WHERE app = ? AND username = ?",
-      { resolvedApp, username }
-    )
-  end
+    if not skipLogout then
+        NotifyLoggedInAccounts(accountAppNames[app], username, {
+            title = L("BACKEND.MISC.LOGGED_OUT_PASSWORD.TITLE"),
+            content = L("BACKEND.MISC.LOGGED_OUT_PASSWORD.DESCRIPTION")
+        })
 
-  return true
+        ClearActiveAccountsCache(accountAppNames[app], username)
+
+        TriggerClientEvent("phone:logoutFromApp", -1, {
+            username = username,
+            app = app,
+            reason = "password"
+        })
+
+        MySQL.update("DELETE FROM phone_logged_in_accounts WHERE app = ? AND username = ?", {
+            app,
+            username
+        })
+    end
+
+    return true
 end
-ChangePassword = changePassword
-exports("ChangePassword", changePassword)
 
--- Resolve a player source, identifier, or item ID to an equipped phone number
-exports("GetEquippedPhoneNumber", function(input)
-  -- If given a player source directly, look up their phone
-  if type(input) == "number" then
-    return GetEquippedPhoneNumber(input)
-  end
+exports("ChangePassword", ChangePassword)
 
-  -- Try to resolve a player source from a string identifier
-  local playerSource = GetSourceFromIdentifier and GetSourceFromIdentifier(input)
-  if playerSource then
-    return GetEquippedPhoneNumber(playerSource)
-  end
+exports("GetEquippedPhoneNumber", function(identifier)
+    if type(identifier) == "number" then
+        return GetEquippedPhoneNumber(identifier)
+    end
 
-  -- Fall back to a DB lookup by item ID
-  local table = Config.Item.Unique and "phone_last_phone" or "phone_phones"
-  return MySQL.scalar.await(
-    ("SELECT phone_number FROM %s WHERE id = ?"):format(table),
-    { input }
-  )
+    local source = GetSourceFromIdentifier and GetSourceFromIdentifier(identifier)
+
+    if source then
+        return GetEquippedPhoneNumber(source)
+    end
+
+    local tableName = Config.Item.Unique and "phone_last_phone" or "phone_phones"
+
+    return MySQL.scalar.await(
+        ("SELECT phone_number FROM %s WHERE id = ?"):format(tableName),
+        { identifier }
+    )
 end)

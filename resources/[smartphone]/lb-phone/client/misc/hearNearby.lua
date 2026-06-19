@@ -1,204 +1,192 @@
-if not Config.Voice.HearNearby then return end
+-- =====================================================
+--  lb-phone · client/misc/hearNearby.lua
+--  Deobfuscated by Eazy Fxap
+-- =====================================================
 
--- Map of liveStreamId → true for live streams the local player is currently near
+if not Config.Voice.HearNearby then
+    return
+end
+
 local nearbyLives = {}
 
--- List of player sources currently in proximity for active phone calls
-local nearbyCallSources = {}
+local function EnterLiveProximity(liveId)
+    if nearbyLives[liveId] then
+        return
+    end
 
--- Map of serverId → { stateBagKey = truthy } tracking remote players' relevant state
-local trackedPlayerState = {}
-
--- ─── enterLiveProximity ────────────────────────────────────────────────────────
--- Marks the local player as near a live stream and notifies the server.
-local function enterLiveProximity(liveId)
-    if not nearbyLives[liveId] then return end
     nearbyLives[liveId] = true
+
     debugprint("entered live", liveId)
     TriggerServerEvent("phone:instagram:enteredLiveProximity", liveId)
 end
 
--- ─── leaveLiveProximity ────────────────────────────────────────────────────────
--- Marks the local player as no longer near a live stream and notifies the server.
-local function leaveLiveProximity(liveId)
-    if not nearbyLives[liveId] then return end
+local function LeaveLiveProximity(liveId)
+    if not nearbyLives[liveId] then
+        return
+    end
+
     nearbyLives[liveId] = nil
+
     debugprint("left live 1", liveId)
     TriggerServerEvent("phone:instagram:leftLiveProximity", liveId)
 end
 
--- ─── phone:instagram:endLive ───────────────────────────────────────────────────
--- Server tells us a live stream has ended.
--- If endedByHost is falsy, simply clean up tracking; otherwise notify the server
--- that proximity has been left (with a flag indicating the stream ended).
-RegisterNetEvent("phone:instagram:endLive")
-AddEventHandler("phone:instagram:endLive", function(liveId, endedByHost)
-    if not endedByHost then
+RegisterNetEvent("phone:instagram:endLive", function(liveId, hostSource)
+    if not hostSource then
         nearbyLives[liveId] = nil
         return debugprint("left live 2", liveId)
     end
 
     if nearbyLives[liveId] then
         nearbyLives[liveId] = nil
-        TriggerServerEvent("phone:instagram:leftLiveProximity", endedByHost, true)
+        TriggerServerEvent("phone:instagram:leftLiveProximity", hostSource, true)
     end
 end)
 
--- ─── leaveCallProximity ────────────────────────────────────────────────────────
--- Removes a player source from the nearby call list and notifies the server.
--- Resets spatial audio for that source if SpatialAudio is enabled.
-local function leaveCallProximity(playerSource)
-    if not playerSource then return end
+local nearbyCallSources = {}
 
-    local found, idx = table.contains(nearbyCallSources, playerSource)
-    if not found then return end
-
-    debugprint("left proximity of", playerSource)
-    TriggerServerEvent("phone:phone:leftCallProximity", playerSource)
-
-    if Config.Voice.SpatialAudio then
-        ResetSpatialAudioSubmixForSource(playerSource)
+local function LeaveCallProximity(source)
+    if not source then
+        return
     end
 
-    table.remove(nearbyCallSources, idx)
+    local inProximity, index = table.contains(nearbyCallSources, source)
+
+    if not inProximity then
+        return
+    end
+
+    debugprint("left proximity of", source)
+    TriggerServerEvent("phone:phone:leftCallProximity", source)
+
+    if Config.Voice.SpatialAudio then
+        ResetSpatialAudioSubmixForSource(source)
+    end
+
+    table.remove(nearbyCallSources, index)
+
     return true
 end
 
--- ─── enterCallProximity ────────────────────────────────────────────────────────
--- Adds a player source to the nearby call list and notifies the server.
--- Sets up spatial audio for that source if SpatialAudio is enabled.
--- Returns early (no-op) if the source is already tracked OR if playerSource is nil.
-local function enterCallProximity(playerSource)
-    if not playerSource then return end
-
-    -- Already tracked — nothing to do
-    if table.contains(nearbyCallSources, playerSource) then return end
-
-    debugprint("entered proximity of", playerSource)
-    TriggerServerEvent("phone:phone:enteredCallProximity", playerSource)
-
-    if Config.Voice.SpatialAudio then
-        SetSpatialAudioSubmixForSource(playerSource)
+local function EnterCallProximity(source)
+    if not source or table.contains(nearbyCallSources, source) then
+        return
     end
 
-    nearbyCallSources[#nearbyCallSources + 1] = playerSource
+    debugprint("entered proximity of", source)
+    TriggerServerEvent("phone:phone:enteredCallProximity", source)
+
+    if Config.Voice.SpatialAudio then
+        SetSpatialAudioSubmixForSource(source)
+    end
+
+    nearbyCallSources[#nearbyCallSources + 1] = source
+
     return true
 end
 
--- ─── Proximity scan interval ───────────────────────────────────────────────────
--- Runs every 250ms while active. Checks every nearby player and:
---   • If they are live on Instagram and within 10 units → enterLiveProximity
---   • If they are on a speakerphone call (answered) and within 10 units → enterCallProximity
---   • If they are on any call and within 10 units → leaveCallProximity (ensure correct state)
---   • Outside 10 units: leave live / leave call accordingly
--- Also sweeps nearbyCallSources for players who are no longer on a call.
-local proximityInterval = Interval.new(Interval, function()
+local hearNearbyInterval = Interval:new(function()
     local nearbyPlayers = GetNearbyPlayers()
-    local myCoords      = GetEntityCoords(PlayerPedId())
+    local playerCoords = GetEntityCoords(PlayerPedId())
 
-    for _, playerData in ipairs(nearbyPlayers) do
-        local state       = Player(playerData.source).state
-        local onCallWith  = state.onCallWith
-        local isSpeaker   = onCallWith and state.speakerphone
-        local callAnswered = isSpeaker and state.callAnswered
-        local isLive      = state.instapicIsLive
+    for i = 1, #nearbyPlayers do
+        local nearbyPlayer = nearbyPlayers[i]
+        local state = Player(nearbyPlayer.source).state
+        local callOnSpeaker = state.onCallWith and state.speakerphone and state.callAnswered
+        local liveId = state.instapicIsLive
+        local distance = #(playerCoords - GetEntityCoords(nearbyPlayer.ped))
 
-        local dist = #(myCoords - GetEntityCoords(playerData.ped))
-
-        if dist <= 10 then
-            if isLive then
-                enterLiveProximity(isLive)
-            elseif callAnswered then
-                enterCallProximity(playerData.source)
-            elseif onCallWith then
-                leaveCallProximity(playerData.source)
+        if distance <= 10 then
+            if liveId then
+                EnterLiveProximity(liveId)
+            elseif callOnSpeaker then
+                EnterCallProximity(nearbyPlayer.source)
+            elseif state.onCallWith then
+                LeaveCallProximity(nearbyPlayer.source)
             end
-        else
-            if isLive then
-                leaveLiveProximity(isLive)
-            elseif onCallWith then
-                leaveCallProximity(playerData.source)
-            end
+        elseif liveId then
+            LeaveLiveProximity(liveId)
+        elseif state.onCallWith then
+            LeaveCallProximity(nearbyPlayer.source)
         end
     end
 
-    -- Clean up any tracked sources whose call has since ended
-    for _, trackedSource in ipairs(nearbyCallSources) do
-        if not Player(trackedSource).state.onCallWith then
-            leaveCallProximity(trackedSource)
+    for i = 1, #nearbyCallSources do
+        local source = nearbyCallSources[i]
+
+        if not Player(source).state.onCallWith then
+            LeaveCallProximity(source)
         end
     end
 end, 250, false)
 
-proximityInterval.onStart = function()
+hearNearbyInterval.onStart = function()
     debugprint("Hear nearby interval started")
 end
 
-proximityInterval.onStop = function()
+hearNearbyInterval.onStop = function()
     debugprint("Hear nearby interval stopped")
 
-    -- Notify the server that we've left proximity of every tracked call source
-    for _, trackedSource in ipairs(nearbyCallSources) do
-        debugprint("left proximity of", trackedSource)
-        TriggerServerEvent("phone:phone:leftCallProximity", trackedSource)
+    for i = 1, #nearbyCallSources do
+        local source = nearbyCallSources[i]
+
+        debugprint("left proximity of", source)
+        TriggerServerEvent("phone:phone:leftCallProximity", source)
+
         if Config.Voice.SpatialAudio then
-            ResetSpatialAudioSubmixForSource(trackedSource)
+            ResetSpatialAudioSubmixForSource(source)
         end
     end
+
     table.wipe(nearbyCallSources)
 
-    -- Also leave proximity of any live streams we were tracking
     for liveId in pairs(nearbyLives) do
-        leaveLiveProximity(liveId)
+        LeaveLiveProximity(liveId)
     end
 end
 
--- ─── State bag watchers ────────────────────────────────────────────────────────
--- Watch these four state bag keys on all players. When any of them becomes truthy
--- on a remote player, add that player to trackedPlayerState and start the interval.
--- When all tracked entries are cleared, stop the interval.
-local WATCHED_STATE_KEYS = { "onCallWith", "speakerphone", "callAnswered", "instapicIsLive" }
+local trackedStateNames = {
+    "onCallWith",
+    "speakerphone",
+    "callAnswered",
+    "instapicIsLive"
+}
 
-for _, stateKey in ipairs(WATCHED_STATE_KEYS) do
-    AddStateBagChangeHandler(stateKey, nil, function(bagName, key, value)
+local trackedPlayers = {}
+
+for i = 1, #trackedStateNames do
+    AddStateBagChangeHandler(trackedStateNames[i], nil, function(bagName, key, value)
         local serverId = GetPlayerDataFromStateBag(bagName)
 
-        -- Only track other players, not ourselves
-        if not serverId then return end
-        if serverId == GetPlayerServerId(PlayerId()) then return end
+        if not serverId or serverId == GetPlayerServerId(PlayerId()) then
+            return
+        end
 
-        -- Yield one frame so the state bag value is fully committed
         Wait(0)
 
         if value then
-            if not trackedPlayerState[serverId] then
-                trackedPlayerState[serverId] = {}
-            end
-            trackedPlayerState[serverId][key] = not not value
-            proximityInterval:toggle(true)
-        else
-            if trackedPlayerState[serverId] then
-                trackedPlayerState[serverId][key] = nil
-                -- Remove the player entry entirely if no tracked keys remain
-                if next(trackedPlayerState[serverId]) == nil then
-                    trackedPlayerState[serverId] = nil
-                end
+            trackedPlayers[serverId] = trackedPlayers[serverId] or {}
+            trackedPlayers[serverId][key] = true
+
+            hearNearbyInterval:toggle(true)
+        elseif trackedPlayers[serverId] then
+            trackedPlayers[serverId][key] = nil
+
+            if next(trackedPlayers[serverId]) == nil then
+                trackedPlayers[serverId] = nil
             end
         end
 
-        -- Stop the interval when no remote players have any relevant state active
-        if not next(trackedPlayerState) then
-            proximityInterval:toggle(false)
+        if not next(trackedPlayers) then
+            hearNearbyInterval:toggle(false)
         end
     end)
 end
 
--- ─── onPlayerDropped ───────────────────────────────────────────────────────────
--- Clean up tracked state for a player who disconnected.
-RegisterNetEvent("onPlayerDropped")
-AddEventHandler("onPlayerDropped", function(droppedServerId)
-    trackedPlayerState[droppedServerId] = nil
-    if not next(trackedPlayerState) then
-        proximityInterval:toggle(false)
+RegisterNetEvent("onPlayerDropped", function(source)
+    trackedPlayers[source] = nil
+
+    if not next(trackedPlayers) then
+        hearNearbyInterval:toggle(false)
     end
 end)

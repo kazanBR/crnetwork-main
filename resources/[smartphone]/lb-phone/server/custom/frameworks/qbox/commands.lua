@@ -32,11 +32,15 @@ QB.Commands.Add("toggleverified", "Toggle verified for a user profile", {
         ["instapic"] = true
     }
 
-    if not allowedApps[app:lower()] or (not username) or (verified ~= 1 and verified ~= 0) then
+    if not allowedApps[app:lower()] or (not username) then
         return
     end
 
-    ToggleVerified(app, username, verified == 1)
+    if type(verified) ~= "number" then
+        return
+    end
+
+    ToggleVerified(app, username, verified)
 end, "admin")
 
 QB.Commands.Add("changepassword", "Change a user's password", {
