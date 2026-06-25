@@ -1,7 +1,6 @@
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
-Bucket = false -- Coloque o número caso queira que troque o bucket.
 PointSeconds = 15 -- Número em segundos que vai contar a pontuação.
 Permission = "Admin" -- Permissão para utilizar o comando.
 DominationGoal = 1000 -- Pontuação máxima para ganhar a dominação.

@@ -120,7 +120,7 @@ RegisterCommand("Partys",function()
 	if Opened or IsPedInAnyVehicle(Ped) then return end
 
 	OpenNUI()
-	SendNUIMessage({ Action = "Open", Payload = { LocalPlayer.state.Passport, vSERVER.GetRooms() } })
+	SendNUIMessage({ Action = "Open", Payload = vSERVER.GetRooms() })
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MARKERS
@@ -154,13 +154,7 @@ end)
 -- GETMEMBERS
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("GetMembers",function(Data,Callback)
-	Callback(vSERVER.GetMembers(Data.Id))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- LEAVEROOM
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("LeaveRoom",function(_,Callback)
-	Callback(vSERVER.LeaveRoom())
+	Callback(vSERVER.GetMembers(Data.Room))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CREATEROOM
@@ -169,10 +163,10 @@ RegisterNUICallback("CreateRoom",function(Data,Callback)
 	Callback(vSERVER.CreateRoom(Data.Name,Data.Password))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- KICKROOM
+-- KICKMEMBER
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("KickRoom",function(Data,Callback)
-	Callback(vSERVER.KickRoom(Data.Room,Data.Passport))
+RegisterNUICallback("KickMember",function(Data,Callback)
+	Callback(vSERVER.KickMember(Data.Room,Data.Passport))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ENTERROOM

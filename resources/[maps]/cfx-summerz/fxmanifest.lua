@@ -5,10 +5,10 @@ this_is_a_map "yes"
 
 files {
 	"stream/*",
-	"stream/**/*",
-	"interiorproxies.meta"
+	"stream/**/*"
 }
 
 data_file "DLC_ITYP_REQUEST" "stream/*.ytyp"
 data_file "DLC_ITYP_REQUEST" "stream/**/*.ytyp"
-data_file "INTERIOR_PROXY_ORDER_FILE" "interiorproxies.meta"
+data_file "DLC_ITYP_REQUEST" "stream/MurmDecor/gcom_decor_pack.ytyp"
+data_file "DLC_ITYP_REQUEST" "stream/MurmDecor/murm_decor_pack.ytyp"

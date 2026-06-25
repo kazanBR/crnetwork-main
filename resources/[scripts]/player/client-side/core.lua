@@ -19,7 +19,7 @@ local Residuals = false
 local LastCameraView = 2
 local CruiseEnabled = false
 local CruiseVehicle = false
-local FeedCooldown = GetGameTimer()
+local KnockCooldown = {}
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- THREADROPE
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -325,23 +325,48 @@ RegisterKeyMapping("ControlCruiser","Ativar/Desativar controle de cruzeiro.","ke
 -- GAMEEVENTTRIGGERED
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("gameEventTriggered",function(Event,Message)
-	local CurrentTimer = GetGameTimer()
-	if Event ~= "CEventNetworkEntityDamage" or LocalPlayer.state.Prison or LocalPlayer.state.Banned or LocalPlayer.state.Arena or LocalPlayer.state.Death or LocalPlayer.state.Crawl or FeedCooldown > CurrentTimer then
+	if Event ~= "CEventNetworkEntityDamage" then
+		return false
+	end
+
+	local State = LocalPlayer.state
+	if State.Prison or State.Banned or State.Arena or State.Death or State.Crawl then
 		return false
 	end
 
 	local Ped = PlayerPedId()
-	local Weaponed = Message[7]
-	local Victim,Attacker = Message[1],Message[2]
-	if Victim ~= Ped or Victim == Attacker or not IsEntityAPed(Victim) or GetEntityHealth(Victim) > 100 then
+	local Victim = Message[1]
+	local Attacker = Message[2]
+	local WeaponHash = Message[7]
+	if not Victim or not Attacker or Victim == Attacker or Victim ~= Ped then
 		return false
 	end
 
-	local Index = NetworkGetPlayerIndexFromPed(Attacker)
-	if Index and NetworkIsPlayerConnected(Index) then
-		FeedCooldown = CurrentTimer + 10000
-		TriggerServerEvent("player:Death",GetPlayerServerId(Index),Weaponed)
+	if not IsEntityAPed(Victim) or not IsEntityAPed(Attacker) then
+		return false
 	end
+
+	if not IsPedAPlayer(Victim) or not IsPedAPlayer(Attacker) then
+		return false
+	end
+
+	if GetEntityHealth(Victim) > 100 then
+		return false
+	end
+
+	local VictimPlayer = NetworkGetPlayerIndexFromPed(Attacker)
+	local VictimServer = GetPlayerServerId(VictimPlayer)
+	if KnockCooldown[VictimServer] then
+		return false
+	end
+
+	TriggerServerEvent("player:Death",VictimServer,WeaponHash)
+	ClearEntityLastDamageEntity(Victim)
+	KnockCooldown[VictimServer] = true
+
+	SetTimeout(1000,function()
+		KnockCooldown[VictimServer] = nil
+	end)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PLAYER:ENTERTRUNK
@@ -392,7 +417,7 @@ AddEventHandler("player:checkTrunk",function()
 		SetEntityVisible(Ped,true)
 		DetachEntity(Ped,false,false)
 		LocalPlayer.state:set("Commands",false,true)
-		SetEntityCoords(Ped,Coords,false,false,false,false)
+		SetEntityCoordsNoOffset(Ped,Coords,false,false,false)
 
 		Trunked = false
 	end
@@ -405,7 +430,7 @@ AddEventHandler("player:enterTrash",function(Entity)
 		local Ped = PlayerPedId()
 		LastCameraView = GetFollowPedCamViewMode()
 
-		SetEntityCoords(Ped,Entity[4],false,false,false,false)
+		SetEntityCoordsNoOffset(Ped,Entity[4],false,false,false)
 		LocalPlayer.state:set("Commands",true,true)
 		FreezeEntityPosition(Ped,true)
 		SetEntityVisible(Ped,false)
@@ -442,7 +467,7 @@ AddEventHandler("player:checkTrash",function()
 		FreezeEntityPosition(Ped,false)
 		SetFollowPedCamViewMode(LastCameraView)
 		LocalPlayer.state:set("Commands",false,true)
-		SetEntityCoords(Ped,Trashed,false,false,false,false)
+		SetEntityCoordsNoOffset(Ped,Trashed,false,false,false)
 
 		Trashed = false
 	end
@@ -451,11 +476,36 @@ end)
 -- ANCHOR
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("player:Anchor",function(Vehicle)
-	if CanAnchorBoatHere(Vehicle) then
+	if not DoesEntityExist(Vehicle) then
+		return
+	end
+
+	if not NetworkHasControlOfEntity(Vehicle) then
+		NetworkRequestControlOfEntity(Vehicle)
+
+		local Timeout = GetGameTimer() + 10000
+		NetworkRequestControlOfEntity(Vehicle)
+		while not NetworkHasControlOfEntity(Vehicle) and GetGameTimer() < Timeout do
+			Wait(0)
+		end
+
+		if not NetworkHasControlOfEntity(Vehicle) then
+			TriggerEvent("Notify","Aviso","Sem controle da embarcação.","amarelo",5000)
+			return false
+		end
+	end
+
+	if GetBoatAnchor(Vehicle) then
 		SetBoatAnchor(Vehicle,false)
 		TriggerEvent("Notify","Sucesso","Embarcação desancorada.","verde",5000)
 	else
-		SetBoatAnchor(Vehicle,true)
-		TriggerEvent("Notify","Sucesso","Embarcação ancorada.","verde",5000)
+		if CanAnchorBoatHere(Vehicle) then
+			TriggerEvent("Notify","Sucesso","Embarcação ancorada.","verde",5000)
+			SetBoatRemainsAnchoredWhilePlayerIsDriver(Vehicle,true)
+			SetBoatLowLodAnchorDistance(Vehicle,100.0)
+			SetBoatAnchor(Vehicle,true)
+		else
+			TriggerEvent("Notify","Aviso","Não é possível ancorar aqui.","amarelo",5000)
+		end
 	end
 end)

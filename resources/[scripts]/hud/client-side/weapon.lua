@@ -26,7 +26,7 @@ AddEventHandler("hud:Weapon",function(Status,Name)
 					Max = Max - Min
 				end
 
-				SendNUIMessage({ Action = "Weapons", Payload = { Name = ItemName(Name), Current = Min, Stored = Max } })
+				SendNUIMessage({ Action = "Weapons", Payload = { Name = exports.vrp:ItemName(Name), Current = Min, Stored = Max } })
 			end
 
 			Wait(100)

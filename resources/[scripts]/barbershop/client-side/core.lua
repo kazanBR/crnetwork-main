@@ -87,7 +87,9 @@ function SetCamera(Name)
 			Wait(1000)
 			DestroyCam(GroundCamera)
 		end)
+
 		Wait(1000)
+
 		return true
 	else
 		local TemporaryCamera = CreateCamWithParams("DEFAULT_SCRIPTED_CAMERA",Coord,0,0,0,50.0)

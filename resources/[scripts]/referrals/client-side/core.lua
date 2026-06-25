@@ -11,11 +11,11 @@ vSERVER = Tunnel.getInterface("referrals")
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("referrals:Open",function()
 	if vSERVER.Check() then
-	 	SetNuiFocus(true,true)
-	 	TransitionToBlurred(1000)
-	 	SetCursorLocation(0.5,0.5)
-	 	TriggerEvent("hud:Active",false)
-	 	SendNUIMessage({ Action = "Open", Payload = Origin })
+		SetNuiFocus(true,true)
+		TransitionToBlurred(1000)
+		SetCursorLocation(0.5,0.5)
+		TriggerEvent("hud:Active",false)
+		SendNUIMessage({ Action = "Open", Payload = Origin })
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------

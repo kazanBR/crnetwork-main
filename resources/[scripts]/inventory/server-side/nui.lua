@@ -1,158 +1,126 @@
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MOUNT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Mount()
+function Creative.Mount(Bluepage)
 	local source = source
 	local Passport = vRP.Passport(source)
-	if Passport then
-		local Primary = {}
-		local Inv = vRP.Inventory(Passport)
-		for Slot,v in pairs(Inv) do
-			if v.amount <= 0 or not ItemExist(v.item) then
-				vRP.CleanSlot(Passport,Slot)
-			else
-				v.key = v.item
-
-				local Split = splitString(v.item)
-				local Item = Split[1]
-
-				if not v.desc then
-					if Item == "vehiclekey" and Split[3] then
-						local Consult = exports.oxmysql:single_async("SELECT * FROM vehicles WHERE Plate = ? LIMIT 1",{ Split[3] })
-						if Consult and VehicleExist(Consult.Vehicle) then
-							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
-						end
-					elseif Item == "propertys" and Split[2] then
-						local Consult = exports.oxmysql:single_async("SELECT * FROM propertys WHERE Serial = ? LIMIT 1",{ Split[2] })
-						if Consult then
-							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common>"
-						end
-					elseif ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
-						if Item == "identity" then
-							v.desc = "Passaporte: <rare>"..Dotted(Split[2]).."</rare><br>Nome: <rare>"..vRP.FullName(Split[2]).."</rare><br>Telefone: <rare>"..vRP.Phone(Split[2]).."</rare>"
-						else
-							v.desc = "Proprietário: <common>"..vRP.FullName(Split[2]).."</common>"
-						end
-					end
-				end
-
-				if Split[2] then
-					local Loaded = ItemLoads(v.item)
-					if Loaded then
-						v.charges = parseInt(Split[2] * (100 / Loaded))
-					end
-
-					if ItemDurability(v.item) then
-						v.durability = parseInt(os.time() - Split[2])
-						v.days = ItemDurability(v.item)
-					end
-				end
-
-				Primary[Slot] = v
-			end
-		end
-
-		return Primary,vRP.GetWeight(Passport)
+	if not Passport then
+		return false
 	end
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- BLUEPRINT
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Blueprint()
-	local source = source
-	local Passport = vRP.Passport(source)
-	if Passport and Users["Blueprints"][Passport] then
-		local Primary = {}
-		local Inv = vRP.Inventory(Passport)
-		for Slot,v in pairs(Inv) do
-			if v.amount <= 0 or not ItemExist(v.item) then
-				vRP.CleanSlot(Passport,Slot)
-			else
-				v.key = v.item
 
-				local Split = splitString(v.item)
-				local Item = Split[1]
+	local Primary = {}
+	local Secondary = {}
+	local Inventory = vRP.Inventory(Passport)
 
-				if not v.desc then
-					if Item == "vehiclekey" and Split[3] then
-						local Consult = exports.oxmysql:single_async("SELECT * FROM vehicles WHERE Plate = ? LIMIT 1",{ Split[3] })
-						if Consult and VehicleExist(Consult.Vehicle) then
-							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
-						end
-					elseif Item == "propertys" and Split[2] then
-						local Consult = exports.oxmysql:single_async("SELECT * FROM propertys WHERE Serial = ? LIMIT 1",{ Split[2] })
-						if Consult then
-							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common>"
-						end
-					elseif ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
+	for Slot,v in pairs(Inventory) do
+		if v.amount <= 0 or not exports.vrp:ItemExist(v.item) then
+			vRP.CleanSlot(Passport,Slot)
+		else
+			v.key = v.item
+
+			local Split = splitString(v.item)
+			local Item,First,Second = Split[1],Split[2],Split[3]
+
+			if not v.desc then
+				if Item == "vehiclekey" and Second then
+					local Consult = exports.oxmysql:single_async("SELECT Passport,Vehicle FROM vehicles WHERE Plate = ? LIMIT 1",{ Second })
+					if Consult and exports.vrp:VehicleExist(Consult.Vehicle) then
+						v.desc = ("Proprietário: <common>%s</common><br>Modelo: <common>%s</common><br>Placa: <common>%s</common>"):format(vRP.FullName(Consult.Passport),exports.vrp:VehicleName(Consult.Vehicle),Second)
+					end
+				elseif Item == "propertys" and First then
+					local Consult = exports.oxmysql:single_async("SELECT Passport FROM propertys WHERE Serial = ? LIMIT 1",{ First })
+					if Consult then
+						v.desc = ("Proprietário: <common>%s</common>"):format(vRP.FullName(Consult.Passport))
+					end
+				elseif exports.vrp:ItemNamed(Item) and First then
+					if vRP.Identity(First) then
 						if Item == "identity" then
-							v.desc = "Passaporte: <rare>"..Dotted(Split[2]).."</rare><br>Nome: <rare>"..vRP.FullName(Split[2]).."</rare><br>Telefone: <rare>"..vRP.Phone(Split[2]).."</rare>"
+							v.desc = ("Passaporte: <rare>%s</rare><br>Nome: <rare>%s</rare><br>Telefone: <rare>%s</rare>"):format(Dotted(First),vRP.FullName(First),vRP.Phone(First))
 						else
-							v.desc = "Proprietário: <common>"..vRP.FullName(Split[2]).."</common>"
+							v.desc = ("Proprietário: <common>%s</common>"):format(vRP.FullName(First))
 						end
 					end
 				end
+			end
 
-				if Split[2] then
-					local Loaded = ItemLoads(v.item)
-					if Loaded then
-						v.charges = parseInt(Split[2] * (100 / Loaded))
-					end
-
-					if ItemDurability(v.item) then
-						v.durability = parseInt(os.time() - Split[2])
-						v.days = ItemDurability(v.item)
-					end
+			if First then
+				local Loaded = exports.vrp:ItemLoads(v.item)
+				if Loaded then
+					v.charges = parseInt(First * (100 / Loaded))
 				end
 
-				Primary[Slot] = v
-			end
-		end
-
-		local Secondary = {}
-		for Item,v in pairs(Users.Blueprints[Passport]) do
-			if (not ItemExist(Item) or not ItemExist("blueprint_"..Item)) and Users.Blueprints[Passport][Item] then
-				Users.Blueprints[Passport][Item] = nil
-			else
-				local Calculated = CountTable(Secondary) + 1
-				local Number = tostring(Calculated)
-
-				Secondary[Number] = { key = Item, amount = 1 }
-
-				if Crafting[Item] then
-					Secondary[Number].required = {}
-
-					for Index,Amount in pairs(Crafting[Item].Required) do
-						local Rarity = ItemRarity(Index)
-
-						table.insert(Secondary[Number].required,"<"..Rarity..">"..Dotted(Amount).."x "..ItemName(Index).."</"..Rarity..">")
-					end
+				local Durability = exports.vrp:ItemDurability(v.item)
+				if Durability then
+					local CurrentTimer = os.time()
+					v.durability = parseInt(CurrentTimer - First)
+					v.days = Durability
 				end
 			end
-		end
 
-		return Primary,Secondary,vRP.GetWeight(Passport)
+			Primary[Slot] = v
+		end
 	end
+
+	if Bluepage then
+		local Blueprints = Users.Blueprints[Passport]
+		if not Blueprints then
+			Blueprints = {}
+			Users.Blueprints[Passport] = Blueprints
+		end
+
+		local Count = 0
+		for Item in pairs(Blueprints) do
+			local Data = exports.vrp:ItemExist(Item)
+			if Data and Data.Blueprint then
+				local Entry = { key = Item, amount = 1 }
+
+				local Craft = Crafting[Item]
+				if Craft and Craft.Required then
+					Entry.required = Craft.Required
+				end
+
+				Secondary[tostring(Count)] = Entry
+				Count = Count + 1
+			else
+				Blueprints[Item] = nil
+			end
+		end
+
+		return Primary,Secondary,vRP.GetWeight(Passport),vRP.InventorySlots(Passport)
+	end
+
+	return Primary,vRP.GetWeight(Passport),vRP.InventorySlots(Passport)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MISSIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Missions()
-	local List = {}
 	local source = source
 	local Passport = vRP.Passport(source)
-
 	if not Passport then
-		return List
+		return {}
 	end
 
-	local Consult = vRP.SimpleData(Passport,"Missions")
+	local List = {}
+	local Consult = vRP.SimpleData(Passport,"Missions") or {}
+
 	for Index,v in pairs(Missions) do
-		List[Index] = v
-		List[Index].Active = Consult and Consult[v.Code] and true or false
+		List[Index] = {
+			Xp = v.Xp,
+			Code = v.Code,
+			Title = v.Title,
+			Description = v.Description,
+			Required = v.Required,
+			Rewards = v.Rewards,
+			Active = Consult[v.Code] == true
+		}
 	end
 
-	return { vRP.GetExperience(Passport,"Missions"),TableLevel(),List }
+	return {
+		Experience = vRP.GetExperience(Passport,"Missions"),
+		Levels = TableLevel(),
+		List = List
+	}
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- RESCUEMISSION
@@ -160,40 +128,59 @@ end
 function Creative.RescueMission(Index)
 	local source = source
 	local Passport = vRP.Passport(source)
-
-	if not Passport or not Missions[Index] then
+	if not Passport then
 		return false
 	end
 
-	local Code = Missions[Index].Code
-	local Consult = vRP.SimpleData(Passport,"Missions")
-	if not Code or (Consult and Consult[Code]) then
+	local Mission = Missions[Index]
+	if not Mission then
 		return false
 	end
 
-	for Item,Amount in pairs(Missions[Index].Required) do
-		if not vRP.ConsultItem(Passport,Item,Amount) then
-			TriggerClientEvent("inventory:Notify",source,"Atenção","Precisa de <default>"..Dotted(Amount).."x "..ItemName(Item).."</default>.","vermelho")
+	local Code = Mission.Code
+	if not Code then
+		return false
+	end
+
+	local Consult = vRP.SimpleData(Passport,"Missions") or {}
+	if Consult and Consult[Code] then
+		return false
+	end
+
+	local Consume = {}
+	for Item,Amount in pairs(Mission.Required) do
+		local ConsultItem = vRP.ConsultItem(Passport,Item,Amount)
+		if not ConsultItem then
+			TriggerClientEvent("inventory:Notify",source,"Atenção","Precisa de <default>"..Dotted(Amount).."x "..exports.vrp:ItemName(Item).."</default>.","vermelho")
 			return false
 		end
+
+		Consume[#Consume + 1] = {
+			Item = ConsultItem.Item,
+			Amount = Amount
+		}
 	end
 
-	for Item,Amount in pairs(Missions[Index].Required) do
-		vRP.RemoveItem(Passport,Item,Amount)
+	for Number = 1,#Consume do
+		local v = Consume[Number]
+		vRP.RemoveItem(Passport,v.Item,v.Amount)
 	end
 
-	for Item,Amount in pairs(Missions[Index].Rewards) do
+	for Item,Amount in pairs(Mission.Rewards) do
 		vRP.GenerateItem(Passport,Item,Amount)
 	end
 
-	if Missions[Index].Xp then
-		vRP.PutExperience(Passport,"Missions",Missions[Index].Xp)
+	if Mission.Xp and Mission.Xp > 0 then
+		vRP.PutExperience(Passport,"Missions",Mission.Xp)
 	end
 
-	Consult = Consult or {}
 	Consult[Code] = true
 
-	vRP.Query("playerdata/SetData",{ Passport = Passport, Name = "Missions", Information = json.encode(Consult) })
+	vRP.Query("playerdata/SetData",{
+		Passport = Passport,
+		Name = "Missions",
+		Information = json.encode(Consult)
+	})
 
 	return true
 end
@@ -202,174 +189,112 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Crafting(Item,Amount,Target)
 	local source = source
-	local Target = tostring(Target)
-	local Amount = parseInt(Amount,true)
 	local Passport = vRP.Passport(source)
-	if Passport and Item and Target and Crafting[Item] then
-		if Amount > 1 and (ItemUnique(Item) or ItemLoads(Item)) then
-			Amount = 1
-		end
-
-		local Inventory = vRP.Inventory(Passport)
-		local Multiplier = Crafting[Item].Amount * Amount
-		if not vRP.MaxItens(Passport,Item,Multiplier) and vRP.CheckWeight(Passport,Item,Multiplier) and (not Inventory[target] or (Inventory[target] and Inventory[target].item == Item)) then
-			for Index,Value in pairs(Crafting[Item].Required) do
-				if not vRP.ConsultItem(Passport,Index,Value * Amount) then
-					TriggerClientEvent("inventory:Notify",source,"Atenção","Precisa de <default>"..Dotted(Value * Amount).."x "..ItemName(Index).."</default>.","vermelho")
-
-					return false
-				end
-			end
-
-			for Index,Value in pairs(Crafting[Item].Required) do
-				vRP.RemoveItem(Passport,vRP.InventoryItemAmount(Passport,Index)[2],Value * Amount)
-			end
-
-			vRP.GenerateItem(Passport,Item,Multiplier,false,Target)
-		end
+	if not Passport or not Item or not Crafting[Item] then
+		return false
 	end
 
-	TriggerClientEvent("inventory:Update",source)
+	Target = tostring(Target)
+	Amount = parseInt(Amount,true)
+	if Amount <= 0 then
+		return false
+	end
+
+	if Amount > 1 and (exports.vrp:ItemUnique(Item) or exports.vrp:ItemLoads(Item)) then
+		Amount = 1
+	end
+
+	local Craft = Crafting[Item]
+	local Multiplier = Craft.Amount * Amount
+	if vRP.MaxItens(Passport,Item,Multiplier) then
+		TriggerClientEvent("inventory:Notify",source,"Aviso","Limite atingido.","amarelo",5000)
+		return false
+	end
+
+	if not vRP.CheckWeight(Passport,Item,Multiplier) then
+		TriggerClientEvent("inventory:Notify",source,"Aviso","Mochila Sobrecarregada.","amarelo")
+		return false
+	end
+
+	local Inventory = vRP.Inventory(Passport)
+	if Inventory[Target] and Inventory[Target].item ~= Item then
+		return false
+	end
+
+	local ItemList = {}
+	for Index,Value in pairs(Craft.Required) do
+		local RequiredAmount = Value * Amount
+		local ConsultItem = vRP.ConsultItem(Passport,Index,RequiredAmount)
+		if not ConsultItem then
+			TriggerClientEvent("inventory:Notify",source,"Atenção","Precisa de <default>"..Dotted(RequiredAmount).."x "..exports.vrp:ItemName(Index).."</default>.","vermelho")
+			return false
+		end
+
+		ItemList[ConsultItem.Item] = RequiredAmount
+	end
+
+	for Index,Value in pairs(ItemList) do
+		vRP.RemoveItem(Passport,Index,Value)
+	end
+
+	vRP.GenerateItem(Passport,Item,Multiplier,false,Target)
+	TriggerClientEvent("inventory:Blueprint",source)
+
+	return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- BUYSKIN
+-- PURCHASESLOT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.BuySkin(Table)  
-    local source = source
-    local Number = tostring(Table.id)
-    local Passport = vRP.Passport(source)
-    if Passport and Number and Users.Skins[Passport] then
-        if not Users.Skins[Passport].List then
-            Users.Skins[Passport].List = {}
-        end
+function Creative.PurchaseSlot(Mode,Amount)
+	local source = source
+	local Passport = vRP.Passport(source)
+	if not Passport then
+		return false
+	end
 
-        if Users.Skins[Passport].List[Number] then return false end
+	local Amount = parseInt(Amount)
+	if Amount <= 0 then
+		return false
+	end
 
-        if not vRP.PaymentGems(Passport,Table.price) then
-            return TriggerClientEvent("Notify",source,"Atenção","<b>"..ItemName("gemstone").."s</b> insuficiente.","vermelho",5000,"bottom-center")
-        end
+	local Slots = Theme.inventory.slots
+	local CurrentSlot = vRP.InventorySlots(Passport)
+	if not Slots or CurrentSlot >= Slots.max or (CurrentSlot + Amount) > Slots.max then
+		return false
+	end
 
-        exports.discord:Embed("Weaponskins","**[TIPO]:** Compra\n".."**[PASSAPORTE]:** "..Passport.."\n".."**[NÚMERO]:** "..Number)
+	local PriceTable
+	local PaymentFunction
+	if Mode == "Bank" then
+		PriceTable = Slots.bank
+		PaymentFunction = vRP.PaymentBank
+	elseif Mode == "Gemstone" then
+		PriceTable = Slots.gemstone
+		PaymentFunction = vRP.PaymentGems
+	else
+		return false
+	end
 
-        Users.Skins[Passport].List[Number] = {
-            Weapon = Table.weapon,
-            Component = Table.component
-        }
+	local BaseIndex = CurrentSlot - Slots.default
+	if BaseIndex < 0 then
+		BaseIndex = 0
+	end
 
-        TriggerClientEvent("inventory:Skins",source,Users.Skins[Passport])
-        TriggerClientEvent("Notify",source,"Sucesso","Você comprou a skin <b>"..Table.name.."</b>.","verde",5000,"bottom-center")
+	local Valuation = 0
+	for Number = 1,Amount do
+		local Price = PriceTable[BaseIndex + Number]
+		if not Price then
+			return false
+		end
 
-        return true
-    end
+		Valuation = Valuation + Price
+	end
 
-    return false
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- INVENTORY:SKINPLAYER
------------------------------------------------------------------------------------------------------------------------------------------
-AddEventHandler("inventory:SkinPlayer",function(Passport,Number,Weapon,Component)
-    if not Users.Skins[Passport] then
-        Users.Skins[Passport] = vRP.UserData(Passport,"Skins")
-    end
-    
-    if not Users.Skins[Passport].List then
-        Users.Skins[Passport].List = {}
-    end
+	if Valuation <= 0 or not PaymentFunction(Passport,Valuation,true) then
+		return false
+	end
 
-    if not Users.Skins[Passport].List[Number] then 
-        Users.Skins[Passport].List[Number] = {
-            Weapon = Weapon,
-            Component = Component
-        }
-        
-        local source = vRP.Source(Passport)
-        if source then
-            TriggerClientEvent("inventory:Skins",source,Users.Skins[Passport])
-        else
-            vRP.Query("playerdata/SetData",{ Passport = Passport, Name = "Skins", Information = json.encode(Users.Skins[Passport]) })
-            Users["Skins"][Passport] = nil
-        end
-    end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- EXISTSKIN
------------------------------------------------------------------------------------------------------------------------------------------
-exports("ExistSkin",function(Passport,Number)
-    if not Users.Skins[Passport] then
-        Users.Skins[Passport] = vRP.UserData(Passport,"Skins")
-    end
+	vRP.UpgradeSlots(Passport,Amount)
 
-    if not Users.Skins[Passport].List then
-        Users.Skins[Passport].List = {}
-    end
-
-    if Users.Skins[Passport].List[Number] then
-        return true
-    end
-
-    return false
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- TRANSFERSKIN
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.TransferSkin(Target, Number, Weapon, Component)
-    local source = source
-    local Passport = vRP.Passport(source)
-    if Passport and not exports.inventory:ExistSkin(Target,Number) and not Passport == Target then
-        Users.Skins[Passport].List[Number] = nil
-        TriggerEvent("inventory:SkinPlayer",Target,Number,Weapon,Component)
-        TriggerClientEvent("inventory:Skins",source,Users.Skins[target])
-        TriggerClientEvent("inventory:Skins",source,Users.Skins[Passport])
-
-        return true
-    end
-    
-    return false
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- ACTIVESKIN
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.ActiveSkin(Weapon,Component)
-    local source = source
-    local Passport = vRP.Passport(source)
-    if Passport and Users.Skins[Passport] and not Users.Skins[Passport][Weapon] then
-        Users.Skins[Passport][Weapon] = Component
-        TriggerClientEvent("inventory:Skins",source,Users.Skins[Passport])
-        vCLIENT.StoreWeapon(source)
-
-        return true
-    end
-
-    return false
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- INACTIVESKIN
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.InactiveSkin(Weapon,Component)
-    if Weapon and Component then
-        local source = source
-        local Passport = vRP.Passport(source)
-        if Passport and Users.Skins[Passport] and Users.Skins[Passport][Weapon] then
-            Users.Skins[Passport][Weapon] = nil
-            TriggerClientEvent("inventory:Skins",source,Users.Skins[Passport])
-            vCLIENT.StoreWeapon(source)
-
-            return true
-        end
-    end
-
-    return false
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- USERSKINS
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.UserSkins()
-    local source = source
-    local Passport = vRP.Passport(source)
-
-    if Passport and Users.Skins[Passport] and Users.Skins[Passport].List then
-        return Users.Skins[Passport]
-    end
-
-    return { List = {} }
+	return true
 end

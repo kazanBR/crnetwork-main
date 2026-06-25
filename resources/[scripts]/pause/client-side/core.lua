@@ -20,7 +20,7 @@ local SalaryCooldown = GetGameTimer() + 60000
 CreateThread(function()
 	while true do
 		local Ped = PlayerPedId()
-		if not LocalPlayer.state.Banned and LocalPlayer.state.Active and GetEntityHealth(Ped) > 100 and not LocalPlayer.state.Arena and SalaryCooldown < GetGameTimer() then
+		if LocalPlayer.state.Active and GetEntityHealth(Ped) > 100 and not LocalPlayer.state.Arena and SalaryCooldown < GetGameTimer() then
 			Salarys = GetGameTimer() + 60000
 			SalaryTick = SalaryTick + 1
 
@@ -108,12 +108,6 @@ RegisterNUICallback("Settings",function(Data,Callback)
 	Callback("Ok")
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- STATISTICS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Statistics",function(Data,Callback)
-	Callback({ Statistics = vSERVER.Statistics(), Message = StatisticsMessage })
-end)
------------------------------------------------------------------------------------------------------------------------------------------
 -- MAP
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Map",function(Data,Callback)
@@ -181,7 +175,17 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("StoreBuy",function(Data,Callback)
 	if not LocalPlayer.state.Prison then
-		Callback(vSERVER.StoreBuy(Data.Index,Data.Amount))
+		Callback(vSERVER.StoreBuy(Data.Index,Data.Amount,Data.Passport))
+	else
+		Callback(false)
+	end
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- FURNITURESBUY
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("FurnituresBuy",function(Data,Callback)
+	if not LocalPlayer.state.Prison then
+		Callback(vSERVER.FurnituresBuy(Data.Index,Data.Amount,Data.Passport))
 	else
 		Callback(false)
 	end
@@ -287,4 +291,10 @@ end)
 RegisterNetEvent("pause:UpdateConfig")
 AddEventHandler("pause:UpdateConfig",function()
 	SendNUIMessage({ Action = "UpdateConfig" })
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- STATISTICS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("Statistics",function(Data,Callback)
+	Callback({ Statistics = vSERVER.Statistics(), Message = StatisticsMessage })
 end)

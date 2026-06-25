@@ -11,6 +11,7 @@ vSERVER = Tunnel.getInterface("target")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
+local Code = {}
 local Zones = {}
 local Models = {}
 local Focus = false
@@ -60,7 +61,15 @@ local Tyres = {
 	{ Bone = "wheel_lf", Index = 0 },
 	{ Bone = "wheel_rf", Index = 1 },
 	{ Bone = "wheel_lm", Index = 2 },
+	{ Bone = "wheel_lm1", Index = 2 },
+	{ Bone = "wheel_lm2", Index = 2 },
+	{ Bone = "wheel_lm3", Index = 2 },
+	{ Bone = "wheel_lm4", Index = 2 },
 	{ Bone = "wheel_rm", Index = 3 },
+	{ Bone = "wheel_rm1", Index = 3 },
+	{ Bone = "wheel_rm2", Index = 3 },
+	{ Bone = "wheel_rm3", Index = 3 },
+	{ Bone = "wheel_rm4", Index = 3 },
 	{ Bone = "wheel_lr", Index = 4 },
 	{ Bone = "wheel_rr", Index = 5 }
 }
@@ -486,7 +495,7 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 function TargetEnable()
 	local Ped = PlayerPedId()
-	if LocalPlayer.state.Arena or LocalPlayer.state.Cancel or LocalPlayer.state.ItemCamera or LocalPlayer.state.Freecam or LocalPlayer.state.Carry or not LocalPlayer.state.Active or LocalPlayer.state.Buttons or LocalPlayer.state.Commands or LocalPlayer.state.Handcuff or IsPauseMenuActive() or exports["lb-phone"]:IsOpen() or not MumbleIsConnected() or Sucess or IsPedInAnyVehicle(Ped) then
+	if LocalPlayer.state.Arena or LocalPlayer.state.Cancel or LocalPlayer.state.ItemCamera or LocalPlayer.state.Carry or not LocalPlayer.state.Active or LocalPlayer.state.Buttons or LocalPlayer.state.Commands or LocalPlayer.state.Handcuff or IsPauseMenuActive() or exports["lb-phone"]:IsOpen() or not MumbleIsConnected() or Sucess or IsPedInAnyVehicle(Ped) then
 		return false
 	end
 
@@ -503,7 +512,7 @@ function TargetEnable()
 		for Index,v in pairs(Zones) do
 			if #(Coords - Zones[Index].center) <= 5 then
 				SetDrawOrigin(Zones[Index].center.x,Zones[Index].center.y,Zones[Index].center.z)
-				DrawSprite("Textures","Normal",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,255,255,255,255)
+				DrawSprite("Textures","Normal",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,88,101,242,255)
 				ClearDrawOrigin()
 			end
 
@@ -516,9 +525,6 @@ function TargetEnable()
 
 				Sucess = true
 				while Sucess do
-					SetDrawOrigin(Zones[Index].center.x,Zones[Index].center.y,Zones[Index].center.z)
-					DrawSprite("Textures","Selected",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,255,255,255,255)
-					ClearDrawOrigin()
 					DisableActions()
 
 					if IsDisabledControlJustReleased(1,24) then
@@ -526,6 +532,10 @@ function TargetEnable()
 						SetNuiFocus(true,true)
 						Focus = true
 					end
+
+					SetDrawOrigin(Zones[Index].center.x,Zones[Index].center.y,Zones[Index].center.z)
+					DrawSprite("Textures","Normal",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,88,101,242,255)
+					ClearDrawOrigin()
 
 					local Ped = PlayerPedId()
 					local OtherCoords = RayCastGamePlayCamera()
@@ -553,6 +563,7 @@ function TargetEnable()
 			end
 
 			local Menu = {}
+			local CreativeCode = DecorGetBool(Entitys,"CREATIVE_CODE")
 			if IsEntityAVehicle(Entitys) and GetEntityHealth(Ped) > 100 and #(Coords - HitCoords) <= 1.0 then
 				local Network = nil
 				local Vehicle = GetLastDrivenVehicle()
@@ -596,7 +607,7 @@ function TargetEnable()
 								end
 
 								if not IsPedArmed(Ped,7) and GetVehicleDoorLockStatus(Entitys) <= 1 then
-									if VehicleWeight(Selected[2]) > 0 then
+									if exports.vrp:VehicleWeight(Selected[2]) > 0 then
 										table.insert(Menu,{ event = "trunkchest:openTrunk", label = "Abrir Porta-Malas", tunnel = "server" })
 									end
 
@@ -628,6 +639,10 @@ function TargetEnable()
 									table.insert(Menu,{ event = "player:checkTrunk", label = "Checar Porta-Malas", tunnel = "server" })
 									table.insert(Menu,{ event = "player:enterTrunk", label = "Entrar no Porta-Malas", tunnel = "client" })
 								end
+							end
+
+							if GetEntitySubmergedLevel(Entitys) > 0.5 then
+								table.insert(Menu,{ event = "garages:Delete", label = "Guardar", tunnel = "client" })
 							end
 
 							if GetEntityArchetypeName(Vehicle) == "flatbed" and Selected[2] ~= "flatbed" then
@@ -792,17 +807,89 @@ function TargetEnable()
 						Wait(1)
 					end
 				end
+			elseif CreativeCode then
+				for Select,v in pairs(Code) do
+					if not DoesEntityExist(Entitys) then
+						goto Continue
+					end
+
+					if v.Entity ~= Entitys then
+						goto Continue
+					end
+
+					local Model = GetEntityModel(Entitys)
+					if v.Model ~= Model then
+						goto Continue
+					end
+
+					local EntityCoords = GetEntityCoords(Entitys)
+					local DistanceToEntity = #(Coords - EntityCoords)
+					if DistanceToEntity <= 5.0 then
+						local MinDim,MaxDim = GetModelDimensions(Model)
+						local CenterOffset = (MinDim + MaxDim) / 2.0
+						local CenterWorld = GetOffsetFromEntityInWorldCoords(Entitys,CenterOffset.x,CenterOffset.y,CenterOffset.z)
+
+						SetDrawOrigin(CenterWorld.x,CenterWorld.y,CenterWorld.z)
+						DrawSprite("Textures","Normal",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,88,101,242,255)
+						ClearDrawOrigin()
+					end
+
+					if #(Coords - HitCoords) <= v.Distance then
+						Sucess = true
+						Selected = Select
+						SendNUIMessage({ Action = "Valid", Payload = v.options })
+
+						while Sucess do
+							DisableActions()
+
+							if IsDisabledControlJustReleased(1,24) then
+								SetCursorLocation(0.5,0.5)
+								SetNuiFocus(true,true)
+								Focus = true
+							end
+
+							local EntityCoords = GetEntityCoords(Entitys)
+							local MinDim,MaxDim = GetModelDimensions(Model)
+							local CenterOffset = (MinDim + MaxDim) / 2.0
+							local CenterWorld = GetOffsetFromEntityInWorldCoords(Entitys,CenterOffset.x,CenterOffset.y,CenterOffset.z)
+
+							SetDrawOrigin(CenterWorld.x,CenterWorld.y,CenterWorld.z)
+							DrawSprite("Textures","Normal",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,88,101,242,255)
+							ClearDrawOrigin()
+
+							local Ped = PlayerPedId()
+							local HitPos,HitEntity = RayCastGamePlayCamera()
+							local DistanceFromPed = #(GetEntityCoords(Ped) - HitPos)
+							if GetEntityType(HitEntity) == 0 or DistanceFromPed > 2.0 then
+								if Focus then
+									SendNUIMessage({ Action = "Close" })
+									SetNuiFocus(false,false)
+									Actived = false
+									Focus = false
+								else
+									SendNUIMessage({ Action = "Left" })
+								end
+
+								Sucess = false
+							end
+
+							Wait(1)
+						end
+					end
+
+					::Continue::
+				end
 			else
-				for Index in pairs(Models) do
+				for Index,v in pairs(Models) do
 					if DoesEntityExist(Entitys) and Index == GetEntityModel(Entitys) then
 						local OtherCoords = GetEntityCoords(Entitys)
 						if #(Coords - OtherCoords) <= 5 then
 							SetDrawOrigin(OtherCoords.x,OtherCoords.y,OtherCoords.z + 1)
-							DrawSprite("Textures","Normal",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,255,255,255,255)
+							DrawSprite("Textures","Normal",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,88,101,242,255)
 							ClearDrawOrigin()
 						end
 
-						if #(Coords - HitCoords) <= Models[Index].Distance then
+						if #(Coords - HitCoords) <= v.Distance then
 							if not IsEntityAMissionEntity(Entitys) then
 								SetEntityAsMissionEntity(Entitys,true,true)
 							end
@@ -812,17 +899,16 @@ function TargetEnable()
 								Network = NetworkGetNetworkIdFromEntity(Entitys)
 							end
 
-							Selected = { Entitys,Index,Network,GetEntityCoords(Entitys),IsEntityDead(Entitys) }
+							if v.shop then
+								Selected = v.shop
+							else
+								Selected = { Entitys,Index,Network,GetEntityCoords(Entitys),IsEntityDead(Entitys) }
+							end
 
-							SendNUIMessage({ Action = "Valid", Payload = Models[Index].options })
+							SendNUIMessage({ Action = "Valid", Payload = v.options })
 
 							Sucess = true
 							while Sucess do
-								local EntityCoords = GetEntityCoords(Entitys)
-
-								SetDrawOrigin(EntityCoords.x,EntityCoords.y,EntityCoords.z + 1)
-								DrawSprite("Textures","Selected",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,255,255,255,255)
-								ClearDrawOrigin()
 								DisableActions()
 
 								if IsDisabledControlJustReleased(1,24) then
@@ -830,6 +916,12 @@ function TargetEnable()
 									SetNuiFocus(true,true)
 									Focus = true
 								end
+
+								local EntityCoords = GetEntityCoords(Entitys)
+
+								SetDrawOrigin(EntityCoords.x,EntityCoords.y,EntityCoords.z + 1)
+								DrawSprite("Textures","Normal",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,88,101,242,255)
+								ClearDrawOrigin()
 
 								local Ped = PlayerPedId()
 								local OtherCoords,OtherEntity = RayCastGamePlayCamera()
@@ -965,12 +1057,49 @@ function RemCircleZone(Name)
 	end
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- ADDCODE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function AddCode(Selected,Options)
+	Code[Selected] = Options
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- REMCODE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function RemCode(Selected)
+	Code[Selected] = nil
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- ADDTARGETMODEL
 -----------------------------------------------------------------------------------------------------------------------------------------
 function AddTargetModel(Model,Options)
 	for _,v in pairs(Model) do
 		Models[v] = Options
 	end
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- REMTARGETMODEL
+-----------------------------------------------------------------------------------------------------------------------------------------
+function RemTargetModel(Model,Options)
+	for _,v in pairs(Model) do
+		Models[v] = nil
+	end
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ADDMODEL
+-----------------------------------------------------------------------------------------------------------------------------------------
+function AddModel(Model,Options)
+	Models[GetHashKey(Model)] = Options
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- REMOVEMODEL
+-----------------------------------------------------------------------------------------------------------------------------------------
+function RemoveModel(Model)
+	local Model = GetHashKey(Model)
+	if Models[Model] then
+		return false
+	end
+
+	Models[Model] = nil
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- LABELTEXT
@@ -998,9 +1127,14 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- EXPORTS
 -----------------------------------------------------------------------------------------------------------------------------------------
+exports("AddCode",AddCode)
+exports("RemCode",RemCode)
+exports("AddModel",AddModel)
 exports("LabelText",LabelText)
 exports("AddBoxZone",AddBoxZone)
+exports("RemoveModel",RemoveModel)
 exports("LabelOptions",LabelOptions)
 exports("RemCircleZone",RemCircleZone)
 exports("AddCircleZone",AddCircleZone)
 exports("AddTargetModel",AddTargetModel)
+exports("RemTargetModel",RemTargetModel)

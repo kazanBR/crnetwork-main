@@ -2,52 +2,59 @@
 -- INFORMATIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
 Informations = {
-	Emerald = {
-		Price = 500000,
-		Vault = 100,
-		Fridge = 25,
-		Gemstone = 25000
-	},
-	Ruby = {
-		Price = 750000,
-		Vault = 150,
-		Fridge = 40,
-		Gemstone = 37500
-	},
-	Sapphire = {
-		Price = 1000000,
-		Vault = 200,
-		Fridge = 50,
-		Gemstone = 50000
-	},
 	Amethyst = {
-		Price = 1500000,
-		Vault = 300,
-		Fridge = 75,
-		Gemstone = 75000
+		Price = 2000000,
+		Gemstone = 100000
 	},
 	Amber = {
 		Price = 2000000,
-		Vault = 400,
-		Fridge = 100,
 		Gemstone = 100000
 	},
-	Galpao = {
-		Price = 1000000,
-		Vault = 200,
-		Gemstone = 50000
+	Sapphire = {
+		Price = 2000000,
+		Gemstone = 100000
+	},
+	Emerald = {
+		Price = 2000000,
+		Gemstone = 100000
+	},
+	Topaz = {
+		Price = 2000000,
+		Gemstone = 100000
+	},
+	Opal = {
+		Price = 2000000,
+		Gemstone = 100000
+	},
+	Jade = {
+		Price = 2000000,
+		Gemstone = 100000
+	},
+	Pearl = {
+		Price = 2000000,
+		Gemstone = 100000
+	},
+	Aquamarine = {
+		Price = 2000000,
+		Gemstone = 100000
+	},
+	Turquoise = {
+		Price = 2000000,
+		Gemstone = 100000
+	},
+	Onyx = {
+		Price = 2000000,
+		Gemstone = 100000
 	}
 }
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- EXPORTS
 -----------------------------------------------------------------------------------------------------------------------------------------
 exports("Informations",function()
-	local Table = {}
+	local Interiors = {}
 	for Name in pairs(Informations) do
-		if Name ~= "Galpao" then
-			table.insert(Table,Name)
-		end
+		Interiors[#Interiors + 1] = Name
 	end
 
-	return #Table > 0 and Table[math.random(#Table)] or nil
+	return Interiors[math.random(1,#Interiors)]
 end)

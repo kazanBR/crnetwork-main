@@ -4,18 +4,16 @@
 vRP.Prepare("characters/Person","SELECT * FROM characters WHERE id = @Passport")
 vRP.Prepare("characters/Delete","UPDATE characters SET Deleted = 1 WHERE id = @Passport")
 vRP.Prepare("characters/SetSkin","UPDATE characters SET Skin = @Skin WHERE id = @Passport")
-vRP.Prepare("characters/UpdatePhone","UPDATE characters SET Phone = @Phone WHERE id = @Passport")
 vRP.Prepare("characters/UpdateDaily","UPDATE characters SET Daily = @Daily WHERE id = @Passport")
 vRP.Prepare("characters/AddBank","UPDATE characters SET Bank = Bank + @Bank WHERE id = @Passport")
 vRP.Prepare("characters/RemBank","UPDATE characters SET Bank = Bank - @Bank WHERE id = @Passport")
-vRP.Prepare("characters/ReducePrison","UPDATE characters SET Prison = Prison - @Prison WHERE id = @Passport")
+vRP.Prepare("characters/ReducePrison","UPDATE characters SET Prison = Prison - 1 WHERE id = @Passport")
 vRP.Prepare("characters/Characters","SELECT * FROM characters WHERE License = @License AND Deleted = 0")
 vRP.Prepare("characters/LastLogin","UPDATE characters SET Login = UNIX_TIMESTAMP() WHERE id = @Passport")
 vRP.Prepare("characters/UserLicense","SELECT * FROM characters WHERE id = @Passport AND License = @License")
 vRP.Prepare("characters/InsertPrison","UPDATE characters SET Prison = Prison + @Prison WHERE id = @Passport")
 vRP.Prepare("characters/Count","SELECT COUNT(License) FROM characters WHERE License = @License AND Deleted = 0")
 vRP.Prepare("characters/UpdateName","UPDATE characters SET Name = @Name, Lastname = @Lastname WHERE id = @Passport")
-vRP.Prepare("characters/UpdateSkinMontly","UPDATE characters SET SkinMontly = @SkinMontly WHERE id = @Passport")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- BANNED
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -58,14 +56,13 @@ vRP.Prepare("entitydata/SetData","INSERT INTO entitydata (Name,Information) VALU
 -----------------------------------------------------------------------------------------------------------------------------------------
 vRP.Prepare("vehicles/All","SELECT * FROM vehicles")
 vRP.Prepare("vehicles/plateVehicles","SELECT * FROM vehicles WHERE Plate = @Plate")
-vRP.Prepare("vehicles/Arrest","UPDATE vehicles SET Arrest = 1, Stolen = 0, StolenUntil = 0 WHERE Plate = @Plate")
+vRP.Prepare("vehicles/Arrest","UPDATE vehicles SET Arrest = 1 WHERE Plate = @Plate")
 vRP.Prepare("vehicles/UserVehicles","SELECT * FROM vehicles WHERE Passport = @Passport")
 vRP.Prepare("vehicles/Count","SELECT COUNT(Vehicle) FROM vehicles WHERE Vehicle = @Vehicle")
 vRP.Prepare("vehicles/PlateUsers","SELECT * FROM vehicles WHERE Plate = @Plate AND Vehicle = @Vehicle")
 vRP.Prepare("vehicles/removeVehicles","DELETE FROM vehicles WHERE Passport = @Passport AND Vehicle = @Vehicle")
 vRP.Prepare("vehicles/selectVehicles","SELECT * FROM vehicles WHERE Passport = @Passport AND Vehicle = @Vehicle")
 vRP.Prepare("vehicles/CoiloverVehicles","UPDATE vehicles SET Drift = 1 WHERE Vehicle = @Vehicle AND Plate = @Plate")
-vRP.Prepare("vehicles/UpdateSave","UPDATE vehicles SET Save = @Save WHERE Passport = @Passport AND Vehicle = @Vehicle")
 vRP.Prepare("vehicles/SeatbeltVehicles","UPDATE vehicles SET Seatbelt = 1 WHERE Plate = @Plate AND Vehicle = @Vehicle")
 vRP.Prepare("vehicles/PaymentArrest","UPDATE vehicles SET Arrest = 0 WHERE Passport = @Passport AND Vehicle = @Vehicle")
 vRP.Prepare("vehicles/plateVehiclesUpdate","UPDATE vehicles SET Plate = @NewPlate WHERE Plate = @Plate AND Vehicle = @Vehicle")
@@ -78,11 +75,6 @@ vRP.Prepare("vehicles/addVehicles","INSERT IGNORE INTO vehicles (Passport,Vehicl
 vRP.Prepare("vehicles/updateVehiclesRespawns","UPDATE vehicles SET Engine = @Engine, Body = @Body, Health = @Health, Fuel = @Fuel, Windows = @Windows, Nitro = @Nitro WHERE Passport = @Passport AND Vehicle = @Vehicle")
 vRP.Prepare("vehicles/rentalVehicles","INSERT IGNORE INTO vehicles (Passport,Vehicle,Plate,Weight,Work,Rental,Tax) VALUES (@Passport,@Vehicle,@Plate,@Weight,@Work,UNIX_TIMESTAMP() + (86400 * @Days),UNIX_TIMESTAMP() + (86400 * @Days))")
 vRP.Prepare("vehicles/updateVehicles","UPDATE vehicles SET Engine = @Engine, Body = @Body, Health = @Health, Fuel = @Fuel, Doors = @Doors, Windows = @Windows, Tyres = @Tyres, Nitro = @Nitro WHERE Passport = @Passport AND Vehicle = @Vehicle")
-vRP.Prepare("vehicles/updateVehiclesSave","UPDATE vehicles SET Engine = @Engine, Body = @Body, Health = @Health, Fuel = @Fuel, Doors = @Doors, Windows = @Windows, Tyres = @Tyres, Nitro = @Nitro, Save = @Save WHERE Passport = @Passport AND Vehicle = @Vehicle")
-vRP.Prepare("vehicles/SetStolen","UPDATE vehicles SET Stolen = @Stolen, StolenUntil = @StolenUntil WHERE Passport = @Passport AND Vehicle = @Vehicle")
-vRP.Prepare("vehicles/GetStolen","SELECT * FROM vehicles WHERE Stolen = @Passport AND StolenUntil > UNIX_TIMESTAMP()")
-vRP.Prepare("vehicles/GetOwnerByPlate","SELECT Passport, Vehicle FROM vehicles WHERE Plate = @Plate")
-vRP.Prepare("vehicles/AddStolenColumns","ALTER TABLE vehicles ADD COLUMN IF NOT EXISTS Stolen INT(11) DEFAULT 0, ADD COLUMN IF NOT EXISTS StolenUntil INT(11) DEFAULT 0")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CHESTS
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -101,13 +93,11 @@ vRP.Prepare("propertys/AllUser","SELECT * FROM propertys WHERE Passport = @Passp
 vRP.Prepare("propertys/Item","UPDATE propertys SET Item = Item + 1 WHERE Name = @Name")
 vRP.Prepare("propertys/Garage","UPDATE propertys SET Garage = @Garage WHERE Name = @Name")
 vRP.Prepare("propertys/Credentials","UPDATE propertys SET Serial = @Serial WHERE Name = @Name")
-vRP.Prepare("propertys/Vault","UPDATE propertys SET Vault = Vault + @Weight WHERE Name = @Name")
 vRP.Prepare("propertys/Transfer","UPDATE propertys SET Passport = @Passport WHERE Name = @Name")
 vRP.Prepare("propertys/Count","SELECT COUNT(Passport) FROM propertys WHERE Passport = @Passport")
-vRP.Prepare("propertys/Fridge","UPDATE propertys SET Fridge = Fridge + @Weight WHERE Name = @Name")
 vRP.Prepare("propertys/Check","SELECT * FROM propertys WHERE Name = @Name AND Passport = @Passport")
 vRP.Prepare("propertys/Tax","UPDATE propertys SET Tax = UNIX_TIMESTAMP() + (86400 * 30) WHERE Name = @Name")
-vRP.Prepare("propertys/Buy","INSERT INTO propertys (Name,Interior,Passport,Serial,Vault,Fridge,Tax) VALUES (@Name,@Interior,@Passport,@Serial,@Vault,@Fridge,UNIX_TIMESTAMP() + (86400 * 30))")
+vRP.Prepare("propertys/Buy","INSERT INTO propertys (Name,Interior,Passport,Serial,Tax) VALUES (@Name,@Interior,@Passport,@Serial,UNIX_TIMESTAMP() + (86400 * 30))")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- HWID
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -134,4 +124,12 @@ vRP.Prepare("summerz/PhoneInstagram","DELETE FROM phone_instagram_notifications 
 CreateThread(function()
 	vRP.Query("summerz/Playerdata")
 	vRP.Query("summerz/Entitydata")
+
+	-- LB-PHONE
+	vRP.Query("summerz/PhoneCalls")
+	vRP.Query("summerz/PhoneStorys")
+	vRP.Query("summerz/PhoneMessages")
+	vRP.Query("summerz/PhoneServices")
+	vRP.Query("summerz/PhoneInstagram")
+	vRP.Query("summerz/PhoneNotifications")
 end)

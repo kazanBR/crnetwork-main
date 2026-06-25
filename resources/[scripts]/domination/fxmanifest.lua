@@ -13,7 +13,7 @@ server_scripts {
 }
 
 shared_scripts {
-	"@vrp/config/Global.lua",
 	"@vrp/lib/Utils.lua",
+	"@vrp/config/Global.lua",
 	"shared-side/*"
 }

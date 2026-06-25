@@ -1,23 +1,4 @@
 -----------------------------------------------------------------------------------------------------------------------------------------
--- LOCKERITENS
------------------------------------------------------------------------------------------------------------------------------------------
-LockerItens = {
-	{ Item = "dollar", Chance = 225, Min = 3225, Max = 3775 },
-	{ Item = "dirtydollar", Chance = 225, Min = 3225, Max = 3775 },
-	{ Item = "promissory1000", Chance = 100, Min = 2, Max = 4 },
-	{ Item = "promissory2000", Chance = 100, Min = 1, Max = 3 },
-	{ Item = "promissory3000", Chance = 100, Min = 1, Max = 2 },
-	{ Item = "promissory4000", Chance = 100, Min = 1, Max = 2 },
-	{ Item = "promissory5000", Chance = 100, Min = 1, Max = 1 },
-	{ Item = "goldnecklace", Chance = 50, Min = 4, Max = 6 },
-	{ Item = "silverchain", Chance = 75, Min = 6, Max = 8 },
-	{ Item = "safependrive", Chance = 10, Min = 1, Max = 1 },
-	{ Item = "goldenjug", Chance = 3, Min = 1, Max = 1 },
-	{ Item = "goldenleopard", Chance = 2, Min = 1, Max = 1 },
-	{ Item = "platinum", Chance = 1, Min = 225, Max = 375 },
-	{ Item = "goldenlion", Chance = 1, Min = 1, Max = 1 }
-}
------------------------------------------------------------------------------------------------------------------------------------------
 -- OTHERITENS
 -----------------------------------------------------------------------------------------------------------------------------------------
 OtherItens = {
@@ -87,8 +68,6 @@ OtherItens = {
 	{ Item = "gauze", Chance = 100, Min = 2, Max = 4 },
 	{ Item = "soap", Chance = 50, Min = 1, Max = 1 },
 	{ Item = "alliance", Chance = 50, Min = 1, Max = 1 },
-	{ Item = "WEAPON_PISTOL_AMMO", Chance = 10, Min = 25, Max = 50 },
-	{ Item = "blueprint_WEAPON_SNSPISTOL", Chance = 2, Min = 1, Max = 1 },
 	{ Item = "scotchtape", Chance = 25, Min = 1, Max = 1 },
 	{ Item = "insulatingtape", Chance = 25, Min = 1, Max = 1 },
 	{ Item = "rammemory", Chance = 12, Min = 1, Max = 1 },
@@ -110,4 +89,111 @@ OtherItens = {
 	{ Item = "horsefigurine", Chance = 2, Min = 1, Max = 1 },
 	{ Item = "toothpaste", Chance = 35, Min = 1, Max = 1 },
 	{ Item = "television", Chance = 2, Min = 1, Max = 1 }
+}
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ROBBERYITENS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RobberyItens = {
+	p_v_43_safe_s = {
+		{ Item = "dollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "dirtydollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "promissory1000", Chance = 100, Min = 2, Max = 4 },
+		{ Item = "promissory2000", Chance = 100, Min = 1, Max = 3 },
+		{ Item = "promissory3000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory4000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory5000", Chance = 100, Min = 1, Max = 1 },
+		{ Item = "goldnecklace", Chance = 50, Min = 4, Max = 6 },
+		{ Item = "silverchain", Chance = 75, Min = 6, Max = 8 },
+		{ Item = "safependrive", Chance = 10, Min = 1, Max = 1 },
+		{ Item = "goldenjug", Chance = 3, Min = 1, Max = 1 },
+		{ Item = "goldenleopard", Chance = 2, Min = 1, Max = 1 },
+		{ Item = "platinum", Chance = 1, Min = 225, Max = 375 },
+		{ Item = "goldenlion", Chance = 1, Min = 1, Max = 1 }
+	},
+	prop_ld_int_safe_01 = {
+		{ Item = "dollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "dirtydollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "promissory1000", Chance = 100, Min = 2, Max = 4 },
+		{ Item = "promissory2000", Chance = 100, Min = 1, Max = 3 },
+		{ Item = "promissory3000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory4000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory5000", Chance = 100, Min = 1, Max = 1 },
+		{ Item = "goldnecklace", Chance = 50, Min = 4, Max = 6 },
+		{ Item = "silverchain", Chance = 75, Min = 6, Max = 8 },
+		{ Item = "safependrive", Chance = 10, Min = 1, Max = 1 },
+		{ Item = "goldenjug", Chance = 3, Min = 1, Max = 1 },
+		{ Item = "goldenleopard", Chance = 2, Min = 1, Max = 1 },
+		{ Item = "platinum", Chance = 1, Min = 225, Max = 375 },
+		{ Item = "goldenlion", Chance = 1, Min = 1, Max = 1 }
+	},
+	sf_prop_v_43_safe_s_bk_01a = {
+		{ Item = "dollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "dirtydollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "promissory1000", Chance = 100, Min = 2, Max = 4 },
+		{ Item = "promissory2000", Chance = 100, Min = 1, Max = 3 },
+		{ Item = "promissory3000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory4000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory5000", Chance = 100, Min = 1, Max = 1 },
+		{ Item = "goldnecklace", Chance = 50, Min = 4, Max = 6 },
+		{ Item = "silverchain", Chance = 75, Min = 6, Max = 8 },
+		{ Item = "safependrive", Chance = 10, Min = 1, Max = 1 },
+		{ Item = "goldenjug", Chance = 3, Min = 1, Max = 1 },
+		{ Item = "goldenleopard", Chance = 2, Min = 1, Max = 1 },
+		{ Item = "platinum", Chance = 1, Min = 225, Max = 375 },
+		{ Item = "goldenlion", Chance = 1, Min = 1, Max = 1 }
+	},
+	xm3_prop_xm3_safe_01a = {
+		{ Item = "dollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "dirtydollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "promissory1000", Chance = 100, Min = 2, Max = 4 },
+		{ Item = "promissory2000", Chance = 100, Min = 1, Max = 3 },
+		{ Item = "promissory3000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory4000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory5000", Chance = 100, Min = 1, Max = 1 },
+		{ Item = "goldnecklace", Chance = 50, Min = 4, Max = 6 },
+		{ Item = "silverchain", Chance = 75, Min = 6, Max = 8 },
+		{ Item = "safependrive", Chance = 10, Min = 1, Max = 1 },
+		{ Item = "goldenjug", Chance = 3, Min = 1, Max = 1 },
+		{ Item = "goldenleopard", Chance = 2, Min = 1, Max = 1 },
+		{ Item = "platinum", Chance = 1, Min = 225, Max = 375 },
+		{ Item = "goldenlion", Chance = 1, Min = 1, Max = 1 }
+	},
+	h4_prop_h4_safe_01a = {
+		{ Item = "dollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "dirtydollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "promissory1000", Chance = 100, Min = 2, Max = 4 },
+		{ Item = "promissory2000", Chance = 100, Min = 1, Max = 3 },
+		{ Item = "promissory3000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory4000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory5000", Chance = 100, Min = 1, Max = 1 },
+		{ Item = "goldnecklace", Chance = 50, Min = 4, Max = 6 },
+		{ Item = "silverchain", Chance = 75, Min = 6, Max = 8 },
+		{ Item = "safependrive", Chance = 10, Min = 1, Max = 1 },
+		{ Item = "goldenjug", Chance = 3, Min = 1, Max = 1 },
+		{ Item = "goldenleopard", Chance = 2, Min = 1, Max = 1 },
+		{ Item = "platinum", Chance = 1, Min = 225, Max = 375 },
+		{ Item = "goldenlion", Chance = 1, Min = 1, Max = 1 }
+	},
+	sf_prop_v_43_safe_s_gd_01a = {
+		{ Item = "dollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "dirtydollar", Chance = 225, Min = 3225, Max = 3775 },
+		{ Item = "promissory1000", Chance = 100, Min = 2, Max = 4 },
+		{ Item = "promissory2000", Chance = 100, Min = 1, Max = 3 },
+		{ Item = "promissory3000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory4000", Chance = 100, Min = 1, Max = 2 },
+		{ Item = "promissory5000", Chance = 100, Min = 1, Max = 1 },
+		{ Item = "goldnecklace", Chance = 50, Min = 4, Max = 6 },
+		{ Item = "silverchain", Chance = 75, Min = 6, Max = 8 },
+		{ Item = "safependrive", Chance = 10, Min = 1, Max = 1 },
+		{ Item = "goldenjug", Chance = 3, Min = 1, Max = 1 },
+		{ Item = "goldenleopard", Chance = 2, Min = 1, Max = 1 },
+		{ Item = "platinum", Chance = 1, Min = 225, Max = 375 },
+		{ Item = "goldenlion", Chance = 1, Min = 1, Max = 1 }
+	}
+}
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ROBBERYBLOCK
+-----------------------------------------------------------------------------------------------------------------------------------------
+RobberyBlock = {
+	hei_heist_bed_double_08 = true
 }

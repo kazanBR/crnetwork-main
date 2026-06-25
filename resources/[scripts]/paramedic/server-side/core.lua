@@ -30,7 +30,7 @@ AddEventHandler("paramedic:Adrenaline",function(Entitys)
 	local AdrenalinePlus = vRP.ConsultItem(Passport,"adrenalineplus")
 
 	if not Adrenaline and not AdrenalinePlus then
-		TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..ItemName("adrenaline").."</b>.","amarelo",5000)
+		TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..exports.vrp:ItemName("adrenaline").."</b>.","amarelo",5000)
 		return false
 	end
 
@@ -68,7 +68,7 @@ AddEventHandler("paramedic:Treatment",function(Entitys)
 				TriggerClientEvent("target:StartTreatment",Entitys)
 				TriggerClientEvent("Notify",source,"Centro Médico","Tratamento começou.","sangue",5000)
 			else
-				TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..ItemName("syringe0"..Identity["Blood"]).."</b>.","amarelo",5000)
+				TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..exports.vrp:ItemName("syringe0"..Identity["Blood"]).."</b>.","amarelo",5000)
 			end
 		end
 	end
@@ -118,7 +118,7 @@ AddEventHandler("paramedic:Bandage",function(Entitys)
 						vRPC.Destroy(source)
 					end)
 				else
-					TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..ItemName("gauze").."</b>.","amarelo",5000)
+					TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..exports.vrp:ItemName("gauze").."</b>.","amarelo",5000)
 				end
 			else
 				TriggerClientEvent("Notify",source,"Atenção","Nenhum ferimento encontrado.","amarelo",5000)

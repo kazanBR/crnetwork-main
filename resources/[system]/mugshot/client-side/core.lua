@@ -2,61 +2,96 @@
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Answers = {}
-local Mugshot = false
-local CurrentPromise = false
+local Mugshot = nil
+local CurrentPromise = nil
 local IsTakingMugshot = false
+local RequestId = 0
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- SAFEUNREGISTER
 -----------------------------------------------------------------------------------------------------------------------------------------
-function SafeUnregister()
-	if Mugshot then
+local function SafeUnregister()
+	if Mugshot and Mugshot ~= -1 then
 		UnregisterPedheadshot(Mugshot)
-		Mugshot = false
+		Mugshot = nil
 	end
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- WAITPEDREADY
+-----------------------------------------------------------------------------------------------------------------------------------------
+local function WaitPedReady(Ped)
+	local Timeout = GetGameTimer() + 4000
+
+	while GetGameTimer() < Timeout do
+		if DoesEntityExist(Ped) and not IsEntityDead(Ped) then
+			if HasPedHeadBlendFinished(Ped) then
+				return true
+			end
+		end
+
+		Wait(50)
+	end
+
+	return false
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GETMUGSHOTBASE64
 -----------------------------------------------------------------------------------------------------------------------------------------
 function GetMugShotBase64()
-	local Ped = PlayerPedId()
 	if IsTakingMugshot then
 		return false
 	end
 
 	IsTakingMugshot = true
 
-	local Cooldown = GetGameTimer() + 5000
-	while (IsPedHuman(Ped) and not HasPedHeadBlendFinished(Ped) and GetGameTimer() < Cooldown) do
-		Wait(50)
+	local Ped = PlayerPedId()
+	if not WaitPedReady(Ped) then
+		IsTakingMugshot = false
+		return false
 	end
 
 	SafeUnregister()
 
-	local Timeout = GetGameTimer() + 3000
 	local Handle = RegisterPedheadshot(Ped)
-	while (not Handle or not IsPedheadshotReady(Handle) or not IsPedheadshotValid(Handle)) and GetGameTimer() < Timeout do
-        Wait(10)
-    end
-
-	local Texture = "none"
-	if Handle and IsPedheadshotReady(Handle) and IsPedheadshotValid(Handle) then
-		Mugshot = Handle
-		Texture = GetPedheadshotTxdString(Handle)
+	if not Handle or Handle == -1 then
+		IsTakingMugshot = false
+		return false
 	end
 
+	local Timeout = GetGameTimer() + 3000
+	while GetGameTimer() < Timeout do
+		if IsPedheadshotReady(Handle) and IsPedheadshotValid(Handle) then
+			break
+		end
+
+		Wait(10)
+	end
+
+	if not IsPedheadshotReady(Handle) or not IsPedheadshotValid(Handle) then
+		UnregisterPedheadshot(Handle)
+		IsTakingMugshot = false
+		return false
+	end
+
+	Mugshot = Handle
+	local Texture = GetPedheadshotTxdString(Handle)
+
+	RequestId = RequestId + 1
+	local id = RequestId
+
 	SendNUIMessage({
-		id = Ped,
+		id = id,
 		type = "convert",
 		pMugShotTxd = Texture,
 		removeImageBackGround = false
 	})
 
 	CurrentPromise = promise.new()
-	Answers[Ped] = CurrentPromise
+	Answers[id] = CurrentPromise
 
 	local Result = Citizen.Await(CurrentPromise)
 
 	SafeUnregister()
+
 	IsTakingMugshot = false
 
 	return Result
@@ -65,31 +100,36 @@ end
 -- ANSWER
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Answer",function(Data,Callback)
-    local id = Data.Id
-    local p = Answers[id]
+	local id = Data.Id
+	local p = Answers[id]
 
-    if p then
-        SafeUnregister()
-        p:resolve(Data.Answer)
-        Answers[id] = nil
-    end
+	if p then
+		p:resolve(Data.Answer)
+		Answers[id] = nil
+	end
 
-    if Callback then
-    	Callback("Ok")
-    end
+	SafeUnregister()
+
+	if Callback then
+		Callback("Ok")
+	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- AVATAR
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Avatar",function(Data,Callback)
-    Callback(GetMugShotBase64())
+	local Result = GetMugShotBase64()
+
+	if Callback then
+		Callback(Result)
+	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ONRESOURCESTOP
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("onResourceStop",function(Resource)
-    if Resource == GetCurrentResourceName() then
-        SafeUnregister()
-        Answers = {}
-    end
+	if Resource == GetCurrentResourceName() then
+		SafeUnregister()
+		Answers = {}
+	end
 end)

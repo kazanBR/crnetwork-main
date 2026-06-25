@@ -4,8 +4,8 @@ lua54 "yes"
 creative_network "extended"
 
 client_scripts {
-	"lib/Utils.lua",
 	"config/Native.lua",
+
 	"client/base.lua",
 	"client/gui.lua",
 	"client/iplloader.lua",
@@ -16,11 +16,20 @@ client_scripts {
 }
 
 server_scripts {
-	"lib/Utils.lua",
-	
 	"modules/vrp.lua",
-	"modules/core.lua",
-	"modules/prepare.lua"
+	"modules/base.lua",
+	"modules/banned.lua",
+	"modules/daily.lua",
+	"modules/drugs.lua",
+	"modules/groups.lua",
+	"modules/identity.lua",
+	"modules/inventory.lua",
+	"modules/permissions.lua",
+	"modules/money.lua",
+	"modules/player.lua",
+	"modules/prepare.lua",
+	"modules/battlepass.lua",
+	"modules/vehicles.lua"
 }
 
 files {
@@ -31,8 +40,8 @@ files {
 }
 
 shared_scripts {
-	"config/Item.lua",
+	"lib/Utils.lua",
 	"config/Vehicle.lua",
-	"config/Global.lua",
-	"config/Drops.lua"
+	"config/Item.lua",
+	"config/Global.lua"
 }

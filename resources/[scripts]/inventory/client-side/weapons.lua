@@ -295,7 +295,12 @@ AddEventHandler("inventory:CreateWeapon",function(Name)
 	end
 
 	SetEntityCollision(Objects[WeaponName],false,false)
-	SetEntityCompletelyDisableCollision(Objects[WeaponName],false,true)
+	SetEntityCompletelyDisableCollision(Objects[WeaponName],true,true)
+	SetEntityNoCollisionEntity(Objects[WeaponName],Ped,true)
+	SetEntityDynamic(Objects[WeaponName],false)
+	SetEntityHasGravity(Objects[WeaponName],false)
+	FreezeEntityPosition(Objects[WeaponName],true)
+
 	AttachEntityToEntity(Objects[WeaponName],Ped,Bone,Data.x,Data.y,Data.z,Data.RotX,Data.RotY,Data.RotZ,true,true,false,false,2,true)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -356,8 +361,8 @@ AddEventHandler("inventory:verifyWeapon",function(Item)
 
 	if Weapon ~= "" then
 		local Ped = PlayerPedId()
-		local AmmoItem = WeaponAmmo(Item)
-		local AmmoHand = WeaponAmmo(Weapon)
+		local AmmoItem = exports.vrp:WeaponAmmo(Item)
+		local AmmoHand = exports.vrp:WeaponAmmo(Weapon)
 
 		local UsingWeapong = (Weapon == Name)
 		local TargetWeapon = UsingWeapong and Weapon or Name
@@ -444,7 +449,7 @@ function Creative.TakeWeapon(Name,Ammo,Components,Type,Skin)
 	local Ped = PlayerPedId()
 	local function EquipWeapon()
 		Weapon = Name
-		Ammos = WeaponAmmo(Weapon)
+		Ammos = exports.vrp:WeaponAmmo(Weapon)
 		TriggerEvent("Weapon",Weapon)
 		TriggerEvent("inventory:RemoveWeapon",Weapon)
 		GiveWeaponToPed(Ped,Weapon,Ammo,false,true)
@@ -455,7 +460,7 @@ function Creative.TakeWeapon(Name,Ammo,Components,Type,Skin)
 
 		if Components then
 			for Item in pairs(Components) do
-				local Component = WeaponAttach(SplitOne(Item),Weapon)
+				local Component = exports.vrp:WeaponAttach(SplitOne(Item),Weapon)
 				GiveWeaponComponentToPed(Ped,Weapon,Component)
 			end
 		end
@@ -484,11 +489,11 @@ function Creative.TakeWeapon(Name,Ammo,Components,Type,Skin)
 	TakeWeapon = false
 	LocalPlayer.state:set("Cancel",false,true)
 
-	if WeaponAmmo(Weapon) then
+	if exports.vrp:WeaponAmmo(Weapon) then
 		TriggerEvent("hud:Weapon",true,Weapon)
 	end
 
-	if (IsPedInAnyVehicle(Ped) and not ItemVehicle(Weapon)) or vSERVER.CheckExistWeapons(Weapon) then
+	if (IsPedInAnyVehicle(Ped) and not exports.vrp:ItemVehicle(Weapon)) or vSERVER.CheckExistWeapons(Weapon) then
 		TriggerEvent("inventory:CleanWeapons")
 	end
 

@@ -109,7 +109,7 @@ function Creative.Mount()
 		local Primary = {}
 		local Inv = vRP.Inventory(Passport)
 		for Slot,v in pairs(Inv) do
-			if v.amount <= 0 or not ItemExist(v.item) then
+			if v.amount <= 0 or not exports.vrp:ItemExist(v.item) then
 				vRP.CleanSlot(Passport,Slot)
 			else
 				v.key = v.item
@@ -120,15 +120,15 @@ function Creative.Mount()
 				if not v.desc then
 					if Item == "vehiclekey" and Split[3] then
 						local Consult = exports.oxmysql:single_async("SELECT * FROM vehicles WHERE Plate = ? LIMIT 1",{ Split[3] })
-						if Consult and VehicleExist(Consult.Vehicle) then
-							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
+						if Consult and exports.vrp:VehicleExist(Consult.Vehicle) then
+							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..exports.vrp:VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
 						end
 					elseif Item == "propertys" and Split[2] then
 						local Consult = exports.oxmysql:single_async("SELECT * FROM propertys WHERE Serial = ? LIMIT 1",{ Split[2] })
 						if Consult then
 							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common>"
 						end
-					elseif ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
+					elseif exports.vrp:ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
 						if Item == "identity" then
 							v.desc = "Passaporte: <rare>"..Dotted(Split[2]).."</rare><br>Nome: <rare>"..vRP.FullName(Split[2]).."</rare><br>Telefone: <rare>"..vRP.Phone(Split[2]).."</rare>"
 						else
@@ -138,14 +138,14 @@ function Creative.Mount()
 				end
 
 				if Split[2] then
-					local Loaded = ItemLoads(v.item)
+					local Loaded = exports.vrp:ItemLoads(v.item)
 					if Loaded then
 						v.charges = parseInt(Split[2] * (100 / Loaded))
 					end
 
-					if ItemDurability(v.item) then
+					if exports.vrp:ItemDurability(v.item) then
 						v.durability = parseInt(os.time() - Split[2])
-						v.days = ItemDurability(v.item)
+						v.days = exports.vrp:ItemDurability(v.item)
 					end
 				end
 
@@ -156,7 +156,7 @@ function Creative.Mount()
 		local Secondary = {}
 		local Inv = vRP.Inventory(Players[Passport])
 		for Slot,v in pairs(Inv) do
-			if v.amount <= 0 or not ItemExist(v.item) then
+			if v.amount <= 0 or not exports.vrp:ItemExist(v.item) then
 				vRP.CleanSlot(Players[Passport],Slot)
 			else
 				v.key = v.item
@@ -167,15 +167,15 @@ function Creative.Mount()
 				if not v.desc then
 					if Item == "vehiclekey" and Split[3] then
 						local Consult = exports.oxmysql:single_async("SELECT * FROM vehicles WHERE Plate = ? LIMIT 1",{ Split[3] })
-						if Consult and VehicleExist(Consult.Vehicle) then
-							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
+						if Consult and exports.vrp:VehicleExist(Consult.Vehicle) then
+							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..exports.vrp:VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
 						end
 					elseif Item == "propertys" and Split[2] then
 						local Consult = exports.oxmysql:single_async("SELECT * FROM propertys WHERE Serial = ? LIMIT 1",{ Split[2] })
 						if Consult then
 							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common>"
 						end
-					elseif ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
+					elseif exports.vrp:ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
 						if Item == "identity" then
 							v.desc = "Passaporte: <rare>"..Dotted(Split[2]).."</rare><br>Nome: <rare>"..vRP.FullName(Split[2]).."</rare><br>Telefone: <rare>"..vRP.Phone(Split[2]).."</rare>"
 						else
@@ -185,14 +185,14 @@ function Creative.Mount()
 				end
 
 				if Split[2] then
-					local Loaded = ItemLoads(v.item)
+					local Loaded = exports.vrp:ItemLoads(v.item)
 					if Loaded then
 						v.charges = parseInt(Split[2] * (100 / Loaded))
 					end
 
-					if ItemDurability(v.item) then
+					if exports.vrp:ItemDurability(v.item) then
 						v.durability = parseInt(os.time() - Split[2])
-						v.days = ItemDurability(v.item)
+						v.days = exports.vrp:ItemDurability(v.item)
 					end
 				end
 
@@ -200,7 +200,7 @@ function Creative.Mount()
 			end
 		end
 
-		return Primary,Secondary,vRP.GetWeight(Passport),vRP.GetWeight(Players[Passport])
+		return Primary,Secondary,vRP.GetWeight(Passport),vRP.GetWeight(Players[Passport]),vRP.InventorySlots(Passport),vRP.InventorySlots(Players[Passport])
 	end
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -235,12 +235,12 @@ function Creative.Store(Item,Slot,Amount,Target)
 	local Slot = tostring(Slot)
 	local Target = tostring(Target)
 	local Passport = vRP.Passport(source)
-	if not Passport or not Sourcers[Passport] or not vRP.DoesEntityExist(Sourcers[Passport]) then
+	if not Passport or not Sourcers[Passport] or not vRP.DoesEntityExist(Sourcers[Passport]) or exports.vrp:ItemLocked(Item) then
 		return false
 	end
 
 	local SelectPlayer = Players[Passport]
-	if not SelectPlayer or BlockDelete(Item) or vRP.MaxItens(SelectPlayer,Item,Amount) then
+	if not SelectPlayer or exports.vrp:BlockDelete(Item) or vRP.MaxItens(SelectPlayer,Item,Amount) then
 		TriggerClientEvent("inventory:Update",source)
 		return false
 	end
@@ -251,17 +251,18 @@ function Creative.Store(Item,Slot,Amount,Target)
 		return false
 	end
 
-	if not vRP.TakeItem(Passport,Item,Amount,true,Slot) then
-		TriggerClientEvent("inventory:Update",source)
-		return false
-	end
-
 	if not vRP.GiveItem(SelectPlayer,Item,Amount,true,Target) then
 		TriggerClientEvent("inventory:Update",source)
 		return false
+	else
+		if not vRP.TakeItem(Passport,Item,Amount,true,Slot) then
+			vRP.RemoveItem(SelectPlayer,Item,Amount)
+			TriggerClientEvent("inventory:Update",source)
+			return false
+		end
 	end
 
-	if ItemType(Item) == "Armamento" then
+	if exports.vrp:ItemType(Item) == "Armamento" then
 		TriggerClientEvent("inventory:Update",source)
 	end
 
@@ -275,12 +276,12 @@ function Creative.Take(Item,Slot,Target,Amount)
 	local Slot = tostring(Slot)
 	local Target = tostring(Target)
 	local Passport = vRP.Passport(source)
-	if not Passport or not Sourcers[Passport] or not vRP.DoesEntityExist(Sourcers[Passport]) then
+	if not Passport or not Sourcers[Passport] or not vRP.DoesEntityExist(Sourcers[Passport]) or exports.vrp:ItemLocked(Item) then
 		return false
 	end
 
 	local SelectPlayer = Players[Passport]
-	if not SelectPlayer or BlockDelete(Item) or vRP.MaxItens(Passport,Item,Amount) then
+	if not SelectPlayer or exports.vrp:BlockDelete(Item) or vRP.MaxItens(Passport,Item,Amount) then
 		TriggerClientEvent("inventory:Update",source)
 		return false
 	end
@@ -291,17 +292,18 @@ function Creative.Take(Item,Slot,Target,Amount)
 		return false
 	end
 
-	if not vRP.TakeItem(SelectPlayer,Item,Amount,true,Slot) then
-		TriggerClientEvent("inventory:Update",source)
-		return false
-	end
-
 	if not vRP.GiveItem(Passport,Item,Amount,true,Target) then
 		TriggerClientEvent("inventory:Update",source)
 		return false
+	else
+		if not vRP.TakeItem(SelectPlayer,Item,Amount,true,Slot) then
+			vRP.RemoveItem(Passport,Item,Amount)
+			TriggerClientEvent("inventory:Update",source)
+			return false
+		end
 	end
 
-	if ItemType(Item) == "Armamento" then
+	if exports.vrp:ItemType(Item) == "Armamento" then
 		TriggerClientEvent("inventory:Update",source)
 	end
 

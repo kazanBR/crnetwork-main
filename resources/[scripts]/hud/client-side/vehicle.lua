@@ -16,7 +16,7 @@ local ActualVehicle = nil
 -----------------------------------------------------------------------------------------------------------------------------------------
 local NitroFuel = 0
 local NitroActive = false
-local NitroButton = GetGameTimer()
+local NitroButton = GetNetworkTime()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- SEATBELT
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -27,12 +27,20 @@ local SeatbeltVelocity = vec3(0,0,0)
 -- TYRES
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Tyres = {
-	{ ["Bone"] = "wheel_lf", ["Index"] = 0 },
-	{ ["Bone"] = "wheel_rf", ["Index"] = 1 },
-	{ ["Bone"] = "wheel_lm", ["Index"] = 2 },
-	{ ["Bone"] = "wheel_rm", ["Index"] = 3 },
-	{ ["Bone"] = "wheel_lr", ["Index"] = 4 },
-	{ ["Bone"] = "wheel_rr", ["Index"] = 5 }
+	{ Bone = "wheel_lf", Index = 0 },
+	{ Bone = "wheel_rf", Index = 1 },
+	{ Bone = "wheel_lm", Index = 2 },
+	{ Bone = "wheel_lm1", Index = 2 },
+	{ Bone = "wheel_lm2", Index = 2 },
+	{ Bone = "wheel_lm3", Index = 2 },
+	{ Bone = "wheel_lm4", Index = 2 },
+	{ Bone = "wheel_rm", Index = 3 },
+	{ Bone = "wheel_rm1", Index = 3 },
+	{ Bone = "wheel_rm2", Index = 3 },
+	{ Bone = "wheel_rm3", Index = 3 },
+	{ Bone = "wheel_rm4", Index = 3 },
+	{ Bone = "wheel_lr", Index = 4 },
+	{ Bone = "wheel_rr", Index = 5 }
 }
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- THREADSYSTEM
@@ -42,7 +50,7 @@ CreateThread(function()
 
 	while true do
 		local TimeDistance = 999
-		if LocalPlayer["state"]["Active"] and Display then
+		if LocalPlayer["state"]["Active"] then
 			if not Loadout then
 				if LoadTexture("circleminimap") then
 					AddReplaceTexture("platform:/textures/graphics","radarmasksm","circleminimap","radarmasksm")
@@ -55,7 +63,6 @@ CreateThread(function()
 
 					repeat
 						Wait(100)
-
 						SetMinimapClipType(1)
 						SetBigmapActive(false,false)
 					until not IsBigmapActive()
@@ -87,7 +94,7 @@ CreateThread(function()
 						local Class = GetVehicleClass(Vehicle)
 						if (Class >= 0 and Class <= 7) or Class == 9 then
 							if IsControlPressed(1,21) then
-								if VSpeed <= 75.0 and not GetDriftTyresEnabled(Vehicle) then
+								if VSpeed <= 75 and not GetDriftTyresEnabled(Vehicle) then
 									SetDriftTyresEnabled(Vehicle,true)
 									SetVehicleReduceGrip(Vehicle,true)
 									SetReduceDriftVehicleSuspension(Vehicle,true)
@@ -117,66 +124,72 @@ CreateThread(function()
 						end
 					end
 
-					for Number,v in pairs(Spike) do
-						if #(GetEntityCoords(Vehicle) - v["Coords"]) <= 10 then
-							for Index = 1,#Tyres do
-								local BoneIndex = GetEntityBoneIndexByName(Vehicle,Tyres[Index]["Bone"])
-								local TirePosition = GetWorldPositionOfEntityBone(Vehicle,BoneIndex)
+					if next(Spike) then
+						for Number,v in pairs(Spike) do
+							if #(GetEntityCoords(Vehicle) - v.Coords) <= 10 then
+								for Index = 1,#Tyres do
+									local BoneIndex = GetEntityBoneIndexByName(Vehicle,Tyres[Index].Bone)
+									if BoneIndex ~= -1 then
+										local TirePosition = GetWorldPositionOfEntityBone(Vehicle,BoneIndex)
 
-								if IsPointInAngledArea(TirePosition,v["Min"],v["Max"],0.45,false,false) then
-									TriggerServerEvent("inventory:StoreObjects",Number)
-									VehicleTyreBurst(Vehicle)
+										if IsPointInAngledArea(TirePosition,v.Min,v.Max,0.45,false,false) then
+											TriggerServerEvent("inventory:StoreObjects",Number)
+											VehicleTyreBurst(Vehicle)
+										end
+									end
 								end
 							end
 						end
 					end
 				end
 
-				if ActualVehicle ~= Vehicle then
-					SendNUIMessage({ Action = "Vehicle", Payload = true })
-					ActualVehicle = Vehicle
-				end
+				if Display then
+					if ActualVehicle ~= Vehicle then
+						SendNUIMessage({ Action = "Vehicle", Payload = true })
+						ActualVehicle = Vehicle
+					end
 
-				if VEngineHealth ~= EngineHealth then
-					SendNUIMessage({ Action = "EngineHealth", Payload = VEngineHealth })
-					VEngineHealth = EngineHealth
-				end
+					if VEngineHealth ~= EngineHealth then
+						SendNUIMessage({ Action = "EngineHealth", Payload = VEngineHealth })
+						EngineHealth = VEngineHealth
+					end
 
-				if Locked ~= VLocked then
-					SendNUIMessage({ Action = "Locked", Payload = VLocked })
-					Locked = VLocked
-				end
+					if Locked ~= VLocked then
+						SendNUIMessage({ Action = "Locked", Payload = VLocked })
+						Locked = VLocked
+					end
 
-				if NitroActive then
-					SendNUIMessage({ Action = "Nitro", Payload = NitroFuel })
-					Nitro = NitroFuel
-				else
-					local EntityState = Entity(Vehicle).state.Nitro or 0
-					if EntityState ~= Nitro then
-						SendNUIMessage({ Action = "Nitro", Payload = EntityState })
-						Nitro = EntityState
+					if NitroActive then
+						SendNUIMessage({ Action = "Nitro", Payload = NitroFuel })
+						Nitro = NitroFuel
+					else
+						local EntityState = Entity(Vehicle).state.Nitro or 0
+						if EntityState ~= Nitro then
+							SendNUIMessage({ Action = "Nitro", Payload = EntityState })
+							Nitro = EntityState
+						end
+					end
+
+					if Fuel ~= VFuel then
+						SendNUIMessage({ Action = "Fuel", Payload = VFuel })
+						Fuel = VFuel
+					end
+
+					if Speed ~= VSpeed then
+						SendNUIMessage({ Action = "Speed", Payload = VSpeed })
+						Speed = VSpeed
+					end
+
+					if not GetIsVehicleEngineRunning(Vehicle) then
+						VRpm = 0.0
+					end
+
+					if Rpm ~= VRpm then
+						SendNUIMessage({ Action = "Rpm", Payload = VRpm })
+						Rpm = VRpm
 					end
 				end
-
-				if Fuel ~= VFuel then
-					SendNUIMessage({ Action = "Fuel", Payload = VFuel })
-					Fuel = VFuel
-				end
-
-				if Speed ~= VSpeed then
-					SendNUIMessage({ Action = "Speed", Payload = VSpeed })
-					Speed = VSpeed
-				end
-
-				if not GetIsVehicleEngineRunning(Vehicle) then
-					VRpm = 0.0
-				end
-
-				if Rpm ~= VRpm then
-					SendNUIMessage({ Action = "Rpm", Payload = VRpm })
-					Rpm = VRpm
-				end
-			else
+			elseif Display then
 				if ActualVehicle then
 					ActualVehicle = nil
 					SendNUIMessage({ Action = "Vehicle", Payload = false })
@@ -243,7 +256,7 @@ end
 -- NITROENABLE
 -----------------------------------------------------------------------------------------------------------------------------------------
 function NitroEnable()
-	if GetGameTimer() < NitroButton or IsPauseMenuActive() then
+	if GetNetworkTime() < NitroButton or IsPauseMenuActive() then
 		return false
 	end
 
@@ -257,7 +270,7 @@ function NitroEnable()
 		return false
 	end
 
-	NitroButton = GetGameTimer() + 1000
+	NitroButton = GetNetworkTime() + 1000
 
 	local VehicleState = Entity(Vehicle).state
 	NitroFuel = VehicleState.Nitro or 0

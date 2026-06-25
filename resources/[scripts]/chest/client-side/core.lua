@@ -11,16 +11,17 @@ vSERVER = Tunnel.getInterface("chest")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
-local Block = false
 local Opened = false
 local Animation = false
+local StoreBlock = false
+local TakeBlock = false
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CHESTS
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Chests = {
 	{ Name = "Policia", Coords = vec3(460.75,-996.82,30.16), Mode = "1" },
 	{ Name = "Paramedico", Coords = vec3(353.0,-1427.67,32.67), Mode = "2" },
-	{ Name = "Restaurante", Coords = vec3(-631.68,228.32,82.17), Mode = "2" },
+	{ Name = "Ballas", Coords = vec3(-626.63,180.34,66.69), Mode = "4" },
 	{ Name = "Lester", Coords = vec3(1275.21,-1712.12,54.64), Mode = "2" }
 }
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -59,6 +60,19 @@ local Labels = {
 			tunnel = "client",
 			service = "Tray"
 		}
+	},
+	["4"] = {
+		{
+			event = "chest:Open",
+			label = "Abrir",
+			tunnel = "client",
+			service = "Normal"
+		},{
+			event = "chest:Open",
+			label = "Metas",
+			tunnel = "client",
+			service = "Goals"
+		}
 	}
 }
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -82,25 +96,45 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("chest:Open")
 AddEventHandler("chest:Open",function(Name,Mode,Item,Blocked,Force)
-	if vSERVER.Permissions(Name,Mode,Item) and GetEntityHealth(PlayerPedId()) > 100 then
-		if Blocked or SplitBoolean(Name,"Helicrash",":") or SplitBoolean(Name,"Halloween",":") then
-			Block = true
-		end
-
-		Opened = Name
-
-		if Mode ~= "Item" then
-			Animation = true
-			vRP.playAnim(false,{"amb@prop_human_bum_bin@base","base"},true)
-		end
-
-		TriggerEvent("inventory:Open",{
-			Type = "Chest",
-			Resource = "chest",
-			Force = Force,
-			Right = "Baú"
-		})
+	if not Name or not Mode then
+		return false
 	end
+
+	if Mode == "Goals" then
+		Name = "Painel:Goals:"..SplitOne(Name,":")
+		TakeBlock = true
+	end
+
+	local Ped = PlayerPedId()
+	if not vSERVER.Permissions(Name,Mode,Item) or GetEntityHealth(Ped) <= 100 then
+		return false
+	end
+
+	if Blocked then
+		StoreBlock = true
+	else
+		local BlockedTypes = { "Helicrash","Halloween","Christmas" }
+		for Number = 1,#BlockedTypes do
+			if SplitBoolean(Name,BlockedTypes[Number],":") then
+				StoreBlock = true
+				break
+			end
+		end
+	end
+
+	Opened = Name
+
+	if Mode ~= "Item" then
+		Animation = true
+		vRP.playAnim(false,{"amb@prop_human_bum_bin@base","base"},true)
+	end
+
+	TriggerEvent("inventory:Open", {
+		Type = "Chest",
+		Resource = "chest",
+		Force = Force,
+		Right = "Baú"
+	})
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CHEST:ITEM
@@ -133,7 +167,8 @@ AddEventHandler("inventory:Close",function(Force)
 		end
 
 		Opened = false
-		Block = false
+		TakeBlock = false
+		StoreBlock = false
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -146,8 +181,9 @@ AddEventHandler("inventory:Closed",function(Name)
 			vRP.Destroy()
 		end
 
-		Block = false
 		Opened = false
+		TakeBlock = false
+		StoreBlock = false
 		TriggerEvent("inventory:Close")
 	end
 end)
@@ -155,26 +191,37 @@ end)
 -- TAKE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Take",function(Data,Callback)
-	Callback(vSERVER.Take(Data.item,Data.slot,Data.amount,Data.target))
+	Callback(vSERVER.Take(Data.Item,Data.Slot,Data.Amount,Data.Target,TakeBlock))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- STORE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Store",function(Data,Callback)
-	Callback(vSERVER.Store(Data.item,Data.slot,Data.amount,Data.target,Block))
+	Callback(vSERVER.Store(Data.Item,Data.Slot,Data.Amount,Data.Target,StoreBlock))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- UPDATE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Update",function(Data,Callback)
-	Callback(vSERVER.Update(Data.slot,Data.target,Data.amount))
+	Callback(vSERVER.Update(Data.Slot,Data.Target,Data.Amount))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MOUNT
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Mount",function(Data,Callback)
-	local Primary,Secondary,PrimaryWeight,SecondaryWeight,Slots = vSERVER.Mount()
+	local Primary,Secondary,PrimaryWeight,SecondaryWeight,PrimarySlots,SecondarySlots = vSERVER.Mount()
 	if Primary then
-		Callback({ Primary = Primary, Secondary = Secondary, PrimaryMaxWeight = PrimaryWeight, SecondaryMaxWeight = SecondaryWeight, SecondarySlots = math.max(CountTable(Secondary),Slots) })
+		Callback({
+			Primary = {
+				Data = Primary,
+				MaxWeight = PrimaryWeight,
+				Slots = PrimarySlots or Theme.inventory.slots.default
+			},
+			Secondary = {
+				Data = Secondary,
+				MaxWeight = SecondaryWeight,
+				Slots = SecondarySlots or Theme.inventory.slots.default
+			}
+		})
 	end
 end)

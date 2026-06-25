@@ -1,69 +1,59 @@
 -----------------------------------------------------------------------------------------------------------------------------------------
--- VARIABLES
------------------------------------------------------------------------------------------------------------------------------------------
-ItemList = {}
------------------------------------------------------------------------------------------------------------------------------------------
--- THREADSTARTSERVER
------------------------------------------------------------------------------------------------------------------------------------------
-CreateThread(function()
-	for Index,v in pairs(List) do
-		local Result = {}
-		for Key,Recipe in pairs(v.List) do
-			Result[#Result + 1] = {
-				key = Key,
-				price = Recipe.Amount,
-				required = Recipe.Required
-			}
-		end
-
-		ItemList[Index] = Result
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
 -- LOCATION
 -----------------------------------------------------------------------------------------------------------------------------------------
 Location = {
 	{
+		Unique = "CR01",
 		Coords = vec3(1272.51,-1713.05,54.63),
 		Mode = "Lester",
 		Circle = 0.1
 	},{
+		Unique = "CR02",
 		Coords = vec3(-345.63,-124.74,38.95),
 		Mode = "Mecanico",
 		Circle = 0.1
 	},{
+		Unique = "CR03",
 		Coords = vec3(-1141.22,-2004.85,13.12),
 		Mode = "Mecanico",
 		Circle = 0.1
 	},{
+		Unique = "CR04",
 		Coords = vec3(1189.48,2636.54,38.34),
 		Mode = "Mecanico",
 		Circle = 0.1
 	},{
+		Unique = "CR05",
 		Coords = vec3(97.65,6619.09,32.38),
 		Mode = "Mecanico",
 		Circle = 0.1
 	},{
+		Unique = "CR06",
 		Coords = vec3(738.23,-1077.99,22.13),
 		Mode = "Mecanico",
 		Circle = 0.1
 	},{
+		Unique = "CR07",
 		Coords = vec3(-216.72,-1318.99,30.81),
 		Mode = "Mecanico",
 		Circle = 0.1
 	},{
+		Unique = "CR08",
 		Coords = vec3(1110.8,-2008.75,31.43),
 		Mode = "Furnace",
 		Circle = 0.1
 	},{
+		Unique = "CR09",
 		Coords = vec3(-629.45,222.9,81.97),
 		Mode = "FoodRestaurante",
 		Circle = 0.1
 	},{
+		Unique = "CR10",
 		Coords = vec3(-627.69,222.96,82.1),
 		Mode = "DrinkRestaurante",
 		Circle = 0.1
 	},{
+		Unique = "CR11",
 		Coords = vec3(87.62,-1670.45,29.18),
 		Mode = "Essence",
 		Circle = 0.5

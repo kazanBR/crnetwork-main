@@ -9,207 +9,293 @@ vRP = Proxy.getInterface("vRP")
 -----------------------------------------------------------------------------------------------------------------------------------------
 Creative = {}
 Tunnel.bindInterface("domination",Creative)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- TUNNEL
+-----------------------------------------------------------------------------------------------------------------------------------------
 vKEYBOARD = Tunnel.getInterface("keyboard")
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
-local Active = {}
-local Points = {}
-local Multiplier = {}
------------------------------------------------------------------------------------------------------------------------------------------
--- DOMINATION
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterCommand(Command,function(source,Message)
-    local Passport = vRP.Passport(source)
-    if Passport and vRP.HasGroup(Passport,"Admin",1) then
-        local Permissions = {}
+local Scoreboard = {}
+local ActivePlayers = {}
+local PermissionPlayers = {}
+local CurrentLocation = false
+------------------------------------------------------------------------------------------------------------------------------------------
+-- SYNCSCOREBOARD
+------------------------------------------------------------------------------------------------------------------------------------------
+function SyncScoreboard()
+	for _,v in pairs(ActivePlayers) do
+		async(function()
+			TriggerClientEvent("domination:Update",v.Source,Scoreboard,DominationGoal)
+		end)
+	end
+end
+------------------------------------------------------------------------------------------------------------------------------------------
+-- SYNCFINISH
+------------------------------------------------------------------------------------------------------------------------------------------
+function SyncFinish(Message,Color)
+	for _,v in pairs(ActivePlayers) do
+		async(function()
+			TriggerClientEvent("Notify",v.Source,"Dominação",Message,Color,10000)
+		end)
+	end
+end
+------------------------------------------------------------------------------------------------------------------------------------------
+-- ENDDOMINATION
+------------------------------------------------------------------------------------------------------------------------------------------
+function EndDomination(Winner)
+	if Winner then
+		SyncFinish("<b>"..(Groups[Winner].Name or Winner).."</b> atingiu <b>"..DominationGoal.." Pontos</b> e ganhou.","verde")
+		exports.discord:Embed("Domination","**[LOCAL]:** "..CurrentLocation.."\n**[GRUPO]:** "..Winner)
+		TriggerClientEvent("domination:Finish",-1,Winner)
 
-        for Permission in pairs(Locations) do
-            if vRP.UserDomination(Passport) then
-            table.insert(Permissions,Permission)
-            end
-        end
+		local Permission = Locations[CurrentLocation] and Locations[CurrentLocation].Permission
+		if Permission then
+			local Consult = exports.oxmysql:query_async("SELECT * FROM chests WHERE Permission LIKE ?",{ Permission.."%" })
+			for _,v in pairs(Consult) do
+				if v.Permission and SplitOne(v.Permission) == Permission and vRP.GetSrvData("Chest:"..v.Name,true) then
+					vRP.RemSrvData("Chest:"..v.Name)
+				end
 
-        table.insert(Permissions,"Finalizar")
-        table.sort(Permissions,function(a,b) return a < b end)
+				if v.id then
+					exports.oxmysql:query_async("DELETE FROM chests WHERE id = ?",{ v.id })
+				end
+			end
 
-        local Keyboard = vKEYBOARD.Instagram(source,Permissions)
-        if Keyboard then
-            local Permission = Keyboard[1]
+			local Data = vRP.GetSrvData("Permissions:"..Permission,true)
+			if Data then
+				for OtherPassport in pairs(Data) do
+					local OtherSource = vRP.Source(OtherPassport)
+					if OtherSource then
+						vRP.ServiceLeave(OtherSource,OtherPassport,Permission,true)
+					end
+				end
 
-            if Permission == "Finalizar" then
-                TriggerClientEvent("Notify",source,"Atenção","Dominação cancelada.","amarelo",5000)
+				vRP.RemSrvData("Permissions:"..Permission)
+			end
 
-                for Index, v in pairs(Active) do
-                    if Active[Index] then
-                        TriggerClientEvent("Notify",vRP.Source(Index),"Dominação","Um membro da administração finalizou.","amarelo",10000)
-                        if Bucket then
-                            exports.vrp:Bucket(vRP.Source(Index),"Exit")
-                        end
-                        Active[Index] = nil
-                    end
-                end
-                TriggerClientEvent("domination:Finish",-1)
+			exports.oxmysql:query_async("DELETE FROM permissions WHERE Permission = ?",{ Permission })
 
-                if Select and type(Select) == "table" then
-                    for Index, v in pairs(Select) do
-                        Select[Index] = nil
-                    end
-                end
-                
-                for Index, v in pairs(Multiplier) do
-                    Multiplier[Index] = nil
-                end
+			local Data = vRP.DataGroups(Winner)
+			for Passport,Level in pairs(Data) do
+				local NewLevel = (Level <= 2) and Level or 3
+				vRP.SetPermission(Passport,Permission,NewLevel)
+			end
+		end
+	else
+		exports.discord:Embed("Domination","**[LOCAL]:** "..CurrentLocation.."\n**[ADMIN]:** Cancelado")
+		SyncFinish("Um membro da administração finalizou.","amarelo")
+		TriggerClientEvent("domination:Finish",-1)
+	end
 
-                return
-            end
-
-            TriggerClientEvent("Notify",source,Permission,"Dominação iniciada","verde",5000)
-            TriggerClientEvent("domination:Start",-1,Permission)
-        end
-    end
-end)
+	CurrentLocation = false
+	ActivePlayers = {}
+	Scoreboard = {}
+end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PROGRESS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Progress(Mode)
-    local source = source
-    local Passport = vRP.Passport(source)
-    local Fit = vRP.UserDomination(Passport)
-    local Inside = nil
+	if not CurrentLocation then
+		return false
+	end
 
-    for Index, v in pairs(Locations) do
-        if #(GetEntityCoords(GetPlayerPed(source)) - v.Blip) <= v.SurvivalDistance then
-            Inside = Index
-        end
-    end
+	local source = source
+	local Passport = vRP.Passport(source)
 
-    if Mode == "Enter" and Fit then
-        Points[Inside] = Points[Inside] or {}
-        Active[Passport] = Active[Passport] or {}
-        Multiplier[Inside] = Multiplier[Inside] or {}
-        Multiplier[Inside][Fit] = Multiplier[Inside][Fit] or 0
+	if not Passport or not CurrentLocation then
+		return false
+	end
 
-        Active[Passport].Permission = Fit
-        Active[Passport].Domination = Inside
-        Points[Inside][Fit] = Points[Inside][Fit] or 0
+	if Mode == "Enter" then
+		if ActivePlayers[Passport] then
+			return false
+		end
 
-        TriggerClientEvent("domination:Update",source,Points[Inside],DominationGoal)
+		local Permission = vRP.UserDomination(Passport)
+		if not Permission then
+			return false
+		end
 
-        if Multiplier[Inside][Fit] < MaxPresenceMultiplier then
-            Multiplier[Inside][Fit] += PresenceMultiplier
-        end
+		PermissionPlayers[Permission] = (PermissionPlayers[Permission] or 0) + 1
+		ActivePlayers[Passport] = { Source = source, Permission = Permission, Update = os.time(), Name = vRP.FullName(Passport) }
 
-        if Bucket then
-            exports.vrp:Bucket(source,"Enter",Bucket)
-        end
+		if not Scoreboard[Permission] then
+			Scoreboard[Permission] = 0
+		end
 
-        elseif Mode == "Exit" and Fit then
-        Active[Passport] = nil
+		SyncScoreboard()
+	elseif Mode == "Exit" then
+		local Active = ActivePlayers[Passport]
+		if not Active then
+			return false
+		end
 
-        if Multiplier[Inside] and Multiplier[Inside][Fit] then
-            Multiplier[Inside][Fit] -= PresenceMultiplier
-        end
+		local Permission = Active.Permission
+		if Permission then
+			PermissionPlayers[Permission] = math.max(0,(PermissionPlayers[Permission] or 0) - 1)
+		end
 
-        if Bucket then
-        exports.vrp:Bucket(source,"Exit")
-        end
-    end
+		ActivePlayers[Passport] = nil
+	end
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PONTUATION
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Pontuation(Select)
-    local source = source
-    local Passport = vRP.Passport(source)
-    local Permission = Active[Passport].Permission
-    if not Permission then return end
+function Creative.Pontuation(Location)
+	if not CurrentLocation then
+		return false
+	end
 
-    Points[Select] = Points[Select] or {}
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Active = ActivePlayers[Passport]
 
-    for Group in pairs(Points[Select]) do
-        if Group ~= Permission then
-            Points[Select][Group] = Points[Select][Group] - 1
-        end
-    end
+	if not Passport or not Active or not Active.Update or Active.Update > os.time() or Location ~= CurrentLocation then
+		return false
+	end
 
-    Points[Select][Permission] = (Points[Select][Permission] or 0) + ((Multiplier[Select] and Multiplier[Select][Permission]) or 0) * 1 + 1
-    TriggerClientEvent("domination:Update",source,Points[Select],DominationGoal)
+	local CurrentTimer = os.time()
+	local Permission = Active.Permission
+	local PlayerCount = PermissionPlayers[Permission] or 1
+	local Multiplier = 1.0 + math.min(MaxPresenceMultiplier - 1.0,(PlayerCount - 1) * PresenceMultiplier)
+	local Reward = math.max(1,math.floor(1 * Multiplier))
 
-    if Points[Select][Permission] >= DominationGoal then
-        TriggerClientEvent("Notify",-1,"Dominação","<b>"..Permission.."</b> atingiu <b>"..DominationGoal.."</b> Pontos e ganhou.","verde",10000)
+	for Parent in pairs(Scoreboard) do
+		if Parent == Permission then
+			Scoreboard[Parent] = (Scoreboard[Parent] or 0) + Reward
+		else
+			Scoreboard[Parent] = math.max(0,(Scoreboard[Parent] or 0) - 1)
+		end
+	end
 
-        if Bucket then
-            exports.vrp:Bucket(source,"Exit")
-        end
+	ActivePlayers[Passport].Update = CurrentTimer + PointSeconds
 
-        Points[Select] = nil
-        Active[Passport] = nil
-        Multiplier[Select] = nil
-    end
+	if Scoreboard[Permission] >= DominationGoal then
+		EndDomination(Permission)
+	else
+		SyncScoreboard()
+	end
 end
+------------------------------------------------------------------------------------------------------------------------------------------
+-- COMMAND
+------------------------------------------------------------------------------------------------------------------------------------------
+RegisterCommand(Command,function(source,Message)
+	local Passport = vRP.Passport(source)
+	if not Passport or not vRP.HasPermission(Passport,Permission) then
+		return false
+	end
+
+	local Options = { "Finalizar" }
+	for Name in pairs(Locations) do
+		table.insert(Options,Name)
+	end
+
+	local Keyboard = vKEYBOARD.Instagram(source,Options)
+	if not Keyboard then
+		return false
+	end
+
+	if Keyboard[1] == "Finalizar" then
+		EndDomination()
+		TriggerClientEvent("Notify",source,"Atenção","Dominação cancelada.","amarelo",5000)
+	else
+		Scoreboard = {}
+		ActivePlayers = {}
+		PermissionPlayers = {}
+		CurrentLocation = Keyboard[1]
+
+		TriggerClientEvent("domination:Start",-1,CurrentLocation)
+		TriggerClientEvent("Notify",source,"Dominação Iniciada!","A disputa pelo território <b>"..Locations[CurrentLocation].Name.."</b> começou!<br>Reúna seu grupo e lute pelo controle da área.<br>A primeira equipe a atingir <b>"..DominationGoal.." pontos</b> será a vencedora!","verde",15000)
+		exports.discord:Embed("Domination","**[LOCAL]:** "..CurrentLocation.."\n**[ADMIN]:** "..Passport.."\n**[MODO]:** Iniciar")
+	end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DOMINATION:KILLFEED
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterServerEvent("domination:KillFeed")
-AddEventHandler("domination:KillFeed", function(OtherSource)
-    local source = source
-    local Passport = vRP.Passport(source)
-    local OtherPassport = vRP.Passport(OtherSource)
+AddEventHandler("domination:KillFeed",function(OtherSource)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local OtherPassport = vRP.Passport(OtherSource)
+	if not (Passport and OtherPassport and Passport ~= OtherPassport) then
+		return false
+	end
 
-    if not (Passport and OtherPassport) or Passport == OtherPassport then
-        return false
-    end
+	local VictimActive = ActivePlayers[Passport]
+	local AttackerActive = ActivePlayers[OtherPassport]
+	if not (AttackerActive and VictimActive) then
+		return false
+	end
 
-    if not (vRP.DoesEntityExist(source) and vRP.DoesEntityExist(OtherSource)) then
-        return false
-    end
+	ActivePlayers[Passport] = nil
 
-    local Identity = vRP.Identity(Passport)
-    local OtherIdentity = vRP.Identity(OtherPassport)
+	local VictimName = VictimActive.Name
+	local AttackerName = AttackerActive.Name
 
-    if not (Identity and OtherIdentity) then
-        return false
-    end
+	for _,v in pairs(ActivePlayers) do
+		async(function()
+			TriggerClientEvent("domination:KillFeed",v.Source,AttackerName,VictimName)
+		end)
+	end
 
-    local Domination = Active[OtherPassport].Domination
-    local Permission = Active[OtherPassport].Permission
-    if not (Domination and Permission) then
-        return false
-    end
+	local Permission = AttackerActive.Permission
+	Scoreboard[Permission] = (Scoreboard[Permission] or 0) + PointsKillFeed
 
-    Points[Domination][Permission] += PointsKillFeed
-
-    for Index, v in pairs(Active) do
-        if Active[Index] then
-            TriggerClientEvent("domination:KillFeed",vRP.Source(Index),OtherIdentity.Name,Identity.Name)
-        end
-    end
+	if Scoreboard[Permission] >= DominationGoal then
+		EndDomination(Permission)
+	else
+		SyncScoreboard()
+	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- THREADTICK
+-- CONNECT
 -----------------------------------------------------------------------------------------------------------------------------------------
-CreateThread(function()
-    while true do
-        local Hours = tonumber(os.date("%H"))
-        local Minutes = tonumber(os.date("%M"))
-        local Week = os.date("%A")
-
-        for Index, v in pairs(Locations) do
-            if Hours == v.Execute.Hour and Minutes == v.Execute.Minute and Week == v.Execute.Week then
-                TriggerClientEvent("Notify",-1,"Dominação","Informamos que a disputa no(a) "..v.Name.." iniciou.","verde",15000)
-                TriggerClientEvent("domination:Start",-1,Index)
-            end
-        end
-
-        Wait(30000)
-    end
+AddEventHandler("Connect",function(Passport,source)
+	if CurrentLocation then
+		TriggerClientEvent("domination:Start",source,CurrentLocation)
+	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DISCONNECT
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("Disconnect",function(Passport,source)
-    if Active[Passport] then
-        Active[Passport] = nil
-    end
+	local Active = ActivePlayers[Passport]
+	if not Active then
+		return false
+	end
+
+	local Permission = Active.Permission
+	if Permission then
+		PermissionPlayers[Permission] = math.max(0,(PermissionPlayers[Permission] or 0) - 1)
+	end
+
+	ActivePlayers[Passport] = nil
 end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- THREADTICK
+-----------------------------------------------------------------------------------------------------------------------------------------
+function ThreadTick()
+	local Week = os.date("%A")
+	local Hour = os.date("%H")
+	local Minute = os.date("%M")
+
+	for Location,v in pairs(Locations) do
+		if not CurrentLocation and Week == v.Execute.Week and Hour == string.format("%02d",v.Execute.Hour) and Minute == string.format("%02d",v.Execute.Minute) then
+			Scoreboard = {}
+			ActivePlayers = {}
+			PermissionPlayers = {}
+			CurrentLocation = Location
+
+			TriggerClientEvent("domination:Start",-1,CurrentLocation)
+			exports.discord:Embed("Domination","**[LOCAL]:** "..CurrentLocation.."\n**[MODO]:** Automático")
+			TriggerClientEvent("Notify",-1,"Dominação Iniciada!","A disputa pelo território <b>"..v.Name.."</b> começou!<br>Reúna seu grupo e lute pelo controle da área.<br>A primeira equipe a atingir <b>"..DominationGoal.." pontos</b> será a vencedora!","verde",15000)
+		end
+	end
+
+	SetTimeout(30000,ThreadTick)
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- THREADTICK
+-----------------------------------------------------------------------------------------------------------------------------------------
+ThreadTick()

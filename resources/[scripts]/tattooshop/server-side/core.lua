@@ -34,8 +34,8 @@ end
 -- THREADINITSYSTEM
 -----------------------------------------------------------------------------------------------------------------------------------------
 CreateThread(function()
-	local Consult = vRP.Query("entitydata/GetData",{ Name = "Tattooshop" })
-	local Result = Consult and Consult[1] and json.decode(Consult[1].Information) or {}
+	local Consult = vRP.SingleQuery("entitydata/GetData",{ Name = "Tattooshop" })
+	local Result = Consult and json.decode(Consult.Information) or {}
 
 	for _,v in pairs(Result) do
 		table.insert(Locations,v)
@@ -47,8 +47,8 @@ end)
 -- ADD
 -----------------------------------------------------------------------------------------------------------------------------------------
 exports("Add",function(Table)
-	local Consult = vRP.Query("entitydata/GetData",{ Name = "Tattooshop" })
-	local Result = Consult and Consult[1] and json.decode(Consult[1].Information) or {}
+	local Consult = vRP.SingleQuery("entitydata/GetData",{ Name = "Tattooshop" })
+	local Result = Consult and json.decode(Consult.Information) or {}
 
 	table.insert(Result,Table)
 	table.insert(Locations,Table)

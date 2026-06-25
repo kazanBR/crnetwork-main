@@ -16,8 +16,8 @@ local Pages = {}
 -- THREADINITSYSTEM
 -----------------------------------------------------------------------------------------------------------------------------------------
 CreateThread(function()
-	local Consult = vRP.Query("entitydata/GetData",{ Name = "Pages" })
-	Pages = Consult and Consult[1] and json.decode(Consult[1].Information) or {}
+	local Consult = vRP.SingleQuery("entitydata/GetData",{ Name = "Pages" })
+	Pages = Consult and json.decode(Consult.Information) or {}
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PAGES

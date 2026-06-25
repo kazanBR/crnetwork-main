@@ -3,6 +3,21 @@ Config = {
 	Mode = "circle", -- bar | circle
 	Position = "middle-right", -- middle-left | middle-right | top-left | top-center | top-right | bottom-left | bottom-center | bottom-right
 	Themes = {
+		christmas = {
+			background = "#0f0f0fcc",
+			border = "#ea7e21",
+			icon = {
+				align = "top",
+				image = "christmas"
+			},
+			title = "#ea7e21",
+			text = "#D1D1D1",
+			bold = "#ffffff",
+			progress = {
+				background = "#0f0f0fcc",
+				color = "#ea7e21"
+			}
+		},
 		halloween = {
 			background = "#0f0f0fcc",
 			border = "#ea7e21",

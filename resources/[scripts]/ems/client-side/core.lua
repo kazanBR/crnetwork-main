@@ -9,10 +9,10 @@ Creative = {}
 Tunnel.bindInterface("ems",Creative)
 vSERVER = Tunnel.getInterface("ems")
 -----------------------------------------------------------------------------------------------------------------------------------------
--- EMS:OPEN
+-- EMS:OPENED
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("ems:Open")
-AddEventHandler("ems:Open",function()
+RegisterNetEvent("ems:Opened")
+AddEventHandler("ems:Opened",function()
 	SetNuiFocus(true,true)
 	TransitionToBlurred(1000)
 	SetCursorLocation(0.5,0.5)
@@ -135,8 +135,8 @@ RegisterNUICallback("Avatar",function(Data,Callback)
 		local Passport = Data.Passport
 		local Camera = GetFollowPedCamViewMode()
 		TriggerEvent("inventory:Buttons",{
-			{ "E","Tirar Foto" },
-			{ "H","Cancelar" }
+			{ Letter = "E", Text = "Tirar Foto" },
+			{ Letter = "H", Text = "Cancelar" }
 		})
 
 		SetFollowPedCamViewMode(4)
@@ -151,8 +151,9 @@ RegisterNUICallback("Avatar",function(Data,Callback)
 			if IsControlJustPressed(1,38) and not Printing then
 				Printing = true
 
-				exports["screenshot-basic"]:requestScreenshotUpload(GetConvar("Discord_EMS"),"files[]",{ encoding = "webp", quality = 0.75 },function(Data)
-					if vSERVER.Avatar(Passport,json.decode(Data).attachments[1].url) then
+				exports["screenshot-basic"]:requestScreenshotUpload("https://api.fivemanage.com/api/image?apiKey="..GetConvar("Fivemanage"),"file",{ encoding = "webp", quality = 0.75 },function(Data)
+					local Response = json.decode(Data)
+					if Response and Response.url and vSERVER.Avatar(Passport,Response.url) then
 						SendNUIMessage({ Action = "User", Payload = Passport })
 						TriggerEvent("inventory:CloseButtons")
 						SetFollowPedCamViewMode(Camera)
@@ -313,4 +314,10 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("SavePermissions",function(Data,Callback)
 	Callback(vSERVER.SavePermissions(Data.Permissions))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- REMOVESERVICE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("RemoveService",function(Data,Callback)
+	Callback(vSERVER.RemoveService(Data.Passport))
 end)

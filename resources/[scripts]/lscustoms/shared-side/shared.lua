@@ -209,7 +209,7 @@ function Calculate(Table,Vehicle)
 		else
 			if type(Values[Index]) == "table" and Installed ~= Selected and Selected > -1 then
 				if Index:match("Upgrade") then
-					local VehiclePrice = VehiclePrice(Vehicle)
+					local VehiclePrice = exports.vrp:VehiclePrice(Vehicle)
 					Values[Index] = {
 						parseInt(VehiclePrice * 0.01),
 						parseInt(VehiclePrice * 0.02),

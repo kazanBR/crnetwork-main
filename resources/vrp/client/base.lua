@@ -19,6 +19,7 @@ local Information = false
 -- DECORS
 -----------------------------------------------------------------------------------------------------------------------------------------
 DecorRegister("CREATIVE_PED",2)
+DecorRegister("CREATIVE_CODE",2)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- RELATIONSHIP
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -138,7 +139,7 @@ function PassportEnable()
 			local Coords = GetEntityCoords(Ped)
 
 			for Entitys,source in pairs(Players) do
-				if Ped ~= Entitys and DoesEntityExist(Entitys) and HasEntityClearLosToEntity(Ped,Entitys,17) then
+				if Ped ~= Entitys and DoesEntityExist(Entitys) and HasEntityClearLosToEntity(Ped,Entitys,17) and IsEntityVisible(Entitys) then
 					local Passport = Player(source).state.Passport
 					if Passport then
 						local OtherCoords = GetEntityCoords(Entitys)
@@ -236,12 +237,12 @@ function DrawText(Coords,Message,Health,Armour)
 
 		if Health then
 			DrawRect(X,Y,Width,Height,25,25,25,125)
-			DrawRect(X - (Width - Width * Health) / 2,Y,Width * Health,Height,118,185,132,200)
+			DrawRect(X - (Width - Width * Health) / 2,Y,Width * Health,Height,122,215,94,200)
 		end
 
 		if Armour then
 			DrawRect(X,Y - 0.005,Width,Height,25,25,25,125)
-			DrawRect(X - (Width - Width * Armour) / 2,Y - 0.005,Width * Armour,Height,166,111,237,200)
+			DrawRect(X - (Width - Width * Armour) / 2,Y - 0.005,Width * Armour,Height,66,183,217,200)
 		end
 	end
 end

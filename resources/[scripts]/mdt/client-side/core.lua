@@ -38,40 +38,12 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Config",function(Data,Callback)
 	Callback({
-		["MaxReductionFine"] = Config.MaxReductionFine,
-		["MaxReductionArrest"] = Config.MaxReductionArrest,
-		["OperationsLocations"] = Config.OperationsLocations
+		Groups = Config.Groups,
+		MaxReductionFine = Config.MaxReductionFine,
+		MaxReductionArrest = Config.MaxReductionArrest,
+		OperationsLocations = Config.OperationsLocations,
+		MaxParticipantsOperation = Config.MaxParticipantsOperation
 	})
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- PENALCODE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("PenalCode",function(Data,Callback)
-	Callback(vSERVER.PenalCode(Data and Data.Mode))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- CREATEPENALCODE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("CreatePenalCode",function(Data,Callback)
-	Callback(vSERVER.CreatePenalCode(Data.Mode,Data.Data))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- UPDATEPENALCODE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("UpdatePenalCode",function(Data,Callback)
-	Callback(vSERVER.UpdatePenalCode(Data.Id,Data.Mode,Data.Data))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- DESTROYPENALCODE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("DestroyPenalCode",function(Data,Callback)
-	Callback(vSERVER.DestroyPenalCode(Data.Id,Data.Mode))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- ORDERPENALCODE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("OrderPenalCode",function(Data,Callback)
-	Callback(vSERVER.OrderPenalCode(Data.Id,Data.Mode,Data.Direction,Data.Section))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PLAYER
@@ -122,8 +94,8 @@ RegisterNUICallback("Avatar",function(Data,Callback)
 		local Passport = Data.Passport
 		local Camera = GetFollowPedCamViewMode()
 		TriggerEvent("inventory:Buttons",{
-			{ "E","Tirar Foto" },
-			{ "H","Cancelar" }
+			{ Letter = "E", Text = "Tirar Foto" },
+			{ Letter = "H", Text = "Cancelar" }
 		})
 
 		SetFollowPedCamViewMode(4)
@@ -138,8 +110,9 @@ RegisterNUICallback("Avatar",function(Data,Callback)
 			if IsControlJustPressed(1,38) and not Printing then
 				Printing = true
 
-				exports["screenshot-basic"]:requestScreenshotUpload(GetConvar("Discord_MDT"),"files[]",{ encoding = "webp", quality = 0.75 },function(Data)
-					if vSERVER.Avatar(Passport,json.decode(Data).attachments[1].url) then
+				exports["screenshot-basic"]:requestScreenshotUpload("https://api.fivemanage.com/api/image?apiKey="..GetConvar("Fivemanage"),"file",{ encoding = "webp", quality = 0.75 },function(Data)
+					local Response = json.decode(Data)
+					if Response and Response.url and vSERVER.Avatar(Passport,Response.url) then
 						SendNUIMessage({ Action = "User", Payload = Passport })
 						TriggerEvent("inventory:CloseButtons")
 						SetFollowPedCamViewMode(Camera)
@@ -164,16 +137,16 @@ RegisterNUICallback("Avatar",function(Data,Callback)
 	Callback("Ok")
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- FIREARMS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Firearms",function(Data,Callback)
-	Callback(vSERVER.Firearms(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
 -- FLYINGARMS
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Flyingarms",function(Data,Callback)
 	Callback(vSERVER.Flyingarms(Data.Passport))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- FIREARMS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("Firearms",function(Data,Callback)
+	Callback(vSERVER.Firearms(Data.Passport))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CLEARRECORD
@@ -191,7 +164,7 @@ end)
 -- RECORD
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Record",function(Data,Callback)
-	Callback(vSERVER.Record(Data))
+	Callback(vSERVER.Record(Data.Id,Data.Type))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PATROL
@@ -314,6 +287,36 @@ RegisterNUICallback("ArchivePoliceReport",function(Data,Callback)
 	Callback(vSERVER.ArchivePoliceReport(Data.Id))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- INTERNALAFFAIRS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("InternalAffairs",function(Data,Callback)
+	Callback(vSERVER.InternalAffairs())
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- GETINTERNALAFFAIRS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("GetInternalAffairs",function(Data,Callback)
+	Callback(vSERVER.GetInternalAffairs(Data.Id))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CREATEINTERNALAFFAIRS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("CreateInternalAffairs",function(Data,Callback)
+	Callback(vSERVER.CreateInternalAffairs(Data))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- UPDATEINTERNALAFFAIRS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("UpdateInternalAffairs",function(Data,Callback)
+	Callback(vSERVER.UpdateInternalAffairs(Data))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ARCHIVEINTERNALAFFAIRS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("ArchiveInternalAffairs",function(Data,Callback)
+	Callback(vSERVER.ArchiveInternalAffairs(Data.Id))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- WANTED
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Wanted",function(Data,Callback)
@@ -350,34 +353,15 @@ RegisterNUICallback("SeizedVehicles",function(Data,Callback)
 	Callback(vSERVER.SeizedVehicles())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INTERNALAFFAIRS
+-- CREATESEIZEDVEHICLE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("InternalAffairs",function(Data,Callback)
-	Callback(vSERVER.InternalAffairs())
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- GETINTERNALAFFAIRS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("GetInternalAffairs",function(Data,Callback)
-	Callback(vSERVER.GetInternalAffairs(Data.Id))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- CREATEINTERNALAFFAIRS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("CreateInternalAffairs",function(Data,Callback)
-	Callback(vSERVER.CreateInternalAffairs(Data))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- UPDATEINTERNALAFFAIRS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("UpdateInternalAffairs",function(Data,Callback)
-	Callback(vSERVER.UpdateInternalAffairs(Data))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- ARCHIVEINTERNALAFFAIRS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("ArchiveInternalAffairs",function(Data,Callback)
-	Callback(vSERVER.ArchiveInternalAffairs(Data.Id))
+RegisterNUICallback("CreateSeizedVehicle",function(Data,Callback)
+	SetNuiFocus(false,false)
+	SetCursorLocation(0.5,0.5)
+	TransitionFromBlurred(1000)
+	TriggerEvent("hud:Active",true)
+
+	Callback(vSERVER.CreateSeizedVehicle(Data))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MDT:VEHICLE
@@ -393,8 +377,8 @@ AddEventHandler("mdt:Vehicle",function(Passport,Name,Plate,Model)
 		local FullRoad = GetStreetNameFromHashKey(MinRoad)
 
 		TriggerEvent("inventory:Buttons",{
-			{ "E","Tirar Foto" },
-			{ "H","Cancelar" }
+			{ Letter = "E", Text = "Tirar Foto" },
+			{ Letter = "H", Text = "Cancelar" }
 		})
 
 		SetFollowPedCamViewMode(4)
@@ -409,13 +393,16 @@ AddEventHandler("mdt:Vehicle",function(Passport,Name,Plate,Model)
 			if IsControlJustPressed(1,38) and not Printing then
 				Printing = true
 
-				exports["screenshot-basic"]:requestScreenshotUpload(GetConvar("Discord_MDT"),"files[]",{ encoding = "webp", quality = 0.75 },function(Data)
-					SendNUIMessage({ Action = "SeizedVehicle", Payload = { VehicleName(Model),Plate,Passport,Name,FullRoad,json.decode(Data).attachments[1].url } })
-					TriggerEvent("inventory:CloseButtons")
-					SetFollowPedCamViewMode(Camera)
-					SetCursorLocation(0.5,0.5)
-					TransitionToBlurred(1000)
-					SetNuiFocus(true,true)
+				exports["screenshot-basic"]:requestScreenshotUpload("https://api.fivemanage.com/api/image?apiKey="..GetConvar("Fivemanage"),"file",{ encoding = "webp", quality = 0.75 },function(Data)
+					local Response = json.decode(Data)
+					if Response and Response.url then
+						SendNUIMessage({ Action = "SeizedVehicle", Payload = { Vehicle = exports.vrp:VehicleName(Model), Plate = Plate, Owner = { Passport = Passport, Name = Name }, Location = FullRoad, Image = Response.url } })
+						TriggerEvent("inventory:CloseButtons")
+						SetFollowPedCamViewMode(Camera)
+						SetCursorLocation(0.5,0.5)
+						TransitionToBlurred(1000)
+						SetNuiFocus(true,true)
+					end
 				end)
 
 				break
@@ -431,15 +418,34 @@ AddEventHandler("mdt:Vehicle",function(Passport,Name,Plate,Model)
 	end)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- CREATESEIZEDVEHICLE
+-- PENALCODE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("CreateSeizedVehicle",function(Data,Callback)
-	SetNuiFocus(false,false)
-	SetCursorLocation(0.5,0.5)
-	TransitionFromBlurred(1000)
-	TriggerEvent("hud:Active",true)
-
-	Callback(vSERVER.CreateSeizedVehicle(Data))
+RegisterNUICallback("PenalCode",function(Data,Callback)
+	Callback(vSERVER.PenalCode(Data and Data.Mode))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CREATEPENALCODE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("CreatePenalCode",function(Data,Callback)
+	Callback(vSERVER.CreatePenalCode(Data.Mode,Data.Data))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- UPDATEPENALCODE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("UpdatePenalCode",function(Data,Callback)
+	Callback(vSERVER.UpdatePenalCode(Data.Id,Data.Mode,Data.Data))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- DESTROYPENALCODE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("DestroyPenalCode",function(Data,Callback)
+	Callback(vSERVER.DestroyPenalCode(Data.Id,Data.Mode))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ORDERPENALCODE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("OrderPenalCode",function(Data,Callback)
+	Callback(vSERVER.OrderPenalCode(Data.Id,Data.Mode,Data.Direction,Data.Section))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MEDALS
@@ -451,7 +457,7 @@ end)
 -- GETMEDAL
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("GetMedal",function(Data,Callback)
-	Callback(vSERVER.GetMedal(Data.Id))
+	Callback(vSERVER.GetMedal(Data.Id,Data.Officers))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CREATEMEDAL
@@ -466,6 +472,12 @@ RegisterNUICallback("UpdateMedal",function(Data,Callback)
 	Callback(vSERVER.UpdateMedal(Data))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- DESTROYMEDAL
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("DestroyMedal",function(Data,Callback)
+	Callback(vSERVER.DestroyMedal(Data.Id))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- ASSIGNMEDAL
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("AssignMedal",function(Data,Callback)
@@ -478,12 +490,6 @@ RegisterNUICallback("RemoveMedal",function(Data,Callback)
 	Callback(vSERVER.RemoveMedal(Data))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- DESTROYMEDAL
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("DestroyMedal",function(Data,Callback)
-	Callback(vSERVER.DestroyMedal(Data.Id))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
 -- UNITS
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Units",function(Data,Callback)
@@ -493,7 +499,7 @@ end)
 -- GETUNIT
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("GetUnit",function(Data,Callback)
-	Callback(vSERVER.GetUnit(Data.Id))
+	Callback(vSERVER.GetUnit(Data.Id,Data.Officers))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CREATEUNIT
@@ -508,6 +514,12 @@ RegisterNUICallback("UpdateUnit",function(Data,Callback)
 	Callback(vSERVER.UpdateUnit(Data))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- DESTROYUNIT
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("DestroyUnit",function(Data,Callback)
+	Callback(vSERVER.DestroyUnit(Data.Id))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- ASSIGNUNIT
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("AssignUnit",function(Data,Callback)
@@ -518,12 +530,6 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("RemoveUnit",function(Data,Callback)
 	Callback(vSERVER.RemoveUnit(Data))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- DESTROYUNIT
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("DestroyUnit",function(Data,Callback)
-	Callback(vSERVER.DestroyUnit(Data.Id))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- OFFICERS
@@ -574,6 +580,18 @@ RegisterNUICallback("TransferBank",function(Data,Callback)
 	Callback(vSERVER.TransferBank(Data.Passport,Data.Value))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- PERMISSIONS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("Permissions",function(Data,Callback)
+	Callback(vSERVER.Permissions())
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- SAVEPERMISSIONS
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("SavePermissions",function(Data,Callback)
+	Callback(vSERVER.SavePermissions(Data.Permissions))
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- MDT:REFRESH
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("mdt:Refresh")
@@ -581,16 +599,15 @@ AddEventHandler("mdt:Refresh",function(Name)
 	SendNUIMessage({ Action = Name })
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- MDT:UPDATEUSER
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("mdt:UpdateUser")
-AddEventHandler("mdt:UpdateUser",function(UserData)
-	SendNUIMessage({ Action = "UpdateUser", Payload = UserData })
-end)
------------------------------------------------------------------------------------------------------------------------------------------
 -- MDT:NOTIFY
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("mdt:Notify")
 AddEventHandler("mdt:Notify",function(Title,Message,Type)
-	SendNUIMessage({ Action = "Notify", Payload = { Title,Message,Type } })
+	SendNUIMessage({ Action = "Notify", Payload = { Title = Title, Message = Message, Type = Type } })
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- REMOVESERVICE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("RemoveService",function(Data,Callback)
+	Callback(vSERVER.RemoveService(Data.Passport))
 end)

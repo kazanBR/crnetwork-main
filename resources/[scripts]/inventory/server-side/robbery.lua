@@ -122,7 +122,7 @@ AddEventHandler("inventory:Robbery",function(Number,Mode)
 	if Configuration.Need then
 		RequiredItem = vRP.ConsultItem(Passport,Configuration.Need.Item,Configuration.Need.Amount)
 		if not RequiredItem then
-			TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>"..Configuration.Need.Amount.."x "..ItemName(Configuration.Need.Item).."</b>.","amarelo",5000)
+			TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>"..Configuration.Need.Amount.."x "..exports.vrp:ItemName(Configuration.Need.Item).."</b>.","amarelo",5000)
 			return false
 		end
 	end

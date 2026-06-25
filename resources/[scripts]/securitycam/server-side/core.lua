@@ -10,23 +10,21 @@ vRP = Proxy.getInterface("vRP")
 Creative = {}
 Tunnel.bindInterface("securitycam",Creative)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- VARIABLES
+-- CONNECTIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
-local Objects = {}
-local InativeTime = 0
-local Active = {}
------------------------------------------------------------------------------------------------------------------------------------------
--- THREADSERVERSTART
------------------------------------------------------------------------------------------------------------------------------------------
-CreateThread(function()
-	Wait(1000)
-	TriggerClientEvent("objects:Table",-1,Objects)
-end)
+local Inside = {}
+local Connections = os.time()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CONNECTIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Connections()
-	return InativeTime <= os.time()
+	return Connections < os.time()
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- INATIVE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Inative()
+	Connections = os.time() + (InativeMinutes * 60)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- TAKEITEM
@@ -34,36 +32,57 @@ end
 function Creative.TakeItem()
 	local source = source
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] then
-		Active[Passport] = true
 
-		if vRP.ConsultItem(Passport,HackerItem,1) and vRP.TakeItem(Passport,HackerItem,1,true) then
-			Active[Passport] = nil
-			return true
-		else
-			Active[Passport] = nil
-			return false
-		end
+	if not Passport then
+		return false
 	end
-	return false
+
+	local Consult = vRP.ConsultItem(Passport,HackerItem)
+	if not Consult then
+		TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..exports.vrp:ItemName(HackerItem).."</b>.","amarelo",5000)
+		return false
+	end
+
+	if not vRP.TakeItem(Passport,Consult.Item) then
+		return false
+	end
+
+	return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INATIVE
+-- INITIALIZE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Inative()
+function Creative.Initialize(Coords)
 	local source = source
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] then
-		Active[Passport] = true
-
-		InativeTime = os.time() + (InativeMinutes * 60)
-		
-		Active[Passport] = nil
+	if not Passport then
+		return false
 	end
+
+	Inside[Passport] = Coords
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- CHECKPOLICE
+-- FINALIZING
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.CheckPolice()
-	return CheckPolice()
+function Creative.Finalizing()
+	local source = source
+	local Passport = vRP.Passport(source)
+
+	if not Passport or not Inside[Passport] then
+		return false
+	end
+
+	Inside[Passport] = nil
 end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- DISCONNECT
+-----------------------------------------------------------------------------------------------------------------------------------------
+AddEventHandler("Disconnect",function(Passport)
+	Inside[Passport] = nil
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- INSIDE
+-----------------------------------------------------------------------------------------------------------------------------------------
+exports("Inside",function(Passport)
+	return Inside[Passport]
+end)

@@ -90,7 +90,7 @@ CreateThread(function()
 			goto Continue
 		end
 
-		if InsideZone and not IsPedInAnyVehicle(Ped) and not IsEntityInWater(Ped) and GetGameTimer() >= Cooldown then
+		if InsideZone and not IsPedInAnyVehicle(Ped) and GetGameTimer() >= Cooldown then
 			Cooldown = GetGameTimer() + (PointSeconds * 1000)
 
 			if CurrentLocation then
@@ -143,6 +143,8 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("domination:Finish")
 AddEventHandler("domination:Finish",function(Winner)
+	CurrentLocation = false
+
 	if InsideZone then
 		vSERVER.Progress("Exit")
 		InsideZone = false
@@ -153,8 +155,6 @@ AddEventHandler("domination:Finish",function(Winner)
 		InsideMarked = false
 	end
 
-	CurrentLocation = false
-
 	if Poly then
 		Poly:destroy()
 		Poly = nil
@@ -162,32 +162,34 @@ AddEventHandler("domination:Finish",function(Winner)
 
 	if DoesBlipExist(Bliped) then
 		RemoveBlip(Bliped)
-		Bliped = nil
 	end
 
 	if DoesBlipExist(Alpha) then
 		RemoveBlip(Alpha)
-		Alpha = nil
 	end
+
+	Bliped = nil
+	Alpha = nil
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GAMEEVENTTRIGGERED
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("gameEventTriggered",function(Event,Message)
-	if Event ~= "CEventNetworkEntityDamage" or not InsideMarked or LocalPlayer.state.Arena or LocalPlayer.state.Death then
-		return false
-	end
-
-	local Victim = Message[1]
-	local Attacker = Message[2]
-	if Victim ~= PlayerPedId() or not IsEntityAPed(Victim) or GetEntityHealth(Victim) > 100 then
-		return false
-	end
-
 	local CurrentTimer = GetGameTimer()
+	if Event ~= "CEventNetworkEntityDamage" or not InsideMarked or LocalPlayer.state.Arena or LocalPlayer.state.Death or LocalPlayer.state.Crawl or FeedCooldown > CurrentTimer then
+		return false
+	end
+
+	local Ped = PlayerPedId()
+	local Weaponed = Message[7]
+	local Victim,Attacker = Message[1],Message[2]
+	if Victim ~= Ped or Victim == Attacker or not IsEntityAPed(Victim) or GetEntityHealth(Victim) > 100 then
+		return false
+	end
+
 	local Index = NetworkGetPlayerIndexFromPed(Attacker)
-	if Index and NetworkIsPlayerConnected(Index) and FeedCooldown < CurrentTimer then
-		FeedCooldown = CurrentTimer + 1000
+	if Index and NetworkIsPlayerConnected(Index) then
+		FeedCooldown = CurrentTimer + 10000
 		TriggerServerEvent("domination:KillFeed",GetPlayerServerId(Index))
 	end
 end)

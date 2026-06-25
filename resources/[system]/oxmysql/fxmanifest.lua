@@ -3,7 +3,7 @@ game "common"
 use_experimental_fxv2_oal "yes"
 lua54 "yes"
 
-version "2.12.0"
+version "2.14.1"
 
 dependencies {
 	"/server:12913"

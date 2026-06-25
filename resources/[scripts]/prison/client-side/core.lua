@@ -93,7 +93,7 @@ CreateThread(function()
 
 			local Coords = GetEntityCoords(Ped)
 			if not PolyPrison:isPointInside(Coords) then
-				SetEntityCoords(Ped,Center)
+				SetEntityCoordsNoOffset(Ped,Center)
 			end
 
 			local Health = GetEntityHealth(Ped)

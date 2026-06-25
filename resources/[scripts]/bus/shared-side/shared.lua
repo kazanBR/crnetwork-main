@@ -9,7 +9,7 @@ Locations = {
 	Citadela = {
 		Name = "Citadela do Sul",
 		Description = "Percurso simples com recompensa baixa.",
-		Payment = { Min = 100, Max = 300 },
+		Payment = { Min = 35, Max = 45 },
 		Coords = {
 			vec3(307.93,-764.49,29.23),
 			vec3(115.96,-785.48,31.32),

@@ -147,7 +147,7 @@ AddEventHandler("boosting:Active",function(VehicleModel,Class)
 	Model = VehicleModel
 	Selected = math.random(#Locates)
 
-	TriggerEvent("NotifyPush",{ code = 20, title = "Localização Veículo", x = Locates[Selected].x, y = Locates[Selected].y, z = Locates[Selected].z, vehicle = VehicleName(Model), color = 44 })
+	TriggerEvent("NotifyPush",{ code = 20, title = "Localização Veículo", x = Locates[Selected].x, y = Locates[Selected].y, z = Locates[Selected].z, vehicle = exports.vrp:VehicleName(Model), color = 44 })
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- BOOSTING:RESET

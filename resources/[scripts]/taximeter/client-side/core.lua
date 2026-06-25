@@ -155,7 +155,7 @@ function UpdatePrice()
 	local Ped = PlayerPedId()
 	local Vehicle = GetVehiclePedIsIn(Ped)
 
-	SendNUIMessage({ Action = "Update", Payload = { DecorGetBool(Vehicle,StarterDecor),DecorGetFloat(Vehicle,DistanceDecor),DecorGetFloat(Vehicle,ExtraDecor),DecorGetFloat(Vehicle,TariffDecor) } })
+	SendNUIMessage({ Action = "Update", Payload = { Started = DecorGetBool(Vehicle,StarterDecor), Distance = DecorGetFloat(Vehicle,DistanceDecor), Extras = DecorGetFloat(Vehicle,ExtraDecor), Tariff = DecorGetFloat(Vehicle,TariffDecor) } })
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- +TAXIMETER

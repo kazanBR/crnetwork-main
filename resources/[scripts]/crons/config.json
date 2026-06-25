@@ -1,18 +1,1 @@
-[
-    {
-        "Mode": "RemovePermission",
-        "Timer": 1770768040.0,
-        "Params": {
-            "Permission": "Prata"
-        },
-        "Passport": 1
-    },
-    {
-        "Mode": "RemovePermission",
-        "Timer": 1770768042.0,
-        "Params": {
-            "Permission": "Bronze"
-        },
-        "Passport": 1
-    }
-]
+[]

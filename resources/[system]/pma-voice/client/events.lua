@@ -30,6 +30,13 @@ AddEventHandler("mumbleConnected",function()
 	},true)
 
 	handleInitialState()
+
+	Wait(1000)
+
+	local Source = LocalPlayer["state"]["Source"]
+	if exports["pma-voice"]:isPlayerMuted(Source) then
+		TriggerEvent("pma-voice:Mute",true)
+	end
 end)
 
 AddEventHandler("pma-voice:settingsCallback",function(cb)

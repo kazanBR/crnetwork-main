@@ -145,7 +145,7 @@ CreateThread(function()
 
 						if Crawl.Timer > 0 then
 							Crawl.Timer = Crawl.Timer - 1
-							SendNUIMessage({ Action = "Update", Payload = { Crawl.Title,Crawl.Text,Crawl.Timer } })
+							SendNUIMessage({ Action = "Update", Payload = { Title = Crawl.Title, Description = Crawl.Text, Seconds = Crawl.Timer } })
 
 							if Crawl.Timer <= 0 then
 								if not LocalPlayer.state.Arena then
@@ -154,20 +154,20 @@ CreateThread(function()
 
 								LocalPlayer.state:set("Crawl",false,true)
 								Death.Timer = not LocalPlayer.state.Arena and Death.Default or 5
-								SendNUIMessage({ Action = "Update", Payload = { Death.Title,Death.Text,Death.Timer } })
+								SendNUIMessage({ Action = "Update", Payload = { Title = Death.Title, Description = Death.Text, Seconds = Death.Timer } })
 								NetworkSetFriendlyFireOption(false)
 								SetEntityInvincible(Ped,true)
 								SetLocalPlayerAsGhost(true)
 							end
 						elseif Death.Timer > 0 then
 							Death.Timer = Death.Timer - 1
-							SendNUIMessage({ Action = "Update", Payload = { Death.Title,Death.Text,Death.Timer } })
+							SendNUIMessage({ Action = "Update", Payload = { Title = Death.Title, Description = Death.Text, Seconds = Death.Timer } })
 
 							if Death.Timer <= 0 then
 								if LocalPlayer.state.Arena then
-									SendNUIMessage({ Action = "Update", Payload = { "Ferido","Aguarde os primeiros socorros",0,"Pressione [E] para levantar" } })
+									SendNUIMessage({ Action = "Update", Payload = { Title = "Ferido", Description = "Aguarde os primeiros socorros", Seconds = 0, Button = "Pressione [E] para levantar" } })
 								else
-									SendNUIMessage({ Action = "Update", Payload = { Death.Title,Death.Text,Death.Timer,"Segure [E] por 10 segundos" } })
+									SendNUIMessage({ Action = "Update", Payload = { Title = Death.Title, Description = Death.Text, Seconds = Death.Timer, Button = "Segure [E] por 10 segundos" } })
 								end
 
 								SetFacialIdleAnimOverride(Ped,"mood_sleeping_1",0)
@@ -291,7 +291,7 @@ function FinishSurvival()
 
 	DoScreenFadeOut(0)
 	SetEntityHeading(Ped,136.07)
-	SetEntityCoords(Ped,315.26,-1412.37,31.62)
+	SetEntityCoordsNoOffset(Ped,315.26,-1412.37,31.62)
 
 	SetTimeout(5000,function()
 		TriggerEvent("hud:Active",true)

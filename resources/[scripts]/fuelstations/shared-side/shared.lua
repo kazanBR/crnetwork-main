@@ -17,11 +17,11 @@ Config = {
 	ItemGallon = "WEAPON_PETROLCAN",
 	ItemGallonFuel = "WEAPON_PETROLCAN_AMMO",
 	GallonFuelAmount = 5000,
-	PriceGallon = 500,
 	StockGallon = 50,
 
 	BankTaxWithdraw = 1.0,
 	BankTaxTransfer = 1.0,
+	TaxTransfer = 0.3,
 
 	Replenishments = {
 		{
@@ -128,7 +128,7 @@ Config = {
 			Transfer = 1
 		},
 		Update = 1,
-		Upgrades = 1,
+		Upgrades = -1,
 		Employees = {
 			View = 1,
 			Create = 1,

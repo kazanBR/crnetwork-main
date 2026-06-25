@@ -73,7 +73,7 @@ function Creative.Home()
 	local source = source
 	local Passport = vRP.Passport(source)
 	if not Passport then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	return {
@@ -90,7 +90,7 @@ function Creative.Deposit(Value)
 	local Valuation = parseInt(Value)
 	local Passport = vRP.Passport(source)
 	if not Passport or Valuation <= 0 or Active[Passport] then
-		return false
+		return { Error = "Valor inválido." }
 	end
 
 	Active[Passport] = true
@@ -117,25 +117,25 @@ function Creative.Withdraw(Value)
 	local Valuation = parseInt(Value)
 	local Passport = vRP.Passport(source)
 	if not Passport or Valuation <= 0 or Active[Passport] then
-		return false
+		return { Error = "Valor inválido." }
 	end
 
 	Active[Passport] = true
 
 	if exports.bank:CheckTaxes(Passport) or exports.bank:CheckFines(Passport) then
 		Active[Passport] = nil
-		return false
+		return { Error = "Você possui débitos bancários." }
 	end
 
 	local Bank = vRP.GetBank(Passport) or 0
 	if Bank < Valuation then
 		Active[Passport] = nil
-		return false
+		return { Error = "Dinheiro insuficiente." }
 	end
 
 	if not vRP.WithdrawCash(Passport,Valuation) then
 		Active[Passport] = nil
-		return false
+		return { Error = "Dinheiro insuficiente." }
 	end
 
 	exports.bank:AddTransactions(Passport,"Withdraw",Valuation)
@@ -155,14 +155,19 @@ function Creative.Transfer(TargetPassport,Value)
 	local Passport = vRP.Passport(source)
 	local TargetPassport = parseInt(TargetPassport)
 	if not Passport or Passport == TargetPassport or Valuation <= 0 or Active[Passport] then
-		return false
+		return { Error = "Valor inválido." }
 	end
 
 	Active[Passport] = true
 
 	if exports.bank:CheckTaxes(Passport) or exports.bank:CheckFines(Passport) then
 		Active[Passport] = nil
-		return false
+		return { Error = "Você possui débitos bancários." }
+	end
+
+	if not vRP.Identity(TargetPassport) then
+		Active[Passport] = nil
+		return { Error = "Passaporte não encontrado." }
 	end
 
 	if vRP.PaymentBank(Passport,Valuation) then
@@ -233,12 +238,12 @@ function Creative.CreateInvoice(TargetPassport,Value,Reason)
 	local Passport = vRP.Passport(source)
 	local TargetPassport = parseInt(TargetPassport)
 	if not Passport or not TargetPassport or Passport == TargetPassport or Valuation <= 0 or Active[Passport] then
-		return false
+		return { Error = "Valor inválido." }
 	end
 
 	local TargetSource = vRP.Source(TargetPassport)
 	if not TargetSource then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	Active[Passport] = true
@@ -247,7 +252,7 @@ function Creative.CreateInvoice(TargetPassport,Value,Reason)
 	local Message = ("<b>%s</b> lhe enviou uma fatura de <b>R$%s</b>, deseja aceitá-la?"):format(FullName,Dotted(Valuation))
 	if not vRP.Request(TargetSource,"Banco",Message) then
 		Active[Passport] = nil
-		return false
+		return { Error = "Fatura recusada." }
 	end
 
 	local InvoiceId = exports.oxmysql:insert_async("INSERT INTO invoices (Passport,Received,Reason,Price,Timestamp) VALUES (?,?,?,?,?)",{ Passport,TargetPassport,Reason or "Sem descrição",Valuation,os.time() })
@@ -270,7 +275,7 @@ function Creative.PayInvoice(Number)
 	local Number = parseInt(Number)
 	local Passport = vRP.Passport(source)
 	if not Passport or Active[Passport] then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	Active[Passport] = true
@@ -278,17 +283,17 @@ function Creative.PayInvoice(Number)
 	local Invoice = exports.oxmysql:single_async("SELECT id,Passport,Received,Price FROM invoices WHERE id = ? LIMIT 1",{ Number })
 	if not Invoice then
 		Active[Passport] = nil
-		return false
+		return { Error = "Fatura não encontrada." }
 	end
 
 	if Invoice.Received ~= Passport then
 		Active[Passport] = nil
-		return false
+		return { Error = "Proprietário inválido." }
 	end
 
 	if not vRP.PaymentBank(Passport,Invoice.Price) then
 		Active[Passport] = nil
-		return false
+		return { Error = "Dinheiro insuficiente." }
 	end
 
 	exports.bank:AddTransactions(Passport,"InvoiceTo",Invoice.Price,("#%s - %s"):format(Invoice.Passport,vRP.FullName(Invoice.Passport)))
@@ -307,7 +312,7 @@ function Creative.CancelInvoice(Number)
 	local Number = parseInt(Number)
 	local Passport = vRP.Passport(source)
 	if not Passport or Active[Passport] then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	Active[Passport] = true
@@ -315,12 +320,12 @@ function Creative.CancelInvoice(Number)
 	local Invoice = exports.oxmysql:single_async("SELECT id,Passport,Received FROM invoices WHERE id = ? LIMIT 1",{ Number })
 	if not Invoice then
 		Active[Passport] = nil
-		return false
+		return { Error = "Fatura não encontrada." }
 	end
 
 	if Invoice.Passport ~= Passport then
 		Active[Passport] = nil
-		return false
+		return { Error = "Proprietário inválido." }
 	end
 
 	exports.oxmysql:query_async("DELETE FROM invoices WHERE id = ?",{ Number })
@@ -376,12 +381,12 @@ function Creative.GetFine(Number)
 	local Number = parseInt(Number)
 	local Passport = vRP.Passport(source)
 	if not Passport then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	local Consult = exports.oxmysql:single_async("SELECT id,Passport,Officer,Fine,Timestamp,Description,Infractions FROM mdt_creative_fines WHERE id = ? LIMIT 1",{ Number })
 	if not Consult or Consult.Passport ~= Passport then
-		return false
+		return { Error = "Multa não encontrada." }
 	end
 
 	return {
@@ -404,7 +409,7 @@ function Creative.PayFine(Number)
 	local Number = parseInt(Number)
 	local Passport = vRP.Passport(source)
 	if not Passport or Active[Passport] then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	Active[Passport] = true
@@ -412,26 +417,16 @@ function Creative.PayFine(Number)
 	local Consult = exports.oxmysql:single_async("SELECT id,Fine FROM mdt_creative_fines WHERE id = ? AND Passport = ? AND Paid = 0 LIMIT 1",{ Number,Passport })
 	if not Consult then
 		Active[Passport] = nil
-		return false
+		return { Error = "Multa não encontrada." }
 	end
 
 	if not vRP.PaymentBank(Passport,Consult.Fine) then
 		Active[Passport] = nil
-		return false
+		return { Error = "Dinheiro insuficiente." }
 	end
 
 	exports.oxmysql:update_async("UPDATE mdt_creative_fines SET Paid = 1 WHERE id = ? AND Passport = ?",{ Number,Passport })
 	exports.bank:AddTransactions(Passport,"Fine",Consult.Fine,Number)
-
-	local ConsultFine = exports.oxmysql:single_async("SELECT Permission FROM mdt_creative_fines WHERE id = ?",{ Number })
-	if ConsultFine and ConsultFine.Permission then
-		local TargetPermission = ConsultFine.Permission
-		if TargetPermission == "Policia" then
-			TargetPermission = "DPD"
-		end
-		vRP.PermissionsUpdate(TargetPermission,"Bank","+",Consult.Fine)
-	end
-
 	Active[Passport] = nil
 
 	return true
@@ -442,7 +437,7 @@ end
 function Creative.PayAllFines()
 	local Passport = vRP.Passport(source)
 	if not Passport or Active[Passport] then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	Active[Passport] = true
@@ -450,7 +445,7 @@ function Creative.PayAllFines()
 	local Consult = exports.oxmysql:query_async("SELECT id,Fine FROM mdt_creative_fines WHERE Passport = ? AND Paid = 0 ORDER BY Timestamp ASC",{ Passport })
 	if not Consult or #Consult == 0 then
 		Active[Passport] = nil
-		return false
+		return { Error = "Multa não encontrada." }
 	end
 
 	for Number = 1,#Consult do
@@ -461,15 +456,6 @@ function Creative.PayAllFines()
 
 		exports.oxmysql:update_async("UPDATE mdt_creative_fines SET Paid = 1 WHERE id = ? AND Passport = ?",{ Row.id,Passport })
 		exports.bank:AddTransactions(Passport,"Fine",Row.Fine,Row.id)
-
-		local ConsultFine = exports.oxmysql:single_async("SELECT Permission FROM mdt_creative_fines WHERE id = ?",{ Row.id })
-		if ConsultFine and ConsultFine.Permission then
-			local TargetPermission = ConsultFine.Permission
-			if TargetPermission == "Policia" then
-				TargetPermission = "DPD"
-			end
-			vRP.PermissionsUpdate(TargetPermission,"Bank","+",Row.Fine)
-		end
 	end
 
 	Active[Passport] = nil
@@ -520,7 +506,7 @@ function Creative.PayTax(Number)
 	local Number = parseInt(Number)
 	local Passport = vRP.Passport(source)
 	if not Passport or Active[Passport] then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	Active[Passport] = true
@@ -528,12 +514,12 @@ function Creative.PayTax(Number)
 	local Consult = exports.oxmysql:single_async("SELECT id,Name,Price FROM taxes WHERE id = ? AND Passport = ? LIMIT 1",{ Number,Passport })
 	if not Consult then
 		Active[Passport] = nil
-		return false
+		return { Error = "Imposto não encontrado." }
 	end
 
 	if not vRP.PaymentBank(Passport,Consult.Price) then
 		Active[Passport] = nil
-		return false
+		return { Error = "Dinheiro insuficiente." }
 	end
 
 	exports.oxmysql:query_async("DELETE FROM taxes WHERE id = ? AND Passport = ?",{ Number,Passport })
@@ -549,7 +535,7 @@ function Creative.PayAllTaxes()
 	local source = source
 	local Passport = vRP.Passport(source)
 	if not Passport or Active[Passport] then
-		return false
+		return { Error = "Indisponível no momento." }
 	end
 
 	Active[Passport] = true
@@ -557,7 +543,7 @@ function Creative.PayAllTaxes()
 	local Consult = exports.oxmysql:query_async("SELECT id,Name,Price FROM taxes WHERE Passport = ?",{ Passport })
 	if not Consult or #Consult == 0 then
 		Active[Passport] = nil
-		return false
+		return { Error = "Imposto não encontrado." }
 	end
 
 	local Total = 0
@@ -567,7 +553,7 @@ function Creative.PayAllTaxes()
 
 	if not vRP.PaymentBank(Passport,Total) then
 		Active[Passport] = nil
-		return false
+		return { Error = "Dinheiro insuficiente." }
 	end
 
 	exports.oxmysql:query_async("DELETE FROM taxes WHERE Passport = ?",{ Passport })
@@ -589,17 +575,12 @@ exports("AddTaxes",function(Passport,Name,Valuation,Description)
 	end
 
 	local Price = Valuation * 0.1
-	local Discount = 1.0
-
-	for GroupName,GroupData in pairs(Groups) do
-		if GroupData.Multiplier and GroupData.Multiplier.Bank then
-			if vRP.HasGroup(Passport,GroupName) then
-				Discount = math.min(Discount,1 - (GroupData.Multiplier.Bank / 100))
-			end
+	for Permission,Multiplier in pairs({ Ouro = 0.65, Prata = 0.75, Bronze = 0.85 }) do
+		if vRP.HasService(Passport,Permission) then
+			Price = Price * Multiplier
+			break
 		end
 	end
-
-	Price = Price * Discount
 
 	if Price < 1 then
 		return false
@@ -630,7 +611,6 @@ exports("CheckTaxes",function(Passport)
 
 	return false
 end)
-
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CHECKFINES
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -652,7 +632,6 @@ exports("CheckFines",function(Passport)
 
 	return false
 end)
-
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ADDTRANSACTIONS
 -----------------------------------------------------------------------------------------------------------------------------------------

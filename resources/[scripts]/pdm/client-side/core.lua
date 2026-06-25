@@ -13,7 +13,7 @@ local Lasted = ""
 local Camera = nil
 local Selected = 1
 local Preview = nil
-local Vehicles = VehicleList()
+local Vehicles = exports.vrp:VehicleList()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CONFIG
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -210,7 +210,7 @@ RegisterNUICallback("Drive", function(Data, Callback)
 				LocalPlayer.state:set("Commands",false,true)
 
 				SetEntityHeading(Ped,Config[Selected].DriveOut.w)
-				SetEntityCoords(Ped,Config[Selected].DriveOut.xyz)
+				SetEntityCoordsNoOffset(Ped,Config[Selected].DriveOut.xyz)
 
 				if DoesEntityExist(Preview) then
 					DeleteEntity(Preview)

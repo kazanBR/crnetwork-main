@@ -60,7 +60,7 @@ AddEventHandler("inventory:ClientTow",function(Vehicle,Selected,Mode)
 
 				local Heading = GetEntityHeading(Vehicle)
 				local Coords = GetOffsetFromEntityInWorldCoords(Vehicle,0.0,-10.0,0.0)
-				SetEntityCoords(Selected,Coords["x"],Coords["y"],Coords["z"],false,false,false,false)
+				SetEntityCoordsNoOffset(Selected,Coords["x"],Coords["y"],Coords["z"],false,false,false)
 				SetEntityHeading(Selected,Heading)
 				SetVehicleOnGroundProperly(Selected)
 

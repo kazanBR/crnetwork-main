@@ -89,7 +89,7 @@ local function PromoteNewOwner(Selected)
 		return
 	end
 
-	if CountUsers(Room.Users) == 0 then
+	if CountUsers(Room.Users) <= 0 then
 		Config.Room[Selected] = nil
 		return false
 	end
@@ -133,19 +133,19 @@ function Creative.GetRooms()
 	local Rooms = {}
 	for _,Room in pairs(Config.Room) do
 		Rooms[#Rooms + 1] = {
-			Value = "",
 			Id = Room.Id,
 			Name = Room.Name,
-			Created = Room.Created,
+			Creator = Room.Created,
 			Identity = Room.Identity,
-			Users = CountUsers(Room.Users),
-			Password = Room.Password or false
+			Members = CountUsers(Room.Users),
+			Mode = Room.Password and "private" or "public"
 		}
 	end
 
 	return {
-		group = Config.Users[Passport] or false,
-		room = Rooms
+		Passport = Passport,
+		Group = Config.Users[Passport] or false,
+		Rooms = Rooms
 	}
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -155,7 +155,6 @@ function Creative.GetMembers(Selected)
 	local source = source
 	local Room = GetRoom(Selected)
 	local Passport = GetPassport(source)
-
 	if not (Passport and Room) then
 		return false
 	end
@@ -168,14 +167,7 @@ function Creative.GetMembers(Selected)
 		}
 	end
 
-	return {
-		Id = Selected,
-		Members = Members,
-		Name = Room.Name,
-		Created = Room.Created,
-		Identity = Room.Identity,
-		Users = CountUsers(Room.Users)
-	}
+	return Members
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CREATEROOM
@@ -202,52 +194,22 @@ function Creative.CreateRoom(Name,Password)
 
 	Config.Users[Passport] = Selected
 
-	return {
-		group = Selected,
-		room = {
-			Users = 1,
-			Name = Name,
-			Id = Selected,
-			Created = Passport,
-			Password = Password,
-			Identity = Config.Room[Selected].Identity
-		}
-	}
+	return Selected
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- LEAVEROOM
+-- KICKMEMBER
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.LeaveRoom()
+function Creative.KickMember(Selected,OtherPassport)
 	local source = source
-	local Passport = GetPassport(source)
-	local Selected = Passport and Config.Users[Passport]
 	local Room = GetRoom(Selected)
-
+	local Passport = GetPassport(source)
+	local OtherPassport = parseInt(OtherPassport)
 	if not (Passport and Room and Room.Users[Passport]) then
 		return false
 	end
 
-	RemoveUserFromRoom(Room,Passport,source)
-
-	if Room.Created == Passport then
+	if Room.Created == OtherPassport then
 		PromoteNewOwner(Selected)
-	elseif CountUsers(Room.Users) == 0 then
-		Config.Room[Selected] = nil
-	end
-
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- KICKROOM
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.KickRoom(Selected,OtherPassport)
-	local source = source
-	local Room = GetRoom(Selected)
-	local Passport = GetPassport(source)
-	OtherPassport = parseInt(OtherPassport)
-
-	if not (Passport and Room and Room.Created == Passport and OtherPassport ~= Passport) then
-		return false
 	end
 
 	local OtherSource = vRP.Source(OtherPassport)
@@ -262,7 +224,7 @@ function Creative.KickRoom(Selected,OtherPassport)
 		Config.Users[OtherPassport] = nil
 	end
 
-	if CountUsers(Room.Users) == 0 then
+	if CountUsers(Room.Users) <= 0 then
 		Config.Room[Selected] = nil
 	end
 
@@ -275,7 +237,6 @@ function Creative.EnterRoom(Selected,Password)
 	local source = source
 	local Room = GetRoom(Selected)
 	local Passport = GetPassport(source)
-
 	if not (Passport and Room and not Config.Users[Passport] and CountUsers(Room.Users) < MaxMembersParty) then
 		return false
 	end
@@ -351,7 +312,7 @@ AddEventHandler("Disconnect",function(Passport,source)
 
 	RemoveUserFromRoom(Room,Passport,source)
 
-	if CountUsers(Room.Users) == 0 then
+	if CountUsers(Room.Users) <= 0 then
 		Config.Room[Selected] = nil
 	end
 end)

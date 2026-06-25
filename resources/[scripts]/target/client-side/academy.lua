@@ -28,7 +28,7 @@ AddEventHandler("target:Academy",function(Number)
 		local Ped = PlayerPedId()
 
 		SetEntityHeading(Ped,Academy[Number]["Coords"]["w"])
-		SetEntityCoords(Ped,Academy[Number]["Coords"]["xyz"])
+		SetEntityCoordsNoOffset(Ped,Academy[Number]["Coords"]["xyz"])
 		TriggerEvent("emotes",Academy[Number]["Anim"])
 
 		if vSERVER.Academy(Number) then

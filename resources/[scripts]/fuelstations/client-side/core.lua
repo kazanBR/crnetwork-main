@@ -30,7 +30,7 @@ AddEventHandler("fuelstations:Connect",function(Table)
 		SetBlipScale(Blips[Permission],Config.DefaultScale)
 
 		BeginTextCommandSetBlipName("STRING")
-		AddTextComponentString(v.Name)
+		AddTextComponentString(v.Name or Config.DefaulName)
 		EndTextCommandSetBlipName(Blips[Permission])
 
 		Wait(10)
@@ -261,13 +261,42 @@ end)
 -- REPLENISHMENT
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Upgrades",function(Data,Callback)
-	Callback(vSERVER.Upgrades())
+	Callback({
+        { -- Dados da Capacidade de estoque
+            Level = 0, -- Level atual
+            List = { -- Lista de níveis disponíveis
+            	{
+            		Amount = 250,
+            		Price = 500
+            	}
+            }
+        },
+        { -- Dados da Capacidade do caminhão
+            Level = 0, -- Level atual
+            List = { -- Lista de níveis disponíveis
+            	{
+            		Amount = 250,
+            		Price = 500
+            	}
+            }
+        },
+        { -- Dados do Relacionamento
+            Level = 0, -- Level atual
+            List = { -- Lista de níveis disponíveis
+            	{
+            		Amount = 250,
+            		Price = 500
+            	}
+            }
+        }
+    })
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- REPLENISHMENT
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("BuyUpgrade",function(Data,Callback)
-    Callback(vSERVER.Upgrade(Data.Mode))
+RegisterNUICallback("Upgrade",function(Data,Callback)
+    -- Mode ( "Stock" | "Truck" | "Relationship" )
+    Callback(true) -- true ou false (true se deu certo o upgrade)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- EMPLOYEES
@@ -323,4 +352,10 @@ end)
 RegisterNUICallback("FinishJob",function(Data,Callback)
     -- Id
     Callback(true) -- true ou false (true se deu certo a finalização do serviço)
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- TRANSFEROWNERSHIP
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNUICallback("TransferOwnership",function(Data,Callback)
+	Callback(vSERVER.TransferOwnership(Data.Passport))
 end)

@@ -50,8 +50,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- RADIO:DISCONNECT
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("radio:Disconnect")
-AddEventHandler("radio:Disconnect",function()
+RegisterNetEvent("radio:Disconnect",function()
 	if Frequency ~= 0 then
 		Frequency = 0
 		SendNUIMessage({ Action = "Frequency" })
@@ -62,7 +61,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- RADIO:DISPLAY
 -----------------------------------------------------------------------------------------------------------------------------------------
-AddEventHandler("radio:Display",function(Name,Enable)
+AddEventHandler("radio:Display",function(OtherSource,Name,Enable)
 	if Enable then
 		SendNUIMessage({ Action = "Radio", Payload = { Source = OtherSource, Name = Name or "Desconhecido" } })
 	else

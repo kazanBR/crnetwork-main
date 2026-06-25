@@ -189,6 +189,11 @@ function toggleMutePlayer(Status)
 	end
 end
 
+RegisterNetEvent("pma-voice:Mute")
+AddEventHandler("pma-voice:Mute",function(Status)
+	toggleMutePlayer(Status)
+end)
+
 exports("Mute",toggleMutePlayer)
 exports("toggleMutePlayer",toggleMutePlayer)
 

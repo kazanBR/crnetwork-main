@@ -5210,7 +5210,8 @@ local List = {
 		Price = 200000,
 		Mode = "Cars",
 		Gemstone = 0,
-		Class = "Clássicos"
+		Class = "Clássicos",
+		Item = "Permanent"
 	},
 	t20 = {
 		Name = "T20",
@@ -5218,7 +5219,8 @@ local List = {
 		Price = 300000,
 		Mode = "Cars",
 		Gemstone = 0,
-		Class = "Clássicos"
+		Class = "Clássicos",
+		Item = 7
 	},
 	taipan = {
 		Name = "Taipan",
@@ -6078,13 +6080,553 @@ local List = {
 	},
 
 	-- IMPORTS
-	teste01 = {
-		Name = "Teste 01",
+	["22m5"] = {
+		Name = "22m5",
 		Weight = 60,
 		Price = 200000,
 		Mode = "Rental",
 		Gemstone = 6000,
 		Class = "Importados"
+	},
+	["69charger"] = {
+		Name = "69charger",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["488misha"] = {
+		Name = "488misha",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["675ltsp"] = {
+		Name = "675ltsp",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["a45amg"] = {
+		Name = "a45amg",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["a80"] = {
+		Name = "a80",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["acs8"] = {
+		Name = "acs8",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["audirs6"] = {
+		Name = "audirs6",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["bdragon"] = {
+		Name = "bdragon",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["bmwr"] = {
+		Name = "bmwr",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["bt62r"] = {
+		Name = "bt62r",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["chiron17"] = {
+		Name = "chiron17",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["cp9a"] = {
+		Name = "cp9a",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["dc5"] = {
+		Name = "dc5",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["demon"] = {
+		Name = "demon",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["e36prb"] = {
+		Name = "e36prb",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["evo9"] = {
+		Name = "evo9",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["filthynsx"] = {
+		Name = "filthynsx",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["fk8"] = {
+		Name = "fk8",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["fnfrx7"] = {
+		Name = "fnfrx7",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["gt63"] = {
+		Name = "gt63",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["gt86"] = {
+		Name = "gt86",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["jester5"] = {
+		Name = "jester5",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["lancerevolutionx"] = {
+		Name = "lancerevolutionx",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["lc500"] = {
+		Name = "lc500",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["lp700"] = {
+		Name = "lp700",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["m1000rr"] = {
+		Name = "m1000rr",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["maj350z"] = {
+		Name = "maj350z",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["pgt322"] = {
+		Name = "pgt322",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["r1"] = {
+		Name = "r1",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["r32"] = {
+		Name = "r32",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["r35"] = {
+		Name = "r35",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["roxanne"] = {
+		Name = "roxanne",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["rr14"] = {
+		Name = "rr14",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["s1000rr"] = {
+		Name = "s1000rr",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["senna"] = {
+		Name = "senna",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["silvias15"] = {
+		Name = "silvias15",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["skyliner34"] = {
+		Name = "skyliner34",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["subaruimpreza"] = {
+		Name = "subaruimpreza",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["sunrise"] = {
+		Name = "sunrise",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["teslamodels"] = {
+		Name = "teslamodels",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["tsgr20"] = {
+		Name = "tsgr20",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["zx10"] = {
+		Name = "zx10",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+	["cb500x"] = {
+		Name = "cb500x",
+		Weight = 60,
+		Price = 200000,
+		Mode = "Rental",
+		Gemstone = 6000,
+		Class = "Importados"
+	},
+
+	-- PARAMEDIC
+	["ambulance2"] = {
+		Name = "ambulance2",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["maverick2"] = {
+		Name = "maverick2",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+
+	-- POLICE
+	["ballerpol"] = {
+		Name = "ballerpol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["elegy2pol"] = {
+		Name = "elegy2pol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["fugitivepol"] = {
+		Name = "fugitivepol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["komodapol"] = {
+		Name = "komodapol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["kurumapol"] = {
+		Name = "kurumapol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["nc700pol"] = {
+		Name = "nc700pol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["oracle2pol"] = {
+		Name = "oracle2pol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["polas350"] = {
+		Name = "polas350",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["polchall"] = {
+		Name = "polchall",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["polchar"] = {
+		Name = "polchar",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["police3pol"] = {
+		Name = "police3pol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["policepol"] = {
+		Name = "policepol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["policetpol"] = {
+		Name = "policetpol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["poltang"] = {
+		Name = "poltang",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["polvic"] = {
+		Name = "polvic",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["r1250pol"] = {
+		Name = "r1250pol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["schafter2pol"] = {
+		Name = "schafter2pol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["silveradopol"] = {
+		Name = "silveradopol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["sultanrspol"] = {
+		Name = "sultanrspol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["tahoepol"] = {
+		Name = "tahoepol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["tailgater2pol"] = {
+		Name = "tailgater2pol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
+	},
+	["tauruspol"] = {
+		Name = "tauruspol",
+		Weight = 40,
+		Price = 1000,
+		Mode = "Work",
+		Gemstone = 0,
+		Class = "Emergência"
 	},
 
 	-- RACES
@@ -6391,54 +6933,58 @@ local List = {
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLELIST
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehicleList()
+exports("VehicleList",function()
 	return List or {}
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLEEXIST
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehicleExist(Name)
+exports("VehicleExist",function(Name)
 	return List[Name] or false
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLENAME
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehicleName(Name)
+exports("VehicleName",function(Name)
 	return List[Name] and List[Name].Name or "Desconhecido"
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLEWEIGHT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehicleWeight(Name)
+exports("VehicleWeight",function(Name)
 	return List[Name] and List[Name].Weight or 0
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLEPRICE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehiclePrice(Name)
+exports("VehiclePrice",function(Name)
 	return List[Name] and List[Name].Price or 0
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLEMODE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehicleMode(Name)
+exports("VehicleMode",function(Name)
 	return List[Name] and List[Name].Mode or false
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLEGEMSTONE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehicleGemstone(Name)
+exports("VehicleGemstone",function(Name)
 	return List[Name] and List[Name].Gemstone or 0
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLECLASS
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehicleClass(Name)
+exports("VehicleClass",function(Name)
 	return List[Name] and List[Name].Class or "Desconhecido"
-end
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VEHICLESTOCK
 -----------------------------------------------------------------------------------------------------------------------------------------
-function VehicleStock(Name)
+exports("VehicleStock",function(Name)
 	return List[Name] and List[Name].Stock or 999999
-end
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- VARIABLES
+-----------------------------------------------------------------------------------------------------------------------------------------
+ListVehicles = List

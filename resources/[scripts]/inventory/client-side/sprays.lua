@@ -14,62 +14,68 @@ function Creative.SprayControlling(Model)
 	local Application = false
 	local SprayCoords = false
 
-	if not Active and LoadModel(Model) then
-		Active = true
-
-		local NextObject = nil
-		local Ped = PlayerPedId()
-		local Coords = GetEntityCoords(Ped)
-
-		TriggerEvent("inventory:Buttons",{
-			{ "F","Cancelar" },
-			{ "H","Pichar" }
-		})
-
-		while true do
-			local rayCoords,rayNormal = FindRaySprayCoords()
-			if rayCoords and rayNormal then
-				local sprayPosition = rayCoords + rayNormal * 0.050
-				local heading = GetHeadingFromVector_2d(sprayPosition.x - Coords.x,sprayPosition.y - Coords.y)
-
-				if not NextObject then
-					NextObject = CreateObjectNoOffset(Model,sprayPosition.x,sprayPosition.y,sprayPosition.z,false,false,false)
-					SetEntityAlpha(NextObject,175,false)
-					SetEntityCollision(NextObject,false,false)
-				end
-
-				SetEntityCoordsNoOffset(NextObject,sprayPosition.x,sprayPosition.y,sprayPosition.z,true,true,true)
-				SetEntityRotation(NextObject,0.0,0.0,heading,2,true)
-			end
-
-			if IsControlJustPressed(1,74) then
-				TriggerEvent("inventory:CloseButtons")
-				Application = true
-
-				break
-			end
-
-			if IsControlJustPressed(0,49) then
-				TriggerEvent("inventory:CloseButtons")
-				Application = false
-
-				break
-			end
-
-			Wait(1)
-		end
-
-		if NextObject and DoesEntityExist(NextObject) then
-			local objectCoords = GetEntityCoords(NextObject)
-			local objectHeading = GetEntityHeading(NextObject)
-
-			SprayCoords = { Optimize(objectCoords.x),Optimize(objectCoords.y),Optimize(objectCoords.z),Optimize(objectHeading) }
-
-			DeleteEntity(NextObject)
-		end
-
-		Active = false
+	if Active or not LoadModel(Model) then
+		return false,false
 	end
+
+	Active = true
+
+	local NextObject = nil
+	local Ped = PlayerPedId()
+	local Coords = GetEntityCoords(Ped)
+
+	TriggerEvent("inventory:Buttons",{
+		{ Letter = "F", Text = "Cancelar" },
+		{ Letter = "H", Text = "Pichar" }
+	})
+
+	while true do
+		local RayCoords,RayNormal = FindRaySprayCoords()
+		if RayCoords and RayNormal then
+			local SprayPosition = RayCoords + RayNormal * 0.050
+			local Heading = GetHeadingFromVector_2d(SprayPosition.x - Coords.x,SprayPosition.y - Coords.y)
+
+			if not NextObject then
+				NextObject = CreateObjectNoOffset(Model,SprayPosition.x,SprayPosition.y,SprayPosition.z,false,false,false)
+
+				SetEntityAlpha(NextObject,175,false)
+				SetEntityCollision(NextObject,false,false)
+			end
+
+			SetEntityCoordsNoOffset(NextObject,SprayPosition.x,SprayPosition.y,SprayPosition.z,false,false,false)
+			SetEntityRotation(NextObject,0.0,0.0,Heading,2,true)
+		end
+
+		if IsControlJustPressed(1,74) then
+			TriggerEvent("inventory:CloseButtons")
+			Application = true
+			break
+		end
+
+		if IsControlJustPressed(0,49) then
+			TriggerEvent("inventory:CloseButtons")
+			Application = false
+			break
+		end
+
+		Wait(0)
+	end
+
+	if NextObject and DoesEntityExist(NextObject) then
+		local ObjectCoords = GetEntityCoords(NextObject)
+		local ObjectHeading = GetEntityHeading(NextObject)
+
+		SprayCoords = {
+			Optimize(ObjectCoords.x),
+			Optimize(ObjectCoords.y),
+			Optimize(ObjectCoords.z),
+			Optimize(ObjectHeading)
+		}
+
+		DeleteEntity(NextObject)
+	end
+
+	Active = false
 
 	if not SprayCoords or (SprayCoords[1] == 0.0 and SprayCoords[2] == 0.0) then
 		Application = false

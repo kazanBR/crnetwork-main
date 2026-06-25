@@ -47,15 +47,15 @@ AddEventHandler("farmer:Minerman",function(Number)
 	local PickaxePlus = vRP.ConsultItem(Passport,Item.."plus")
 
 	if not Pickaxe and not PickaxePlus then
-		TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..ItemName(Item).."</b>.","amarelo",5000)
+		TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..exports.vrp:ItemName(Item).."</b>.","amarelo",5000)
 	else
 		Active[Passport] = true
 		Player(source).state.Cancel = true
 		Player(source).state.Buttons = true
 		vRPC.CreateObjects(source,"melee@large_wpn@streamed_core","ground_attack_on_spot","prop_tool_pickaxe",1,18905,0.10,-0.1,0.0,-92.0,260.0,5.0)
 
-		if vRP.Task(source,Pickaxe and 10 or 5,10000) and GlobalState.Work >= FarmerState then
-			FarmerState = GlobalState.Work + 60
+		if vRP.Task(source,Pickaxe and 10 or 5,10000) and GlobalState.Work >= GlobalState[FarmerKey] then
+			GlobalState[FarmerKey] = GlobalState.Work + 60
 
 			local Result = {
 				{ Item = "tin_pure", Chance = 125, Min = 1, Max = 1 },
@@ -146,15 +146,15 @@ AddEventHandler("farmer:Lumberman",function(Number)
 	local AxePlus = vRP.ConsultItem(Passport,Item.."plus")
 
 	if not Axe and not AxePlus then
-		TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..ItemName(Item).."</b>.","amarelo",5000)
+		TriggerClientEvent("Notify",source,"Atenção","Precisa de <b>1x "..exports.vrp:ItemName(Item).."</b>.","amarelo",5000)
 	else
 		Active[Passport] = true
 		Player(source).state.Cancel = true
 		Player(source).state.Buttons = true
 		vRPC.playAnim(source,false,{"lumberjackaxe@idle","idle"},true)
 
-		if vRP.Task(source,Pickaxe and 10 or 5,10000) and GlobalState.Work >= FarmerState then
-			FarmerState = GlobalState.Work + 30
+		if vRP.Task(source,Pickaxe and 10 or 5,10000) and GlobalState.Work >= GlobalState[FarmerKey] then
+			GlobalState[FarmerKey] = GlobalState.Work + 30
 
 			local Valuation = 3
 			local Item = "woodlog"
@@ -228,7 +228,7 @@ AddEventHandler("farmer:Transporter",function(Number)
 
 	Wait(1000)
 
-	if GlobalState.Work >= FarmerState then
+	if GlobalState.Work >= GlobalState[FarmerKey] then
 		GlobalState[FarmerKey] = GlobalState.Work + 30
 
 		local Amount = 1
@@ -292,7 +292,7 @@ AddEventHandler("farmer:Sandman",function(Number)
 
 	Wait(1000)
 
-	if GlobalState.Work >= FarmerState then
+	if GlobalState.Work >= GlobalState[FarmerKey] then
 		GlobalState[FarmerKey] = GlobalState.Work + 30
 
 		local Amount = 1
@@ -356,7 +356,7 @@ AddEventHandler("farmer:Trasher",function(Number)
 
 	Wait(1000)
 
-	if GlobalState.Work >= FarmerState then
+	if GlobalState.Work >= GlobalState[FarmerKey] then
 		GlobalState[FarmerKey] = GlobalState.Work + 180
 
 		local Item = "binbag"
@@ -416,9 +416,9 @@ AddEventHandler("farmer:Prison",function(Number)
 
 	Wait(1000)
 
-	if GlobalState.Work >= FarmerState then
+	if GlobalState.Work >= GlobalState[FarmerKey] then
 		GlobalState[FarmerKey] = GlobalState.Work + 60
-		vRP.UpdatePrison(Passport,1)
+		vRP.UpdatePrison(Passport)
 	end
 
 	Player(source).state.Buttons = false

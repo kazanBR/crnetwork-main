@@ -20,21 +20,6 @@ local Cooldown = {}
 -- CHESTITENS
 -----------------------------------------------------------------------------------------------------------------------------------------
 local ChestItens = {
-	["personalp"] = {
-		Slots = 100,
-		Weight = 100,
-		Block = true
-	},
-	["personalm"] = {
-		Slots = 100,
-		Weight = 250,
-		Block = true
-	},
-	["personalg"] = {
-		Slots = 100,
-		Weight = 500,
-		Block = true
-	},
 	["chestgroupp"] = {
 		Slots = 100,
 		Weight = 1000,
@@ -119,14 +104,25 @@ local ChestItens = {
 		Weight = 10,
 		Close = true,
 		Itens = {
-			["bandage"] = true,
-			["gauze"] = true,
-			["gdtkit"] = true,
-			["medkit"] = true,
-			["sinkalmy"] = true,
-			["analgesic"] = true,
-			["ritmoneury"] = true,
-			["adrenaline"] = true
+			bandage = true,
+			gauze = true,
+			gdtkit = true,
+			medkit = true,
+			sinkalmy = true,
+			analgesic = true,
+			ritmoneury = true,
+			adrenaline = true
+		}
+	},
+	["mechanicbag"] = {
+		Slots = 5,
+		Weight = 20,
+		Close = true,
+		Itens = {
+			advtoolbox = true,
+			toolbox = true,
+			WEAPON_WRENCH = true,
+			tyres = true
 		}
 	},
 	["treasurebox"] = {
@@ -146,7 +142,23 @@ function Creative.Permissions(Name,Mode,Item)
 		return false
 	end
 
-	if Mode == "Personal" then
+	if Mode == "Goals" then
+		local SplitName = splitString(Name,":")
+		if SplitName[1] and SplitName[2] and SplitName[3] and SplitName[1] == "Painel" and SplitName[2] == "Goals" then
+			if vRP.HasService(Passport,SplitName[3]) then
+				Open[Passport] = {
+					Name = "Goals:"..SplitName[3],
+					Permission = SplitName[3],
+					Weight = 1000,
+					Save = true,
+					Slots = 200,
+					Goals = true
+				}
+
+				return true
+			end
+		end
+	elseif Mode == "Personal" then
 		local ServiceName = SplitOne(Name)
 		if vRP.HasService(Passport,ServiceName) then
 			Open[Passport] = {
@@ -208,14 +220,13 @@ function Creative.Permissions(Name,Mode,Item)
 		end
 
 		if Consult and vRP.HasService(Passport,Consult.Permission) then
-			local IsPremium = vRP.Permissions(Consult.Permission, "Premium") > os.time()
+			local IsPremium = vRP.Permissions(Consult.Permission,"Premium") > os.time()
 
 			Open[Passport] = {
 				Weight = IsPremium and Consult.Weight * 2 or Consult.Weight,
 				Chest = Name,
 				Slots = Consult.Slots,
 				Name = "Chest:"..Name,
-				Permission = Consult.Permission,
 				Save = true
 			}
 
@@ -237,7 +248,7 @@ function Creative.Mount()
 	end
 
 	local function ProcessItem(Slot,v,Prefix,Key,Save)
-		if v.amount <= 0 or not ItemExist(v.item) then
+		if v.amount <= 0 or not exports.vrp:ItemExist(v.item) then
 			if Prefix == "Inventory" then
 				vRP.CleanSlot(Passport,Slot)
 			elseif Prefix == "Chest" then
@@ -259,15 +270,15 @@ function Creative.Mount()
 		if not v.desc then
 			if Item == "vehiclekey" and Split[3] then
 				local Consult = exports.oxmysql:single_async("SELECT * FROM vehicles WHERE Plate = ? LIMIT 1",{ Split[3] })
-				if Consult and VehicleExist(Consult.Vehicle) then
-					v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
+				if Consult and exports.vrp:VehicleExist(Consult.Vehicle) then
+					v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..exports.vrp:VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
 				end
 			elseif Item == "propertys" and Split[2] then
 				local Consult = exports.oxmysql:single_async("SELECT * FROM propertys WHERE Serial = ? LIMIT 1",{ Split[2] })
 				if Consult then
 					v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common>"
 				end
-			elseif ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
+			elseif exports.vrp:ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
 				if Item == "identity" then
 					v.desc = "Passaporte: <rare>"..Dotted(Split[2]).."</rare><br>Nome: <rare>"..vRP.FullName(Split[2]).."</rare><br>Telefone: <rare>"..vRP.Phone(Split[2]).."</rare>"
 				else
@@ -277,14 +288,14 @@ function Creative.Mount()
 		end
 
 		if Split[2] then
-			local Loaded = ItemLoads(v.item)
+			local Loaded = exports.vrp:ItemLoads(v.item)
 			if Loaded then
 				v.charges = parseInt(Split[2] * (100 / Loaded))
 			end
 
-			if ItemDurability(v.item) then
+			if exports.vrp:ItemDurability(v.item) then
 				v.durability = parseInt(os.time() - Split[2])
-				v.days = ItemDurability(v.item)
+				v.days = exports.vrp:ItemDurability(v.item)
 			end
 		end
 
@@ -312,7 +323,7 @@ function Creative.Mount()
 		end
 	end
 
-	return Primary,Secondary,vRP.GetWeight(Passport),Open[Passport].Weight,Open[Passport].Slots
+	return Primary,Secondary,vRP.GetWeight(Passport),Open[Passport].Weight,vRP.InventorySlots(Passport),Open[Passport].Slots
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- STORE
@@ -321,54 +332,130 @@ function Creative.Store(Item,Slot,Amount,Target,Inactived)
 	local source = source
 	local Amount = parseInt(Amount,true)
 	local Passport = vRP.Passport(source)
-
-	if not (Passport and Open[Passport] and not Inactived) then
+	local OpenData = Passport and Open[Passport]
+	if not Passport or not OpenData or Inactived then
 		TriggerClientEvent("inventory:Update",source)
-
 		return false
 	end
 
-	if Open[Passport].Recycle then
-		local Recycled = ItemRecycle(Item)
-		if Recycled and vRP.TakeItem(Passport,Item,Amount) then
-			for Index,Number in pairs(Recycled) do
-				vRP.GenerateItem(Passport,Index,Number * Amount)
-			end
+	local function UpdateInventory()
+		TriggerClientEvent("inventory:Update",source)
+	end
 
-			TriggerClientEvent("inventory:Update",source)
-		else
-			TriggerClientEvent("inventory:Notify",source,"Atenção",ItemName(Item).." não pode ser reciclado.","amarelo")
-			TriggerClientEvent("inventory:Update",source)
+	local function NotifyError(Message)
+		TriggerClientEvent("inventory:Notify",source,"Atenção",Message,"amarelo")
+		UpdateInventory()
+	end
+
+	if OpenData.Recycle then
+		if exports.vrp:ItemDurability(Item) and not vRP.CheckDamaged(Item) then
+			NotifyError(exports.vrp:ItemName(Item).." não pode ser reciclado.")
+			return false
 		end
 
+		local Recycled = exports.vrp:ItemRecycle(Item)
+		if not Recycled or not vRP.TakeItem(Passport,Item,Amount) then
+			NotifyError(exports.vrp:ItemName(Item).." não pode ser reciclado.")
+			return false
+		end
+
+		for Index,Number in pairs(Recycled) do
+			vRP.GenerateItem(Passport,Index,Number * Amount)
+		end
+
+		UpdateInventory()
+
 		return false
+	else
+		if exports.vrp:ItemLocked(Item) then
+			UpdateInventory()
+			return false
+		end
 	end
 
-	if Item == "diagram" and Open[Passport].Chest and vRP.TakeItem(Passport,Item,Amount) then
-		vRP.Update("chests/UpdateWeight",{ Name = Open[Passport].Chest, Multiplier = Amount })
+	if Item == "diagram" and OpenData.Chest and vRP.TakeItem(Passport,Item,Amount) then
 		TriggerClientEvent("inventory:Notify",source,"Sucesso","Armazenamento melhorado.","verde")
-		Open[Passport].Weight = Open[Passport].Weight + (10 * Amount)
-		TriggerClientEvent("inventory:Update",source)
+		vRP.Update("chests/UpdateWeight",{ Name = OpenData.Chest, Multiplier = Amount })
+		OpenData.Weight = OpenData.Weight + (10 * Amount)
+		UpdateInventory()
 
 		return false
 	end
 
-	local CleanedItem = SplitOne(Item)
-	local Unique = Open[Passport].Unique
-	if (ChestItens[CleanedItem] and ChestItens[CleanedItem].Block) or (Unique and ChestItens[Unique] and ChestItens[Unique].Itens and not ChestItens[Unique].Itens[CleanedItem]) then
-		if Unique and CleanedItem == Unique then
-			TriggerClientEvent("inventory:Open",source,{ Type = "Inventory", Resource = "inventory", Right = "Proximidade" },true)
+	local Cleaned = SplitOne(Item)
+	local Uniqued = OpenData.Unique
+	local ChestConfig = ChestItens[Uniqued]
+	if (ChestItens[Cleaned] and ChestItens[Cleaned].Block) or (Uniqued and ChestConfig and ChestConfig.Itens and not ChestConfig.Itens[Cleaned]) then
+		if Uniqued and Cleaned == Uniqued then
+			TriggerClientEvent("inventory:Open",source,{
+				Type = "Inventory",
+				Resource = "inventory",
+				Right = "Proximidade"
+			},true)
 		else
-			TriggerClientEvent("inventory:Update",source)
+			UpdateInventory()
 		end
 
 		return false
 	end
 
-	if vRP.StoreChest(Passport,Open[Passport].Name,Amount,Open[Passport].Weight,Slot,Target,Open[Passport].Save,ChestItens[Unique]) then
-		TriggerClientEvent("inventory:Update",source)
+	if OpenData.Goals and OpenData.Permission then
+		if exports.vrp:ItemDurability(Item) and vRP.CheckDamaged(Item) then
+			UpdateInventory()
+			return false
+		end
 
-		return false
+		local Weekday = os.date("*t")
+		local Goals = vRP.GetSrvData("Painel:Goals:"..OpenData.Permission,true) or {}
+		local MyGoals = vRP.GetSrvData("Goals:"..OpenData.Permission..":"..Passport,true) or {}
+
+		MyGoals.Items = MyGoals.Items or {}
+		MyGoals.Week = MyGoals.Week or { false,false,false,false,false,false,false }
+		MyGoals.Rescued = MyGoals.Rescued or false
+
+		if not Goals.Items then
+			UpdateInventory()
+			return false
+		end
+
+		local Limit = Goals.Items[Cleaned]
+		if not Limit then
+			UpdateInventory()
+			return false
+		end
+
+		MyGoals.Items[Cleaned] = MyGoals.Items[Cleaned] or 0
+
+		if (MyGoals.Items[Cleaned] + Amount) > Limit then
+			UpdateInventory()
+			return false
+		end
+
+		if vRP.StoreChest(Passport,OpenData.Name,Amount,OpenData.Weight,Slot,Target,OpenData.Save,ChestConfig) then
+			UpdateInventory()
+			return false
+		end
+
+		MyGoals.Items[Cleaned] = MyGoals.Items[Cleaned] + Amount
+
+		local Completed = true
+		for Item,Needed in pairs(Goals.Items) do
+			if (MyGoals.Items[Item] or 0) < Needed then
+				Completed = false
+				break
+			end
+		end
+
+		if Completed then
+			MyGoals.Week[Weekday.wday] = true
+		end
+
+		vRP.SetSrvData("Goals:"..OpenData.Permission..":"..Passport,MyGoals,true)
+	else
+		if vRP.StoreChest(Passport,OpenData.Name,Amount,OpenData.Weight,Slot,Target,OpenData.Save,ChestConfig) then
+			UpdateInventory()
+			return false
+		end
 	end
 
 	return true
@@ -376,15 +463,23 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- TAKE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Take(Item,Slot,Amount,Target)
+function Creative.Take(Item,Slot,Amount,Target,Inactived)
 	local source = source
 	local Amount = parseInt(Amount,true)
 	local Passport = vRP.Passport(source)
-
 	if not Passport or not Open[Passport] then
 		TriggerClientEvent("inventory:Update",source)
 
 		return false
+	end
+
+	if Inactived then
+		local Permission = Open[Passport].Permission
+		if not Permission or not vRP.HasService(Passport,Permission,2) then
+			TriggerClientEvent("inventory:Update",source)
+
+			return false
+		end
 	end
 
 	local Name = Open[Passport].Name
@@ -405,6 +500,9 @@ function Creative.Take(Item,Slot,Amount,Target)
 			GlobalState.Helibox = (GlobalState.Helibox or 1) - 1
 		elseif SplitBoolean(Name,"Halloween",":") then
 			GlobalState.Hallobox = (GlobalState.Hallobox or 1) - 1
+			GlobalState[Name] = false
+		elseif SplitBoolean(Name,"Christmas",":") then
+			GlobalState.Christbox = (GlobalState.Christbox or 1) - 1
 			GlobalState[Name] = false
 		end
 	end

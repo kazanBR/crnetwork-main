@@ -8,638 +8,974 @@ vRP = Proxy.getInterface("vRP")
 -- CONNECTION
 -----------------------------------------------------------------------------------------------------------------------------------------
 Creative = {}
-Tunnel.bindInterface("ems", Creative)
+Tunnel.bindInterface("ems",Creative)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
-local Permission = {}
+local Active = {}
+local Division = {}
+local Permissions = {}
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- DEFAULTPERMISSION
+-----------------------------------------------------------------------------------------------------------------------------------------
+local DefaultPermissions = {
+	Consultations = {
+		View = false,
+		Create = false,
+		Edit = false,
+		Delete = false
+	},
+	Exams = {
+		View = false,
+		Create = false,
+		Edit = false,
+		Delete = false
+	},
+	MedicPlan = false,
+	Announcements = {
+		Create = false,
+		Edit = false,
+		Delete = false
+	},
+	Bank = {
+		View = false,
+		Deposit = false,
+		Withdraw = false,
+		Transfer = false
+	},
+	Specialties = {
+		View = false,
+		Create = false,
+		Edit = false,
+		Delete = false,
+		Assign = false
+	},
+	Management = {
+		View = false,
+		Create = false,
+		Dismiss = false,
+		RemoveService = false,
+		Edit = false
+	}
+}
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- EMS:OPEN
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterServerEvent("ems:Open")
-AddEventHandler("ems:Open",function(Group)
-  local source = source
-  local Passport = vRP.Passport(source)
-	Permission[Passport] = Passport and vRP.HasPermission(Passport, Group) and Group
-  TriggerClientEvent("dynamic:Close",source)
-  TriggerClientEvent("ems:Open",source)
+AddEventHandler("ems:Open",function(Permission)
+	local source = source
+	local Passport = vRP.Passport(source)
+	if not Passport then
+		return false
+	end
+
+	local Level = vRP.HasService(Passport,Permission)
+	if not Level then
+		return false
+	end
+
+	local Consult = {}
+	local Levels = tostring(Level)
+
+	if Level == 1 then
+		local Leader = {}
+		for Index,Value in pairs(DefaultPermissions) do
+			if type(Value) == "table" then
+				Leader[Index] = {}
+
+				for Parent in pairs(Value) do
+					Leader[Index][Parent] = true
+				end
+			else
+				Leader[Index] = true
+			end
+		end
+
+		Consult[Levels] = Leader
+	else
+		Consult = vRP.GetSrvData("EMS:"..Permission,true)
+	end
+
+	Division[Passport] = Permission
+	Permissions[Passport] = Consult[Levels] or DefaultPermissions
+
+	TriggerClientEvent("ems:Opened",source)
 end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- SEARCHUSER
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.SearchUser(Search)
+	local Table = {}
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
+		return Table
+	end
+
+	if type(Search) == "number" then
+		local Identity = vRP.Identity(Search)
+		if Identity then
+			table.insert(Table,{
+				Passport = Search,
+				Name = Identity.Name.." "..Identity.Lastname,
+				MedicPlan = vRP.DatatableInformation(Search,"MedicPlan") or 0
+			})
+		end
+	else
+		local Consult = exports.oxmysql:query_async("SELECT id,CONCAT(Name,' ',Lastname) AS FullName FROM characters WHERE Name LIKE CONCAT('%',@Search,'%') OR Lastname LIKE CONCAT('%',@Search,'%') LIMIT 10",{ Search = Search })
+		if Consult and #Consult > 0 then
+			for _,v in ipairs(Consult) do
+				local Identity = vRP.Identity(v.id)
+				if Identity then
+					table.insert(Table,{
+						Passport = v.id,
+						Name = Identity.Name.." "..Identity.Lastname,
+						MedicPlan = vRP.DatatableInformation(v.id,"MedicPlan") or 0
+					})
+				end
+			end
+		end
+	end
+
+	return Table
+end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PLAYER
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Player()
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local GroupInfo = Groups[Group] or {}
-	local Hierarchy = vRP.Hierarchy(Group)
-	local DefaultPermission = tonumber(Level) == 1
-	local Permissions = {
-		Management = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Dismiss = DefaultPermission },
-		Announcements = { Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-		Specialties = { View = DefaultPermission, Create = DefaultPermission, Assign = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-		Bank = { View = DefaultPermission, Deposit = DefaultPermission, Withdraw = DefaultPermission, Transfer = DefaultPermission },
-		Paramedic = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission, MedicPlan = DefaultPermission, Avatar = DefaultPermission },
-		Consultations = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-		Exams = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-		MedicPlan = DefaultPermission
+	return {
+		Player = {
+			Passport = Passport,
+			Name = Player(source).state.Name,
+			Level = vRP.HasPermission(Passport,Departmenty)
+		},
+		Group = Departmenty,
+		Permissions = Permissions[Passport]
 	}
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			for Key,Value in pairs(LevelData) do
-				if type(Permissions[Key]) == "table" and type(Value) == "table" then
-					for SubKey,SubValue in pairs(Value) do
-						if type(Permissions[Key][SubKey]) == "boolean" then
-							Permissions[Key][SubKey] = SubValue and true or false
-						end
-					end
-				elseif type(Permissions[Key]) == "boolean" then
-					Permissions[Key] = Value and true or false
-				end
-			end
-			if type(LevelData.Paramedic) == "table" and type(LevelData.Paramedic.MedicPlan) == "boolean" then
-				Permissions.MedicPlan = LevelData.Paramedic.MedicPlan
-			end
-		end
-	end
-
-	return { Group = Group, Player = { Name = vRP.FullName(Passport), Level = Level, Passport = Passport }, GroupData = { Name = GroupInfo.Name or Group, Hierarchy = Hierarchy }, Permissions = Permissions }
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- HOME
+-- CONSULTATIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Home()
+	local Table = {}
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return {}
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
+		return Table
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return {}
+	Table = {
+		Users = {},
+		Consultations = {},
+		Exams = {}
+	}
+
+	local Service = vRP.NumPermission(Departmenty)
+	for OtherPassport in pairs(Service) do
+		table.insert(Table.Users,{
+			Passport = OtherPassport,
+			Name = vRP.FullName(OtherPassport)
+		})
 	end
 
-	local Announcements = exports.oxmysql:query_async("SELECT id AS Id, Title, Description, Timestamp AS Date, Updated, Permission FROM painel_creative_announcements WHERE LOWER(Permission) = LOWER(?) ORDER BY COALESCE(Updated, Timestamp) DESC, id DESC LIMIT 5",{ Group }) or {}
-
-	local DoctorsInService = {}
-	local Groups = vRP.DataGroups(Group) or {}
-	local Service = vRP.NumPermission(Group) or {}
-	
-	for Target in pairs(Groups) do
-		if Service[Target] and vRP.Source(Target) then
-			local Identity = vRP.Identity(Target)
-			local Hierarchy = vRP.HasPermission(Target,Group)
-			if Identity and Hierarchy then
-				DoctorsInService[#DoctorsInService + 1] = { Passport = Target, Name = vRP.FullName(Target), Hierarchy = Hierarchy }
-			end
+	local ConsultConsultations = exports.oxmysql:query_async("SELECT * FROM ems_creative_consultations WHERE Permission = @Permission AND Status = @Status ORDER BY Timestamp DESC",{ Permission = Departmenty, Status = "appointment" })
+	if ConsultConsultations and #ConsultConsultations > 0 then
+		for _,v in ipairs(ConsultConsultations) do
+			table.insert(Table.Consultations,{
+				Patient = {
+					Passport = v.Passport,
+					Name = vRP.FullName(v.Passport)
+				},
+				Doctor = {
+					Passport = v.Doctor,
+					Name = vRP.FullName(v.Doctor)
+				},
+				Date = v.Timestamp
+			})
 		end
 	end
 
-	local Consultations = exports.oxmysql:query_async("SELECT id, Passport, Doctor, Timestamp, Reason, Status, Description FROM ems_creative_consultations WHERE LOWER(Permission) = LOWER(?) AND Status = 'appointment' ORDER BY Timestamp ASC LIMIT 10",{ Group }) or {}
-	local ScheduledConsultations = {}
-	for _,Consult in ipairs(Consultations) do
-		ScheduledConsultations[#ScheduledConsultations + 1] = { 
-			Id = Consult.id, 
-			Patient = {
-				Passport = Consult.Passport,
-				Name = vRP.FullName(Consult.Passport) or ""
-			},
-			Doctor = Consult.Doctor and {
-				Passport = Consult.Doctor,
-				Name = vRP.FullName(Consult.Doctor) or ""
-			} or nil,
-			Date = Consult.Timestamp, 
-			Reason = Consult.Reason or "", 
-			Description = Consult.Description 
-		}
+	local ConsultExams = exports.oxmysql:query_async("SELECT * FROM ems_creative_exams WHERE Permission = @Permission AND Status = @Status ORDER BY Timestamp DESC",{ Permission = Departmenty, Status = "appointment" })
+	if ConsultExams and #ConsultExams > 0 then
+		for _,v in ipairs(ConsultExams) do
+			table.insert(Table.Exams,{
+				Patient = {
+					Passport = v.Passport,
+					Name = vRP.FullName(v.Passport)
+				},
+				Doctor = {
+					Passport = v.Doctor,
+					Name = vRP.FullName(v.Doctor)
+				},
+				Date = v.Timestamp
+			})
+		end
 	end
 
-	local Exams = exports.oxmysql:query_async("SELECT id, Passport, Doctor, Timestamp, Name, Status, Description FROM ems_creative_exams WHERE LOWER(Permission) = LOWER(?) AND Status = 'appointment' ORDER BY Timestamp ASC LIMIT 10",{ Group }) or {}
-	local ScheduledExams = {}
-	for _,Exam in ipairs(Exams) do
-		ScheduledExams[#ScheduledExams + 1] = { 
-			Id = Exam.id, 
-			Patient = {
-				Passport = Exam.Passport,
-				Name = vRP.FullName(Exam.Passport) or ""
-			},
-			Doctor = Exam.Doctor and {
-				Passport = Exam.Doctor,
-				Name = vRP.FullName(Exam.Doctor) or ""
-			} or nil,
-			Date = Exam.Timestamp, 
-			Name = Exam.Name or "", 
-			Description = Exam.Description 
-		}
+	return Table
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CONSULTATIONS
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Consultations()
+	local Table = {}
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty then
+		return Table
 	end
 
-	return { Announcements = Announcements, Users = DoctorsInService, Consultations = ScheduledConsultations, Exams = ScheduledExams }
+	if not Permissions[Passport].Consultations.View then
+		return Table
+	end
+
+	local Consult = exports.oxmysql:query_async("SELECT * FROM ems_creative_consultations WHERE Permission = @Permission ORDER BY Timestamp DESC",{ Permission = Departmenty })
+	if Consult and #Consult > 0 then
+		for _,v in ipairs(Consult) do
+			table.insert(Table,{
+				Id = v.id,
+				Reason = v.Reason,
+				Patient = {
+					Passport = v.Passport,
+					Name = vRP.FullName(v.Passport)
+				},
+				Doctor = {
+					Passport = v.Doctor,
+					Name = vRP.FullName(v.Doctor)
+				},
+				Date = v.Timestamp,
+				Status = v.Status,
+			})
+		end
+	end
+
+	return Table
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- GETCONSULTATION
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.GetConsultation(Number)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].Consultations.View then
+		return false
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT * FROM ems_creative_consultations WHERE id = @Number ORDER BY id LIMIT 1",{ Number = Number })
+	if Consult then
+		local Identity = vRP.Identity(Consult.Passport)
+		if Identity then
+			return {
+				Id = Consult.id,
+				Reason = Consult.Reason,
+				Patient = {
+					Passport = Consult.Passport,
+					Name = vRP.FullName(Consult.Passport)
+				},
+				Doctor = {
+					Passport = Consult.Doctor,
+					Name = vRP.FullName(Consult.Doctor)
+				},
+				Date = Consult.Timestamp,
+				Status = Consult.Status,
+				Description = Consult.Description
+			}
+		end
+	end
+
+	return false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CREATECONSULTATION
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.CreateConsultation(Table)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].Consultations.Create then
+		return false
+	end
+
+	exports.oxmysql:insert_async("INSERT INTO ems_creative_consultations (Reason,Passport,Doctor,Status,Timestamp,Description,Permission) VALUES (@Reason,@Passport,@Doctor,@Status,@Timestamp,@Description,@Permission)",{ Reason = Table.Reason, Passport = Table.Passport, Doctor = Passport, Status = Table.Status, Timestamp = Table.Date, Description = Table.Description, Permission = Departmenty })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Consulta criada.","verde")
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- UPDATECONSULTATION
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.UpdateConsultation(Table)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].Consultations.Edit then
+		return false
+	end
+
+	exports.oxmysql:update_async("UPDATE ems_creative_consultations SET Reason = @Reason, Timestamp = @Timestamp, Status = @Status, Description = @Description WHERE id = @Id",{ Id = Table.Id, Reason = Table.Reason, Timestamp = Table.Date, Status = Table.Status, Description = Table.Description })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Consulta atualizada.","verde")
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- DESTROYCONSULTATION
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.DestroyConsultation(Number)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].Consultations.Delete then
+		return false
+	end
+
+	exports.oxmysql:query_async("DELETE FROM ems_creative_consultations WHERE id = @id",{ id = Number })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Consulta removida.","verde")
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- EXAMS
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Exams()
+	local Table = {}
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
+		return Table
+	end
+
+	if not Permissions[Passport].Exams.View then
+		return Table
+	end
+
+	local Consult = exports.oxmysql:query_async("SELECT * FROM ems_creative_exams WHERE Permission = @Permission ORDER BY Timestamp DESC",{ Permission = Departmenty })
+	if Consult and #Consult > 0 then
+		for _,v in ipairs(Consult) do
+			table.insert(Table,{
+				Id = v.id,
+				Name = v.Name,
+				Patient = {
+					Passport = v.Passport,
+					Name = vRP.FullName(v.Passport)
+				},
+				Doctor = {
+					Passport = v.Doctor,
+					Name = vRP.FullName(v.Doctor)
+				},
+				Date = v.Timestamp,
+				Status = v.Status,
+			})
+		end
+	end
+
+	return Table
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- GETEXAM
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.GetExam(Number)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].Exams.View then
+		return false
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT * FROM ems_creative_exams WHERE id = @Number ORDER BY id LIMIT 1",{ Number = Number })
+	if Consult then
+		local Identity = vRP.Identity(Consult.Passport)
+		if Identity then
+			return {
+				Id = Consult.id,
+				Name = Consult.Name,
+				Patient = {
+					Passport = Consult.Passport,
+					Name = vRP.FullName(Consult.Passport)
+				},
+				Doctor = {
+					Passport = Consult.Doctor,
+					Name = vRP.FullName(Consult.Doctor)
+				},
+				Date = Consult.Timestamp,
+				Status = Consult.Status,
+				Description = Consult.Description
+			}
+		end
+	end
+
+	return false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CREATECONSULTATION
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.CreateExam(Table)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].Exams.Create then
+		return false
+	end
+
+	exports.oxmysql:insert_async("INSERT INTO ems_creative_exams (Name,Passport,Doctor,Status,Timestamp,Description,Permission) VALUES (@Name,@Passport,@Doctor,@Status,@Timestamp,@Description,@Permission)",{ Name = Table.Name, Passport = Table.Passport, Doctor = Passport, Status = Table.Status, Timestamp = Table.Date, Description = Table.Description, Permission = Departmenty })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Exame criado.","verde")
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- UPDATECONSULTATION
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.UpdateExam(Table)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].Exams.Edit then
+		return false
+	end
+
+	exports.oxmysql:update_async("UPDATE ems_creative_exams SET Name = @Name, Timestamp = @Timestamp, Status = @Status, Description = @Description WHERE id = @Id",{ Id = Table.Id, Name = Table.Name, Timestamp = Table.Date, Status = Table.Status, Description = Table.Description })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Exame atualizado.","verde")
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- DESTROYCONSULTATION
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.DestroyExam(Number)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].Exams.Delete then
+		return false
+	end
+
+	exports.oxmysql:query_async("DELETE FROM ems_creative_exams WHERE id = @id",{ id = Number })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Exame removido.","verde")
+
+	return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- USER
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.User(TargetPassport)
+function Creative.User(OtherPassport)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return nil
+	local Departmenty = Division[Passport]
+	local OtherPassport = parseInt(OtherPassport)
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return nil
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = (tonumber(Level) == 1) or (Group == "Admin")
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local ParamedicCat = LevelData.Paramedic
-			local ParamedicView = type(ParamedicCat) == "table" and ParamedicCat.View
-			if type(ParamedicView) == "boolean" then
-				Allowed = Allowed or (ParamedicView == true)
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return nil
-	end
-
-	local SelectedPassport = parseInt(TargetPassport)
-	if SelectedPassport <= 0 then
-		return nil
-	end
-
-	local Identity = vRP.Identity(SelectedPassport)
-	if not Identity then
-		return nil
-	end
-
-	local Avatar = exports.oxmysql:single_async("SELECT Image FROM avatars WHERE Passport = ?",{ SelectedPassport })
-	local Records = exports.oxmysql:query_async("SELECT id, Doctor, Timestamp, Reason, Status, Description FROM ems_creative_consultations WHERE Passport = ? AND Permission = ? ORDER BY Timestamp DESC",{ SelectedPassport,Group }) or {}
-
-	local Historical = {}
-	for _,Record in ipairs(Records) do
-		local DoctorPassport = tonumber(Record.Doctor) or 0
-		local DoctorName = ""
-		
-		if DoctorPassport > 0 then
-			DoctorName = vRP.FullName(DoctorPassport) or ""
-		end
-		
-		Historical[#Historical + 1] = { 
-			Id = tonumber(Record.id) or 0,
-			Doctor = {
-				Passport = tonumber(DoctorPassport) or 0,
-				Name = tostring(DoctorName) or ""
-			},
-			Date = tonumber(Record.Timestamp) or 0, 
-			Reason = tostring(Record.Reason) or "", 
-			Status = tostring(Record.Status) or "appointment", 
-			Description = tostring(Record.Description) or "" 
+	local Identity = vRP.Identity(OtherPassport)
+	if Identity then
+		return {
+			Passport = OtherPassport,
+			Name = Identity.Name.." "..Identity.Lastname,
+			Blood = Sanguine(Identity.Blood),
+			Phone = vRP.Phone(OtherPassport),
+			MedicPlan = vRP.DatatableInformation(OtherPassport,"MedicPlan") or 0,
+			Avatar = exports.vrp:Avatar(OtherPassport,Departmenty)
 		}
 	end
 
-	return {
-		Passport = SelectedPassport,
-		Name = vRP.FullName(SelectedPassport),
-		Phone = vRP.Phone(SelectedPassport),
-		Blood = Sanguine(Identity.Blood),
-		Avatar = Avatar and Avatar.Image or "",
-		MedicPlan = vRP.DatatableInformation(SelectedPassport,"MedicPlan") or false,
-		Historical = Historical
-	}
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- AVATAR
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Avatar(TargetPassport,Image)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Paramedic
-			if type(Category) == "table" then
-				local Value = Category.Avatar
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local TargetPassport = parseInt(TargetPassport)
-	if TargetPassport <= 0 or not Image or Image == "" then
-		return false
-	end
-
-	local Avatar = exports.oxmysql:single_async("SELECT id FROM avatars WHERE Passport = ?",{ TargetPassport })
-	if Avatar then
-		exports.oxmysql:execute_async("UPDATE avatars SET Image = ?, Permission = ? WHERE Passport = ?",{ Image,Group,TargetPassport })
-	else
-		exports.oxmysql:insert_async("INSERT INTO avatars (Passport,Image,Permission) VALUES (?,?,?)",{ TargetPassport,Image,Group })
-	end
-
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Avatar atualizado.","verde")
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- SEARCHUSER
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.SearchUser(Search)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return {}
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return {}
-	end
-
-	local Results = {}
-	local SearchStr = tostring(Search or "")
-	local SearchLower = SearchStr:lower()
-
-	local Lookup = "%" .. SearchLower .. "%"
-	local Users = exports.oxmysql:query_async(
-		"SELECT id AS Passport, Name, Lastname FROM characters WHERE Deleted = 0 AND (LOWER(Name) LIKE ? OR LOWER(Lastname) LIKE ? OR CAST(id AS CHAR) = ?) LIMIT 50",
-		{ Lookup,Lookup,SearchStr }
-	) or {}
-
-	for _,User in ipairs(Users) do
-		Results[#Results + 1] = { Passport = User.Passport, Name = User.Name .. " " .. User.Lastname, MedicPlan = vRP.DatatableInformation(User.Passport,"MedicPlan") or false }
-	end
-
-	return Results
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- MEDICPLAN
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.MedicPlan(TargetPassport)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Paramedic
-			if type(Category) == "table" then
-				local Value = Category.MedicPlan
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local TargetPassport = parseInt(TargetPassport)
-	if TargetPassport <= 0 then
-		return false
-	end
-
-	local Identity = vRP.Identity(TargetPassport)
-	if not Identity then
-		return false
-	end
-
-	local Duration = Config.MedicPlanDuration or 0
-	local Current = vRP.DatatableInformation(TargetPassport,"MedicPlan") or 0
-	local Now = os.time()
-	local Expire = ((Current > Now) and Current or Now) + Duration
-
-	vRP.UpdateDatatable(TargetPassport,"MedicPlan",Expire)
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Plano medico atualizado.","verde")
-	return Expire
+	return false
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- USERCONSULTATIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.UserConsultations(TargetPassport)
+function Creative.UserConsultations(OtherPassport)
+	local Table = {}
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return {}
+	local Departmenty = Division[Passport]
+	local OtherPassport = parseInt(OtherPassport)
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return Table
 	end
 
-	local TargetPassport = parseInt(TargetPassport)
-	if TargetPassport <= 0 then
-		return {}
+	if not Permissions[Passport].Consultations.View then
+		return Table
 	end
 
-	local Consult = exports.oxmysql:query_async("SELECT id, Doctor, Timestamp, Reason, Status, Description FROM ems_creative_consultations WHERE Passport = ? AND Permission = ? ORDER BY Timestamp DESC",{ TargetPassport,Group }) or {}
-	local Results = {}
-	for _,Record in ipairs(Consult) do
-		local DoctorPassport = tonumber(Record.Doctor) or 0
-		local DoctorName = ""
-		if DoctorPassport > 0 then
-			DoctorName = vRP.FullName(DoctorPassport) or ""
+	local Identity = vRP.Identity(OtherPassport)
+	if Identity then
+		local Consult = exports.oxmysql:query_async("SELECT * FROM ems_creative_consultations WHERE Passport = @Passport AND Permission = @Permission ORDER BY Timestamp DESC",{ Passport = OtherPassport, Permission = Departmenty })
+
+		if Consult and #Consult > 0 then
+			for _,v in ipairs(Consult) do
+				table.insert(Table,{
+					Id = v.id,
+					Reason = v.Reason,
+					Patient = {
+						Passport = v.Passport,
+						Name = vRP.FullName(v.Passport)
+					},
+					Doctor = {
+						Passport = v.Doctor,
+						Name = vRP.FullName(v.Doctor)
+					},
+					Date = v.Timestamp,
+					Status = v.Status
+				})
+			end
 		end
-		
-		Results[#Results + 1] = { 
-			Id = tonumber(Record.id) or 0, 
-			Doctor = {
-				Passport = DoctorPassport,
-				Name = DoctorName
-			},
-			Date = tonumber(Record.Timestamp) or 0, 
-			Reason = tostring(Record.Reason) or "", 
-			Status = tostring(Record.Status) or "appointment", 
-			Description = tostring(Record.Description) or "" 
-		}
 	end
-	return Results
+
+	return Table
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- USEREXAMS
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.UserExams(TargetPassport)
+function Creative.UserExams(OtherPassport)
+	local Table = {}
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return {}
+	local Departmenty = Division[Passport]
+	local OtherPassport = parseInt(OtherPassport)
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return Table
 	end
 
-	local TargetPassport = parseInt(TargetPassport)
-	if TargetPassport <= 0 then
-		return {}
+	if not Permissions[Passport].Exams.View then
+		return Table
 	end
 
-	local Consult = exports.oxmysql:query_async("SELECT id, Doctor, Timestamp, Name, Status, Description FROM ems_creative_exams WHERE Passport = ? AND Permission = ? ORDER BY Timestamp DESC",{ TargetPassport,Group }) or {}
-	local Results = {}
-	for _,Record in ipairs(Consult) do
-		local DoctorPassport = tonumber(Record.Doctor) or 0
-		local DoctorName = ""
-		if DoctorPassport > 0 then
-			DoctorName = vRP.FullName(DoctorPassport) or ""
+	local Identity = vRP.Identity(OtherPassport)
+	if Identity then
+		local Consult = exports.oxmysql:query_async("SELECT * FROM ems_creative_exams WHERE Passport = @Passport AND Permission = @Permission ORDER BY Timestamp DESC",{ Passport = OtherPassport, Permission = Departmenty })
+
+		if Consult and #Consult > 0 then
+			for _,v in ipairs(Consult) do
+				table.insert(Table,{
+					Id = v.id,
+					Name = v.Name,
+					Patient = {
+						Passport = v.Passport,
+						Name = vRP.FullName(v.Passport)
+					},
+					Doctor = {
+						Passport = v.Doctor,
+						Name = vRP.FullName(v.Doctor)
+					},
+					Date = v.Timestamp,
+					Status = v.Status
+				})
+			end
 		end
-		
-		Results[#Results + 1] = { 
-			Id = tonumber(Record.id) or 0, 
-			Doctor = {
-				Passport = DoctorPassport,
-				Name = DoctorName
-			},
-			Date = tonumber(Record.Timestamp) or 0, 
-			Name = tostring(Record.Name) or "", 
-			Status = tostring(Record.Status) or "appointment", 
-			Description = tostring(Record.Description) or "" 
-		}
 	end
-	return Results
+
+	return Table
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- AVATAR
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Avatar(OtherPassport,Link)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+	local OtherPassport = parseInt(OtherPassport)
+
+	if not Passport or not OtherPassport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT * FROM avatars WHERE Passport = @Passport AND Permission = @Permission LIMIT 1",{ Passport = OtherPassport, Permission = Departmenty })
+	if Consult then
+		exports.oxmysql:update_async("UPDATE avatars SET Image = @Image WHERE Passport = @Passport AND Permission = @Permission",{ Passport = OtherPassport, Image = Link, Permission = Departmenty })
+	else
+		exports.oxmysql:insert_async("INSERT INTO avatars (Passport,Image,Permission) VALUES (@Passport,@Image,@Permission)",{ Passport = OtherPassport, Image = Link, Permission = Departmenty })
+	end
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- MEDICPLAN
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.MedicPlan(OtherPassport)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+	local OtherPassport = parseInt(OtherPassport)
+
+	if not Passport or not OtherPassport or Active[Passport] or not Departmenty then
+		return false
+	end
+
+	if not Permissions[Passport].MedicPlan then
+		return false
+	end
+
+	local CurrentTimer = os.time()
+	local ActualPlan = vRP.DatatableInformation(OtherPassport,"MedicPlan") or 0
+	local UpdatePlan = (ActualPlan > CurrentTimer and ActualPlan + Config.MedicPlanDuration) or (CurrentTimer + Config.MedicPlanDuration)
+
+	vRP.UpdateDatatable(OtherPassport,"MedicPlan",UpdatePlan)
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Plano médico atualizado.","verde")
+
+	return UpdatePlan
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MEMBERS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Members(Ranking)
+	local Table = {}
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return { Members = {}, Max = 0 }
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty then
+		return Table
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return { Members = {}, Max = 0 }
-	end
+	local NumGroups = vRP.NumGroups(Departmenty)
+	local Max = vRP.Permissions(Departmenty,"Members")
+	local Specialties = exports.oxmysql:query_async("SELECT * FROM ems_creative_specialties WHERE Permission = @Permission",{ Permission = Departmenty })
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = (tonumber(Level) == 1) or (Group == "Admin")
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Management
-			if type(Category) == "table" then
-				local Value = Category.View
-				if type(Value) == "boolean" then
-					Allowed = Value or (Group == "Admin")
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category or (Group == "Admin")
+	for OtherPassport,v in pairs(NumGroups) do
+		local OtherPassport = parseInt(OtherPassport)
+		local Identity = vRP.Identity(OtherPassport)
+		if Identity then
+			local TablePlayer = {
+				Passport = OtherPassport,
+				Name = Identity.Name.." "..Identity.Lastname,
+				Hierarchy = v.Level,
+				Specialties = {}
+			}
+
+			if Ranking then
+				TablePlayer.Hours = vRP.Playing(OtherPassport,v.Permission)
+			else
+				local Calculated = CompleteTimers(os.time() - (Identity.Login or 0),true)
+				local Activated = (vRP.Source(OtherPassport) and "Ativo" or "Inativo").." a "..Calculated
+
+				TablePlayer.Status = Activated
+				TablePlayer.Service = vRP.HasService(OtherPassport,v.Permission)
 			end
-		end
-	end
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return { Members = {}, Max = 0 }
-	end
-
-	local Members = {}
-	local Groups = vRP.DataGroups(Group) or {}
-	local Service = vRP.NumPermission(Group) or {}
-
-	local Specialties = exports.oxmysql:query_async("SELECT Name, Members FROM ems_creative_specialties WHERE LOWER(Permission) = LOWER(?)",{ Group }) or {}
-	for _,Specialty in ipairs(Specialties) do
-		Specialty.Decoded = Specialty.Members and json.decode(Specialty.Members) or {}
-	end
-
-	for Target in pairs(Groups) do
-		local Identity = vRP.Identity(Target)
-		local Hierarchy = vRP.HasPermission(Target,Group)
-		if Identity and Hierarchy then
-			local Assigned = {}
-			for _,Specialty in ipairs(Specialties) do
-				for _,Number in ipairs(Specialty.Decoded) do
-					if tonumber(Number) == tonumber(Target) then
-						table.insert(Assigned, Specialty.Name)
-						break
+			if Specialties and #Specialties > 0 then
+				for _,Specialty in pairs(Specialties) do
+					local Members = json.decode(Specialty.Members)
+					if Contains(Members,TablePlayer.Passport) then
+						table.insert(TablePlayer.Specialties,Specialty.Name)
 					end
 				end
 			end
 
-			local Played = vRP.Playing(Target,Group) or 0
-			local TimerLabel = CompleteTimers(Played)
-			local Status = vRP.Source(Target) and ("Ativo a "..TimerLabel) or ("Inativo a "..TimerLabel)
-
-			Members[#Members + 1] = { 
-				Passport = Target, 
-				Name = vRP.FullName(Target), 
-				Hierarchy = Hierarchy, 
-				Service = Service[Target] and 1 or 0, 
-				Hours = Played, 
-				Status = Status,
-				Specialties = Assigned
-			}
+			table.insert(Table,TablePlayer)
+		else
+			vRP.RemovePermission(OtherPassport,Departmenty)
 		end
 	end
 
-	if Ranking then
-		table.sort(Members,function(a,b)
-			return a.Hours > b.Hours
-		end)
-	end
-
-	return { Members = Members, Max = vRP.Permissions(Group,"Members") or 0 }
+	return { Members = Table, Max = Max }
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- INVITE
+-- SPECIALTIES
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Invite(Target)
+function Creative.Specialties()
+	local Table = {}
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return false
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
+		return Table
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
+	if not Permissions[Passport].Specialties.View then
+		return Table
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Management
-			if type(Category) == "table" then
-				local Value = Category.Create
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
+	local Consult = exports.oxmysql:query_async("SELECT * FROM ems_creative_specialties WHERE Permission = @Permission ORDER BY Name ASC",{ Permission = Departmenty })
+	if Consult and #Consult > 0 then
+		for _,v in ipairs(Consult) do
+			table.insert(Table,{
+				Id = v.id,
+				Name = v.Name,
+				Members = #json.decode(v.Members)
+			})
+		end
+	end
+
+	return Table
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- GETSPECIALTY
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.GetSpecialty(Number)
+	local Table = {}
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
+		return Table
+	end
+
+	if not Permissions[Passport].Specialties.View then
+		return Table
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT * FROM ems_creative_specialties WHERE id = @Number",{ Number = Number })
+	if Consult then
+		Table = {
+			Id = Consult.id,
+			Name = Consult.Name,
+			Members = {}
+		}
+
+		if Consult.Members then
+			local Members = json.decode(Consult.Members)
+			for _,v in pairs(Members) do
+				table.insert(Table.Members,{
+					Passport = v,
+					Name = vRP.FullName(v)
+				})
 			end
 		end
 	end
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
+	return Table
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- CREATESPECIALTY
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.CreateSpecialty(Table)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
 		return false
 	end
 
-	Target = parseInt(Target)
-	if Target <= 0 or Target == Passport then
-		return true
+	if exports.oxmysql:scalar_async("SELECT COUNT(Permission) FROM ems_creative_specialties WHERE Permission = @Permission",{ Permission = Departmenty }) >= Config.MaxSpecialties then
+		TriggerClientEvent("ems:Notify",source,"Atenção","Limite de especialidades atingido.","amarelo")
+
+		return false
 	end
 
-	if not vRP.GetUserType(Target,"Work") then
-		local TargetSource = vRP.Source(Target)
-		if TargetSource and vRP.Request(TargetSource,"Grupos","Você foi convidado(a) para participar do grupo <b>"..Group.."</b>, deseja entrar?") then
-			vRP.SetPermission(Target,Group)
-			TriggerClientEvent("ems:Notify",source,"Sucesso","Passaporte adicionado.","verde")
-		end
+	if not Permissions[Passport].Specialties.Create then
+		return false
 	end
+
+	local Number = exports.oxmysql:insert_async("INSERT INTO ems_creative_specialties (Name,Permission) VALUES (@Name,@Permission)",{ Name = Table.Name, Permission = Departmenty })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade criada.","verde")
+
+	return Number
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- UPDATESPECIALTY
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.UpdateSpecialty(Table)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
+		return false
+	end
+
+	if not Permissions[Passport].Specialties.Edit then
+		return false
+	end
+
+	exports.oxmysql:update_async("UPDATE ems_creative_specialties SET Name = @Name WHERE id = @Id",{ Id = Table.Id, Name = Table.Name })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade atualizada.","verde")
 
 	return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- DISMISS
+-- DESTROYSPECIALTY
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Dismiss(Target)
+function Creative.DestroySpecialty(Number)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Target then
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
+	if not Permissions[Passport].Specialties.Delete then
 		return false
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Management
-			if type(Category) == "table" then
-				local Value = Category.Dismiss
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
+	exports.oxmysql:query_async("DELETE FROM ems_creative_specialties WHERE id = @id",{ id = Number })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade removida.","verde")
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ASSIGNSPECIALTY
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.AssignSpecialty(Table)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not Table.Passport or not vRP.HasService(Passport,Departmenty) or not vRP.HasPermission(Table.Passport,Departmenty) then
+		return false
+	end
+
+	if not Permissions[Passport].Specialties.Assign then
+		return false
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT Members,Name FROM ems_creative_specialties WHERE id = @Number",{ Number = Table.Id })
+	if Consult and Consult.Members then
+		local Members = json.decode(Consult.Members)
+		for _,v in ipairs(Members) do
+			if Table.Passport == v then
+				return false
+			end
+		end
+
+		table.insert(Members,Table.Passport)
+		TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade atribuida.","verde")
+		exports.oxmysql:update_async("UPDATE ems_creative_specialties SET Members = @Members WHERE id = @Id",{ Id = Table.Id, Members = json.encode(Members) })
+
+		local OtherSource = vRP.Source(Table.Passport)
+		if OtherSource then
+			TriggerClientEvent("Notify",OtherSource,Consult.Name,"Parabéns você recebeu uma especialidade.","verde",10000)
+		end
+
+		return { Passport = Table.Passport, Name = vRP.FullName(Table.Passport) }
+	end
+
+	return false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- REMOVESPECIALTY
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.RemoveSpecialty(Table)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty or not vRP.HasService(Passport,Departmenty) then
+		return false
+	end
+
+	if not Permissions[Passport].Specialties.Assign then
+		return false
+	end
+
+	local Consult = exports.oxmysql:single_async("SELECT Members FROM ems_creative_specialties WHERE id = @Number",{ Number = Table.Id })
+	if Consult and Consult.Members then
+		local Members = json.decode(Consult.Members)
+		for Index,v in ipairs(Members) do
+			if Table.Passport == v then
+				table.remove(Members,Index)
+				TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade removida.","verde")
+				exports.oxmysql:update_async("UPDATE ems_creative_specialties SET Members = @Members WHERE id = @Id",{ Id = Table.Id, Members = json.encode(Members) })
+
+				return true
 			end
 		end
 	end
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
+	return false
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- INVITE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.Invite(OtherPassport)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+
+	if not Passport or not OtherPassport or Passport == OtherPassport or not Departmenty then
 		return false
 	end
 
-	if vRP.HasGroup(Target,Group) then
-		vRP.RemovePermission(Target,Group)
+	local OtherSource = vRP.Source(OtherPassport)
+	if not OtherSource then
+		TriggerClientEvent("ems:Notify",source,"Atenção","Usuário indisponível no momento.","amarelo")
+
+		return false
+	end
+
+	local Identity = vRP.Identity(OtherPassport)
+	if not Identity or not Permissions[Passport].Management.Create then
+		return false
+	end
+
+	if vRP.AmountGroups(Departmenty) >= vRP.Permissions(Departmenty,"Members") then
+		TriggerClientEvent("ems:Notify",source,"Atenção","Limite de membros atingido.","amarelo")
+
+		return false
+	end
+
+	if Groups[Departmenty].Type and vRP.GetUserType(OtherPassport,Groups[Departmenty].Type) then
+		TriggerClientEvent("ems:Notify",source,"Atenção","O passaporte já pertence a outro grupo.","amarelo")
+
+		return false
+	end
+
+	if vRP.Request(OtherSource,"Grupos","Você foi convidado(a) para participar do grupo <b>"..Departmenty.."</b>, gostaria de estar entrando no mesmo?") then
+		vRP.SetPermission(OtherPassport,Departmenty)
+		TriggerClientEvent("ems:Notify",source,"Sucesso","Passaporte adicionado.","verde")
+
 		return true
 	end
 
@@ -648,1128 +984,156 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- HIERARCHY
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Hierarchy(Data)
+function Creative.Hierarchy(Table)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Passport or not Data.Mode then
+	local Departmenty = Division[Passport]
+	local Mode,OtherPassport = Table.Mode,Table.Passport
+
+	if not Passport or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
+	local Level = vRP.HasPermission(Passport,Departmenty)
+	local MemberLevel = vRP.HasPermission(OtherPassport,Departmenty)
+	if not MemberLevel or Passport == OtherPassport or not Permissions[Passport].Management.Edit then
 		return false
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Management
-			if type(Category) == "table" then
-				local Value = Category.Edit
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
+	local Modify = (Mode == "Demote" and Level < MemberLevel and MemberLevel < #Groups[Departmenty].Hierarchy) or (Mode == "Promote" and MemberLevel > (Level + 1))
+	if Modify then
+		vRP.SetPermission(OtherPassport,Departmenty,nil,Mode)
+		TriggerClientEvent("ems:Notify",source,"Sucesso","Membro "..(Mode == "Promote" and "promovido" or "rebaixado")..".","verde")
+
+		local OtherSource = vRP.Source(OtherPassport)
+		if OtherSource then
+			TriggerClientEvent("Notify",OtherSource,Departmenty,"Você foi <b>"..(Mode == "Promote" and "promovido" or "rebaixado").."</b> do seu cargo atual.","verde",10000)
 		end
-	end
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local Text = Data.Mode == "Promote" and "promovido" or "rebaixado"
-	vRP.SetPermission(Data.Passport,Group,Passport,Data.Mode)
-	local TargetSource = vRP.Source(Data.Passport)
-	if TargetSource then
-		TriggerClientEvent("Notify",TargetSource,Group,"Você foi <b>"..Text.."</b> do seu cargo atual.","verde",5000)
-	end
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- SPECIALTIES
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Specialties()
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return {}
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return {}
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1 or Group == "Admin"
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Specialties
-			if type(Category) == "table" then
-				local Value = Category.View
-				if type(Value) == "boolean" then
-					Allowed = Value or Group == "Admin"
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category or Group == "Admin"
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return {}
-	end
-
-	local Consult = exports.oxmysql:query_async("SELECT * FROM ems_creative_specialties WHERE LOWER(Permission) = LOWER(?)",{ Group }) or {}
-	local Specialties = {}
-
-	for _,Row in ipairs(Consult) do
-		Specialties[#Specialties + 1] = { Id = Row.id, Name = Row.Name, Members = json.decode(Row.Members) or {} }
-	end
-
-	return Specialties
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- CREATESPECIALTY
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.CreateSpecialty(Data)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Name then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1 or Group == "Admin"
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Specialties
-			if type(Category) == "table" then
-				local Value = Category.Create
-				if type(Value) == "boolean" then
-					Allowed = Value or Group == "Admin"
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category or Group == "Admin"
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local InsertId = exports.oxmysql:insert_async("INSERT INTO ems_creative_specialties (Name,Members,Permission) VALUES (?,?,?)",{ Data.Name,"[]",Group })
-	if InsertId then
-		TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade criada.","verde")
-		return InsertId
+		return true
 	end
 
 	return false
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- UPDATESPECIALTY
+-- DISMISS
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.UpdateSpecialty(Data)
+function Creative.Dismiss(OtherPassport)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Id or not Data.Name then
+	local Departmenty = Division[Passport]
+
+	if not Passport or Passport == OtherPassport or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
+	local Level = vRP.HasPermission(Passport,Departmenty)
+	local MemberLevel = vRP.HasPermission(OtherPassport,Departmenty)
+	if MemberLevel and Level < MemberLevel and Permissions[Passport].Management.Dismiss then
+		TriggerClientEvent("ems:Notify",source,"Sucesso","Membro removido.","verde")
+		vRP.RemovePermission(OtherPassport,Departmenty)
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1 or Group == "Admin"
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Specialties
-			if type(Category) == "table" then
-				local Value = Category.Edit
-				if type(Value) == "boolean" then
-					Allowed = Value or Group == "Admin"
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category or Group == "Admin"
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	exports.oxmysql:execute_async("UPDATE ems_creative_specialties SET Name = ? WHERE id = ? AND Permission = ?",{ Data.Name,Data.Id,Group })
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade atualizada.","verde")
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- GETSPECIALTY
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.GetSpecialty(Identifier)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Identifier then
-		return nil
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return nil
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1 or Group == "Admin"
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Specialties
-			if type(Category) == "table" then
-				local Value = Category.Assign
-				if type(Value) == "boolean" then
-					Allowed = Value or Group == "Admin"
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category or Group == "Admin"
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local Consult = exports.oxmysql:single_async("SELECT id, Name, Members FROM ems_creative_specialties WHERE Id = ? AND LOWER(Permission) = LOWER(?)",{ Identifier,Group })
-	if not Consult then
-		return nil
-	end
-
-	local MembersList = json.decode(Consult.Members) or {}
-	local FormattedMembers = {}
-	for _,MemberPassport in ipairs(MembersList) do
-		FormattedMembers[#FormattedMembers + 1] = {
-			Passport = MemberPassport,
-			Name = vRP.FullName(MemberPassport) or ""
-		}
-	end
-
-	return { Id = Consult.id, Name = Consult.Name, Members = FormattedMembers }
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- ASSIGNSPECIALTY
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.AssignSpecialty(Data)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Id or not Data.Passport then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1 or Group == "Admin"
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Specialties
-			if type(Category) == "table" then
-				local Value = Category.Assign
-				if type(Value) == "boolean" then
-					Allowed = Value or Group == "Admin"
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category or Group == "Admin"
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local Consult = exports.oxmysql:single_async("SELECT id, Name, Members FROM ems_creative_specialties WHERE Id = ? AND LOWER(Permission) = LOWER(?)",{ Data.Id,Group })
-	if not Consult then
-		return false
-	end
-
-	local Members = json.decode(Consult.Members) or {}
-	local TargetPassport = tonumber(Data.Passport) or Data.Passport
-	local Found = false
-	for _,Member in ipairs(Members) do
-		if tonumber(Member) == tonumber(TargetPassport) then
-			Found = true
-			break
-		end
-	end
-
-	if not Found then
-		Members[#Members + 1] = tonumber(TargetPassport) or TargetPassport
-		exports.oxmysql:execute_async("UPDATE ems_creative_specialties SET Members = ? WHERE Id = ?",{ json.encode(Members),Data.Id })
-		TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade atribuída.","verde")
-		return { Passport = tonumber(TargetPassport) or TargetPassport, Name = vRP.FullName(TargetPassport) or "" }
+		return true
 	end
 
 	return false
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- REMOVESPECIALTY
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.RemoveSpecialty(Data)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Id or not Data.Passport then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1 or Group == "Admin"
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Specialties
-			if type(Category) == "table" then
-				local Value = Category.Assign
-				if type(Value) == "boolean" then
-					Allowed = Value or Group == "Admin"
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category or Group == "Admin"
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local Consult = exports.oxmysql:single_async("SELECT id, Name, Members FROM ems_creative_specialties WHERE Id = ? AND LOWER(Permission) = LOWER(?)",{ Data.Id,Group })
-	if not Consult then
-		return false
-	end
-
-	local Members = json.decode(Consult.Members) or {}
-	local TargetPassport = tonumber(Data.Passport) or Data.Passport
-	for Index,Member in ipairs(Members) do
-		if tonumber(Member) == tonumber(TargetPassport) then
-			table.remove(Members,Index)
-			break
-		end
-	end
-
-	exports.oxmysql:execute_async("UPDATE ems_creative_specialties SET Members = ? WHERE Id = ?",{ json.encode(Members),Data.Id })
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade removida.","verde")
-	return { Passport = Data.Passport }
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- DESTROYSPECIALTY
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.DestroySpecialty(Identifier)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Identifier then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1 or Group == "Admin"
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Specialties
-			if type(Category) == "table" then
-				local Value = Category.Delete
-				if type(Value) == "boolean" then
-					Allowed = Value or Group == "Admin"
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category or Group == "Admin"
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	exports.oxmysql:execute_async("DELETE FROM ems_creative_specialties WHERE id = ? AND Permission = ?",{ Identifier,Group })
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Especialidade removida.","verde")
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- CONSULTATIONS
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Consultations()
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return {}
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return {}
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = true
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Consultations
-			if type(Category) == "table" then
-				local Value = Category.View
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return {}
-	end
-
-	local Consult = exports.oxmysql:query_async("SELECT id, Passport, Doctor, Timestamp, Reason, Status, Description, Permission FROM ems_creative_consultations WHERE LOWER(Permission) = LOWER(?) ORDER BY Timestamp DESC, id DESC",{ Group }) or {}
-	local Results = {}
-	for _,Record in ipairs(Consult) do
-		Results[#Results + 1] = {
-			Id = Record.id,
-			Patient = {
-				Passport = Record.Passport,
-				Name = vRP.FullName(Record.Passport) or ""
-			},
-			Doctor = {
-				Passport = Record.Doctor,
-				Name = vRP.FullName(Record.Doctor) or ""
-			},
-			Date = Record.Timestamp,
-			Reason = Record.Reason or "",
-			Status = Record.Status or "appointment",
-			Description = Record.Description,
-			Permission = Record.Permission
-		}
-	end
-
-	return Results
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- GETCONSULTATION
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.GetConsultation(Identifier)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Identifier then
-		return nil
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return nil
-	end
-
-	local Consult = exports.oxmysql:single_async( "SELECT id, Passport, Doctor, Timestamp, Reason, Status, Description FROM ems_creative_consultations WHERE id = ? AND Permission = ?", { Identifier,Group } )
-
-	if not Consult then
-		return nil
-	end
-
-	return {
-		Id = Consult.id,
-		Patient = {
-			Passport = Consult.Passport,
-			Name = vRP.FullName(Consult.Passport) or ""
-		},
-		Doctor = {
-			Passport = Consult.Doctor,
-			Name = vRP.FullName(Consult.Doctor) or ""
-		},
-		Date = Consult.Timestamp,
-		Reason = Consult.Reason or "",
-		Status = Consult.Status or "appointment",
-		Description = Consult.Description
-	}
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- CREATECONSULTATION
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.CreateConsultation(Data)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Passport or not Data.Description then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Consultations
-			if type(Category) == "table" then
-				local Value = Category.Create
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local Target = parseInt(Data.Passport)
-	if Target <= 0 or not vRP.Identity(Target) then
-		return false
-	end
-
-	local Timestamp = os.time()
-	local TimestampField = Data.Timestamp or Data.Date
-	if TimestampField then
-		local TimestampValue = tonumber(TimestampField)
-		if TimestampValue and TimestampValue > 0 then
-			if TimestampValue > 10000000000 then
-				TimestampValue = math.floor(TimestampValue / 1000)
-			end
-			Timestamp = TimestampValue
-		end
-	end
-
-	exports.oxmysql:insert_async( "INSERT INTO ems_creative_consultations (Passport,Doctor,Timestamp,Reason,Status,Description,Permission) VALUES (?,?,?,?,?,?,?)", { Target,Passport,Timestamp,Data.Reason or "",Data.Status or "appointment",Data.Description,Group } )
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Consulta criada.","verde")
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- UPDATECONSULTATION
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.UpdateConsultation(Data)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Id or not Data.Description then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Consultations
-			if type(Category) == "table" then
-				local Value = Category.Edit
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local UpdateFields = { Data.Reason or "",Data.Status or "appointment",Data.Description }
-	local UpdateQuery = "UPDATE ems_creative_consultations SET Reason = ?, Status = ?, Description = ?"
-	
-	local TimestampField = Data.Timestamp or Data.Date
-	if TimestampField then
-		local TimestampValue = tonumber(TimestampField)
-		if TimestampValue and TimestampValue > 0 then
-			if TimestampValue > 10000000000 then
-				TimestampValue = math.floor(TimestampValue / 1000)
-			end
-			UpdateQuery = "UPDATE ems_creative_consultations SET Reason = ?, Status = ?, Description = ?, Timestamp = ?"
-			table.insert(UpdateFields,TimestampValue)
-		end
-	end
-	
-	table.insert(UpdateFields,Data.Id)
-	table.insert(UpdateFields,Group)
-	
-	exports.oxmysql:execute_async( UpdateQuery .. " WHERE id = ? AND Permission = ?", UpdateFields )
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Consulta atualizada.","verde")
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- DESTROYCONSULTATION
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.DestroyConsultation(Identifier)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Identifier then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Consultations
-			if type(Category) == "table" then
-				local Value = Category.Delete
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	exports.oxmysql:execute_async("DELETE FROM ems_creative_consultations WHERE id = ? AND Permission = ?",{ Identifier,Group })
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Consulta removida.","verde")
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- EXAMS
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Exams()
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return {}
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return {}
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = true
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Exams
-			if type(Category) == "table" then
-				local Value = Category.View
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return {}
-	end
-
-	local Consult = exports.oxmysql:query_async("SELECT id, Passport, Doctor, Timestamp, Name, Status, Description, Permission FROM ems_creative_exams WHERE LOWER(Permission) = LOWER(?) ORDER BY Timestamp DESC, id DESC",{ Group }) or {}
-	local Results = {}
-	for _,Record in ipairs(Consult) do
-		Results[#Results + 1] = {
-			Id = Record.id,
-			Patient = {
-				Passport = Record.Passport,
-				Name = vRP.FullName(Record.Passport) or ""
-			},
-			Doctor = {
-				Passport = Record.Doctor,
-				Name = vRP.FullName(Record.Doctor) or ""
-			},
-			Date = Record.Timestamp,
-			Name = Record.Name or "",
-			Status = Record.Status or "appointment",
-			Description = Record.Description,
-			Permission = Record.Permission
-		}
-	end
-
-	return Results
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- GETEXAM
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.GetExam(Identifier)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Identifier then
-		return nil
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return nil
-	end
-
-	local Consult = exports.oxmysql:single_async(
-		"SELECT id, Passport, Doctor, Timestamp, Name, Status, Description FROM ems_creative_exams WHERE id = ? AND Permission = ?",
-		{ Identifier,Group }
-	)
-
-	if not Consult then
-		return nil
-	end
-
-	return {
-		Id = Consult.id,
-		Patient = {
-			Passport = Consult.Passport,
-			Name = vRP.FullName(Consult.Passport) or ""
-		},
-		Doctor = {
-			Passport = Consult.Doctor,
-			Name = vRP.FullName(Consult.Doctor) or ""
-		},
-		Date = Consult.Timestamp,
-		Name = Consult.Name or "",
-		Status = Consult.Status or "appointment",
-		Description = Consult.Description
-	}
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- CREATEEXAM
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.CreateExam(Data)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Passport or not Data.Description then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Exams
-			if type(Category) == "table" then
-				local Value = Category.Create
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local Target = parseInt(Data.Passport)
-	if Target <= 0 or not vRP.Identity(Target) then
-		return false
-	end
-
-	local Timestamp = os.time()
-	local TimestampField = Data.Timestamp or Data.Date
-	if TimestampField then
-		local TimestampValue = tonumber(TimestampField)
-		if TimestampValue and TimestampValue > 0 then
-			if TimestampValue > 10000000000 then
-				TimestampValue = math.floor(TimestampValue / 1000)
-			end
-			Timestamp = TimestampValue
-		end
-	end
-
-	exports.oxmysql:insert_async( "INSERT INTO ems_creative_exams (Passport,Doctor,Timestamp,Name,Status,Description,Permission) VALUES (?,?,?,?,?,?,?)", { Target,Passport,Timestamp,Data.Name or "",Data.Status or "appointment",Data.Description,Group } )
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Exame criado.","verde")
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- UPDATEEXAM
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.UpdateExam(Data)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not Data.Id or not Data.Description then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Exams
-			if type(Category) == "table" then
-				local Value = Category.Edit
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local UpdateFields = { Data.Name or "",Data.Status or "appointment",Data.Description }
-	local UpdateQuery = "UPDATE ems_creative_exams SET Name = ?, Status = ?, Description = ?"
-	
-	local TimestampField = Data.Timestamp or Data.Date
-	if TimestampField then
-		local TimestampValue = tonumber(TimestampField)
-		if TimestampValue and TimestampValue > 0 then
-			if TimestampValue > 10000000000 then
-				TimestampValue = math.floor(TimestampValue / 1000)
-			end
-			UpdateQuery = "UPDATE ems_creative_exams SET Name = ?, Status = ?, Description = ?, Timestamp = ?"
-			table.insert(UpdateFields,TimestampValue)
-		end
-	end
-	
-	table.insert(UpdateFields,Data.Id)
-	table.insert(UpdateFields,Group)
-	
-	exports.oxmysql:execute_async( UpdateQuery .. " WHERE id = ? AND Permission = ?", UpdateFields )
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Exame atualizado.","verde")
-	return true
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- DESTROYEXAM
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.DestroyExam(Identifier)
-	local source = source
-	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Identifier then
-		return false
-	end
-
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return false
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Exams
-			if type(Category) == "table" then
-				local Value = Category.Delete
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	exports.oxmysql:execute_async("DELETE FROM ems_creative_exams WHERE id = ? AND Permission = ?",{ Identifier,Group })
-	TriggerClientEvent("ems:Notify",source,"Sucesso","Exame removido.","verde")
-	return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ANNOUNCEMENTS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Announcements()
-    local source = source
-    local Passport = vRP.Passport(source)
-    local Group = Passport and Permission[Passport]
-    if not Passport or not Group then
-        return {}
-    end
+	local Table = {}
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
 
-    if not vRP.HasPermission(Passport,Group) then
-        return {}
-    end
+	if not Passport or Passport == OtherPassport or not Departmenty then
+		return Table
+	end
 
-    local Result = exports.oxmysql:query_async("SELECT id AS Id, Title, Description, Timestamp AS Date, Updated, Permission FROM painel_creative_announcements WHERE LOWER(Permission) = LOWER(?) ORDER BY COALESCE(Updated, Timestamp) DESC, id DESC",{ Group })
-    return Result or {}
+	local Consult = exports.oxmysql:query_async("SELECT * FROM painel_creative_announcements WHERE Permission = @Permission ORDER BY Timestamp DESC",{ Permission = Departmenty })
+	if Consult and #Consult > 0 then
+		for _,v in pairs(Consult) do
+			table.insert(Table,{
+				Id = v.id,
+				Title = v.Title,
+				Date = v.Timestamp,
+				Description = v.Description,
+				Updated = v.Updated
+			})
+		end
+	end
+
+	return Table
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CREATEANNOUNCEMENT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.CreateAnnouncement(Data)
+function Creative.CreateAnnouncement(Table)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data then
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
+	if not Permissions[Passport].Announcements.Create then
 		return false
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = tonumber(Level) == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Announcements
-			if type(Category) == "table" then
-				local Value = Category.Create
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
+	if exports.oxmysql:scalar_async("SELECT COUNT(Permission) FROM painel_creative_announcements WHERE Permission = @Permission",{ Permission = Departmenty }) >= vRP.Permissions(Departmenty,"Announces") then
+		TriggerClientEvent("ems:Notify",source,"Atenção","Limite de avisos atingido.","amarelo")
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
 		return false
 	end
 
-	local Inserted = exports.oxmysql:insert_async( "INSERT INTO painel_creative_announcements (Title,Description,Timestamp,Permission) VALUES (?,?,?,?)", { Data.Title,Data.Description,os.time(),Group } )
+	local Number = exports.oxmysql:insert_async("INSERT INTO painel_creative_announcements (Title,Description,Timestamp,Permission) VALUES (@Title,@Description,@Timestamp,@Permission)",{ Title = Table.Title, Description = Table.Description, Timestamp = os.time(), Permission = Departmenty })
 	TriggerClientEvent("ems:Notify",source,"Sucesso","Aviso criado.","verde")
-	return Inserted or false
+
+	return Number
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- UPDATEANNOUNCEMENT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.UpdateAnnouncement(Data)
+function Creative.UpdateAnnouncement(Table)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or not (Data.Id or Data.id) then
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
+	if not Permissions[Passport].Announcements.Edit then
 		return false
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = tonumber(Level) == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Announcements
-			if type(Category) == "table" then
-				local Value = Category.Edit
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
+	exports.oxmysql:update_async("UPDATE painel_creative_announcements SET Title = @Title, Description = @Description, Updated = @Updated WHERE id = @Number",{ Number = Table.Id, Title = Table.Title, Description = Table.Description, Updated = os.time() })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Aviso atualizado.","verde")
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local RawId = Data.Id or Data.id
-	local Id = tonumber(RawId) or tonumber((tostring(RawId or "")):match("%d+"))
-	if not Id then
-		TriggerClientEvent("ems:Notify",source,"Erro","Identificador inválido.","vermelho")
-		return false
-	end
-	local Exists = exports.oxmysql:single_async("SELECT id FROM painel_creative_announcements WHERE id = ? AND LOWER(Permission) = LOWER(?)",{ Id,Group })
-	if not Exists then
-		TriggerClientEvent("ems:Notify",source,"Erro","Aviso não localizado ou sem permissão.","vermelho")
-		return false
-	end
-
-	local Affected = exports.oxmysql:update_async( "UPDATE painel_creative_announcements SET Title = ?, Description = ?, Updated = ? WHERE id = ? AND LOWER(Permission) = LOWER(?)", { Data.Title,Data.Description,os.time(),Id,Group } )
-	local Success = (Affected ~= nil and Affected ~= false)
-	TriggerClientEvent("ems:Notify",source, Success and "Sucesso" or "Erro", Success and "Aviso atualizado." or "Falha ao atualizar.", Success and "verde" or "vermelho")
-	return Success
+	return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DESTROYANNOUNCEMENT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.DestroyAnnouncement(Identifier)
+function Creative.DestroyAnnouncement(Number)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Identifier then
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
+	if not Permissions[Passport].Announcements.Delete then
 		return false
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = tonumber(Level) == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Announcements
-			if type(Category) == "table" then
-				local Value = Category.Delete
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
+	exports.oxmysql:query_async("DELETE FROM painel_creative_announcements WHERE id = @Number",{ Number = Number })
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Aviso removido.","verde")
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local RawId = Identifier
-	local Id = tonumber(RawId) or tonumber((tostring(RawId or "")):match("%d+"))
-	if not Id then
-		TriggerClientEvent("ems:Notify",source,"Erro","Identificador inválido.","vermelho")
-		return false
-	end
-
-	exports.oxmysql:execute_async("DELETE FROM painel_creative_announcements WHERE id = ? AND LOWER(Permission) = LOWER(?)",{ Id,Group })
-	local ExistsAfter = exports.oxmysql:single_async("SELECT id FROM painel_creative_announcements WHERE id = ? AND LOWER(Permission) = LOWER(?)",{ Id,Group })
-	if not ExistsAfter then
-		TriggerClientEvent("ems:Notify",source,"Sucesso","Aviso removido.","verde")
-		return true
-	else
-		TriggerClientEvent("ems:Notify",source,"Erro","Aviso não localizado ou sem permissão.","vermelho")
-		return false
-	end
+	return true
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- BANK
@@ -1777,48 +1141,33 @@ end
 function Creative.Bank()
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return { Balance = 0, Historical = {} }
+	local Departmenty = Division[Passport]
+
+	if not Passport or not Departmenty then
+		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
-		return { Balance = 0, Historical = {} }
-	end
-
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Bank
-			if type(Category) == "table" then
-				local Value = Category.View
-				if type(Value) == "boolean" then
-					Allowed = Value
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
+	local Table = {}
+	local Consult = exports.oxmysql:query_async("SELECT * FROM painel_creative_transactions WHERE Permission = @Permission AND Timestamp >= UNIX_TIMESTAMP(DATE_SUB(NOW(),INTERVAL 30 DAY)) ORDER BY Timestamp DESC LIMIT 50",{ Permission = Departmenty })
+	if Consult and #Consult > 0 then
+		for _,v in pairs(Consult) do
+			table.insert(Table,{
+				Type = v.Type,
+				Value = v.Value,
+				Date = v.Timestamp,
+				Player = {
+					Passport = v.Passport,
+					Name = vRP.FullName(v.Passport)
+				},
+				To = (v.Type ~= "Transfer" and nil or {
+					Passport = v.Transfer,
+					Name = vRP.FullName(v.Transfer)
+				})
+			})
 		end
 	end
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return { Balance = 0, Historical = {} }
-	end
-
-	local Consult = exports.oxmysql:query_async("SELECT * FROM painel_creative_transactions WHERE Permission = ? ORDER BY Timestamp DESC LIMIT 50",{ Group }) or {}
-	local Historical = {}
-	for _,Data in ipairs(Consult) do
-		table.insert(Historical, { Player = { Passport = Data.Passport, Name = vRP.FullName(Data.Passport) }, To = Data.Transfer and { Passport = Data.Transfer, Name = vRP.FullName(Data.Transfer) } or nil, Type = Data.Type, Value = Data.Value, Date = Data.Timestamp })
-	end
-
-	local Balance = vRP.Permissions(Group,"Bank") or 0
-	return { Balance = Balance, Historical = Historical }
+	return { Balance = vRP.Permissions(Departmenty,"Bank"), Historical = Table }
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DEPOSITBANK
@@ -1826,50 +1175,30 @@ end
 function Creative.DepositBank(Value)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	Value = parseInt(Value)
-	if not Passport or not Group or Value <= 0 then
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
+	if not Permissions[Passport].Bank.Deposit then
 		return false
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Bank
-			if type(Category) == "table" then
-				local ValuePerm = Category.Deposit
-				if type(ValuePerm) == "boolean" then
-					Allowed = ValuePerm
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
+	Active[Passport] = true
 
 	if vRP.PaymentBank(Passport,Value) then
-		exports.oxmysql:insert_async( "INSERT INTO painel_creative_transactions (Type,Passport,Value,Timestamp,Transfer,Permission) VALUES (?,?,?,?,?,?)", { "Deposit", Passport, Value, os.time(), nil, Group } )
-		vRP.PermissionsUpdate(Group,"Bank","+",Value)
+		exports.oxmysql:insert_async("INSERT INTO painel_creative_transactions (Type,Passport,Value,Timestamp,Permission) VALUES (@Type,@Passport,@Value,@Timestamp,@Permission)",{ Type = "Deposit", Passport = Passport, Value = Value, Timestamp = os.time(), Permission = Departmenty })
 		TriggerClientEvent("ems:Notify",source,"Sucesso","Deposito realizado.","verde")
+		vRP.PermissionsUpdate(Departmenty,"Bank","+",Value)
+		Active[Passport] = nil
+
 		return true
-	else
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui dinheiro suficiente.","amarelo")
-		return false
 	end
+
+	Active[Passport] = nil
+
+	return false
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- WITHDRAWBANK
@@ -1877,49 +1206,29 @@ end
 function Creative.WithdrawBank(Value)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	Value = parseInt(Value)
-	if not Passport or not Group or Value <= 0 then
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
+	if not Permissions[Passport].Bank.Withdraw then
 		return false
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Bank
-			if type(Category) == "table" then
-				local ValuePerm = Category.Withdraw
-				if type(ValuePerm) == "boolean" then
-					Allowed = ValuePerm
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
+	Active[Passport] = true
 
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
-
-	local BankBalance = vRP.Permissions(Group,"Bank") or 0
-	if BankBalance >= Value then
-		exports.oxmysql:insert_async( "INSERT INTO painel_creative_transactions (Type,Passport,Value,Timestamp,Transfer,Permission) VALUES (?,?,?,?,?,?)", { "Withdraw", Passport, Value, os.time(), nil, Group } )
-		vRP.GiveBank(Passport,Value * (Config.BankTaxWithdraw or 1))
-		vRP.PermissionsUpdate(Group,"Bank","-",Value)
+	if vRP.Permissions(Departmenty,"Bank") >= Value then
+		exports.oxmysql:insert_async("INSERT INTO painel_creative_transactions (Type,Passport,Value,Timestamp,Permission) VALUES (@Type,@Passport,@Value,@Timestamp,@Permission)",{ Type = "Withdraw", Passport = Passport, Value = Value, Timestamp = os.time(), Permission = Departmenty })
 		TriggerClientEvent("ems:Notify",source,"Sucesso","Saque realizado.","verde")
+		vRP.GiveBank(Passport,Value * Config.BankTaxWithdraw)
+		vRP.PermissionsUpdate(Departmenty,"Bank","-",Value)
+		Active[Passport] = nil
+
 		return true
 	end
+
+	Active[Passport] = nil
 
 	return false
 end
@@ -1929,51 +1238,33 @@ end
 function Creative.TransferBank(OtherPassport,Value)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	Value = parseInt(Value)
-	OtherPassport = parseInt(OtherPassport)
-	if not Passport or not Group or Value <= 0 or OtherPassport <= 0 then
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level then
+	if not Permissions[Passport].Bank.Transfer then
 		return false
 	end
 
-	local StoredPermissions = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(StoredPermissions) == "table" and StoredPermissions.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Allowed = Level == 1
-	if Version >= 1 then
-		local LevelData = StoredPermissions[tostring(Level)]
-		if type(LevelData) == "table" then
-			local Category = LevelData.Bank
-			if type(Category) == "table" then
-				local ValuePerm = Category.Transfer
-				if type(ValuePerm) == "boolean" then
-					Allowed = ValuePerm
-				end
-			elseif type(Category) == "boolean" then
-				Allowed = Category
-			end
-		end
-	end
-
-	if not Allowed then
-		TriggerClientEvent("ems:Notify",source,"Atencao","Você não possui permissão.","amarelo")
-		return false
-	end
+	Active[Passport] = true
 
 	local Identity = vRP.Identity(OtherPassport)
-	local BankBalance = vRP.Permissions(Group,"Bank") or 0
-	if Identity and BankBalance >= Value then
-		exports.oxmysql:insert_async( "INSERT INTO painel_creative_transactions (Type,Passport,Value,Timestamp,Transfer,Permission) VALUES (?,?,?,?,?,?)", { "Transfer", Passport, Value, os.time(), OtherPassport, Group } )
-		vRP.GiveBank(OtherPassport,Value * (Config.BankTaxTransfer or 1),true)
-		vRP.PermissionsUpdate(Group,"Bank","-",Value)
-		TriggerClientEvent("ems:Notify",source,"Sucesso","Transferencia realizada.","verde")
-		return { Passport = OtherPassport, Name = Identity.Name .. " " .. Identity.Lastname }
+	if Identity and vRP.Permissions(Departmenty,"Bank") >= Value then
+		exports.oxmysql:insert_async("INSERT INTO painel_creative_transactions (Type,Passport,Value,Timestamp,Transfer,Permission) VALUES (@Type,@Passport,@Value,@Timestamp,@Transfer,@Permission)",{ Type = "Transfer", Passport = Passport, Value = Value, Timestamp = os.time(), Transfer = OtherPassport, Permission = Departmenty })
+		TriggerClientEvent("ems:Notify",source,"Sucesso","Transferência realizada.","verde")
+		vRP.GiveBank(OtherPassport,Value * Config.BankTaxTransfer,true)
+		vRP.PermissionsUpdate(Departmenty,"Bank","-",Value)
+		Active[Passport] = nil
+
+		return {
+			Passport = OtherPassport,
+			Name = Identity.Name.." "..Identity.Lastname
+		}
 	end
+
+	Active[Passport] = nil
 
 	return false
 end
@@ -1983,105 +1274,84 @@ end
 function Creative.Permissions()
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group then
-		return {}
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
+		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level or Level ~= 1 then
-		return {}
+	local Level = vRP.HasPermission(Passport,Departmenty)
+	if Level ~= 1 then
+		return false
 	end
 
-	local Hierarchy = vRP.Hierarchy(Group)
-	local Stored = vRP.GetSrvData("EMS:Permissions:"..Group,true) or {}
-	local MetaData = type(Stored) == "table" and Stored.__Meta
-	local Version = type(MetaData) == "table" and MetaData.Version or 0
-	local Response = {}
+	local Return = {}
+	local Hierarchy = #Groups[Departmenty].Hierarchy
+	local Consult = vRP.GetSrvData("EMS:"..Departmenty,true)
 
-	for Index = 1,#Hierarchy do
-		local Key = tostring(Index)
-		local DefaultPermission = Index == 1
-		local Template = {
-			Management = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Dismiss = DefaultPermission },
-			Announcements = { Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-			Specialties = { View = DefaultPermission, Create = DefaultPermission, Assign = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-			Bank = { View = DefaultPermission, Deposit = DefaultPermission, Withdraw = DefaultPermission, Transfer = DefaultPermission },
-			Paramedic = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission, MedicPlan = DefaultPermission, Avatar = DefaultPermission },
-			Consultations = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-			Exams = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission }
-		}
-
-		if Version >= 1 and type(Stored[Key]) == "table" then
-			for Category,Value in pairs(Stored[Key]) do
-				if type(Template[Category]) == "table" and type(Value) == "table" then
-					for SubKey,SubValue in pairs(Value) do
-						if type(Template[Category][SubKey]) == "boolean" then
-							Template[Category][SubKey] = SubValue and true or false
-						end
-					end
-				elseif type(Template[Category]) == "boolean" then
-					Template[Category] = Value and true or false
-				end
-			end
-		end
-
-		Response[Key] = Template
+	for Number = 1,Hierarchy do
+		local Levels = tostring(Number)
+		Return[Levels] = Consult[Levels] or DefaultPermissions
 	end
 
-	return Response
+	return Return
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- SAVEPERMISSIONS
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.SavePermissions(Data)
+function Creative.SavePermissions(Table)
 	local source = source
 	local Passport = vRP.Passport(source)
-	local Group = Passport and Permission[Passport]
-	if not Passport or not Group or not Data or type(Data) ~= "table" then
+	local Departmenty = Division[Passport]
+
+	if not Passport or Active[Passport] or not Departmenty then
 		return false
 	end
 
-	local Level = vRP.HasPermission(Passport,Group)
-	if not Level or Level ~= 1 then
+	local Level = vRP.HasPermission(Passport,Departmenty)
+	if Level ~= 1 then
 		return false
 	end
 
-	local Hierarchy = vRP.Hierarchy(Group)
-	local Result = {}
-
-	for Index = 1,#Hierarchy do
-		local Key = tostring(Index)
-		local DefaultPermission = Index == 1
-		local Template = {
-			Management = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Dismiss = DefaultPermission },
-			Announcements = { Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-			Specialties = { View = DefaultPermission, Create = DefaultPermission, Assign = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-			Bank = { View = DefaultPermission, Deposit = DefaultPermission, Withdraw = DefaultPermission, Transfer = DefaultPermission },
-			Paramedic = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission, MedicPlan = DefaultPermission, Avatar = DefaultPermission },
-			Consultations = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission },
-			Exams = { View = DefaultPermission, Create = DefaultPermission, Edit = DefaultPermission, Delete = DefaultPermission }
-		}
-
-		if type(Data[Key]) == "table" then
-			for Category,Value in pairs(Data[Key]) do
-				if type(Template[Category]) == "table" and type(Value) == "table" then
-					for SubKey,SubValue in pairs(Value) do
-						if type(Template[Category][SubKey]) == "boolean" then
-							Template[Category][SubKey] = SubValue and true or false
-						end
-					end
-				elseif type(Template[Category]) == "boolean" then
-					Template[Category] = Value and true or false
-				end
-			end
-		end
-
-		Result[Key] = Template
-	end
-
-	Result.__Meta = { Version = 1 }
-	vRP.SetSrvData("EMS:Permissions:"..Group,Result,true)
+	vRP.SetSrvData("EMS:"..Departmenty,Table,true)
 	TriggerClientEvent("ems:Notify",source,"Sucesso","Permissões atualizadas.","verde")
+
 	return true
 end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- REMOVESERVICE
+-----------------------------------------------------------------------------------------------------------------------------------------
+function Creative.RemoveService(OtherPassport)
+	local source = source
+	local Passport = vRP.Passport(source)
+	local Departmenty = Division[Passport]
+	if not Passport or Active[Passport] or not Departmenty or not vRP.HasService(OtherPassport,Departmenty) then
+		return false
+	end
+
+	local OtherSource = vRP.Source(OtherPassport)
+	if not OtherSource then
+		return false
+	end
+
+	vRP.ServiceLeave(OtherSource,OtherPassport,Departmenty,true)
+	TriggerClientEvent("ems:Notify",source,"Sucesso","Serviço removido.","verde")
+
+	return true
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- DISCONNECT
+-----------------------------------------------------------------------------------------------------------------------------------------
+AddEventHandler("Disconnect",function(Passport)
+	if Active[Passport] then
+		Active[Passport] = nil
+	end
+
+	if Division[Passport] then
+		Division[Passport] = nil
+	end
+
+	if Permissions[Passport] then
+		Permissions[Passport] = nil
+	end
+end)

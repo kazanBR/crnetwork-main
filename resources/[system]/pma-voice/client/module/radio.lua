@@ -22,7 +22,7 @@ RegisterNetEvent("pma-voice:syncRadioData",syncRadioData)
 
 function setTalkingOnRadio(plySource,enabled,Name)
 	radioData[plySource] = enabled
-	TriggerEvent("radio:Display",Name,enabled)
+	TriggerEvent("radio:Display",plySource,Name,enabled)
 
 	if not isRadioEnabled() then return end
 

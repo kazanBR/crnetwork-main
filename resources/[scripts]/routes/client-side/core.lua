@@ -26,7 +26,7 @@ CreateThread(function()
 		for Index,v in pairs(Initial[Name]["List"]) do
 			Initial[Name]["List"][Index] = {
 				["Index"] = v["Item"],
-				["Name"] = ItemName(v["Item"]),
+				["Name"] = exports.vrp:ItemName(v["Item"]),
 				["Price"] = v["Price"],
 				["Active"] = false
 			}
@@ -53,7 +53,6 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ROUTES:OPEN
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("routes:Open")
 AddEventHandler("routes:Open",function(Name)
 	if not Progress or (Progress and Progress == Name) then
 		if vSERVER.Permission(Name) then
@@ -123,7 +122,7 @@ CreateThread(function()
 				if Distance <= 10.0 then
 					TimeDistance = 1
 					SetDrawOrigin(Initial[Progress]["Coords"][Selectedz]["x"],Initial[Progress]["Coords"][Selectedz]["y"],Initial[Progress]["Coords"][Selectedz]["z"])
-					DrawSprite("Textures","H",0.0,0.0,0.02,0.02 * GetAspectRatio(false),0.0,255,255,255,255)
+					DrawSprite("Textures","H",0.0,0.0,0.0185,0.0185 * GetAspectRatio(false),0.0,88,101,242,255)
 					ClearDrawOrigin()
 
 					if Distance <= 1.0 and IsControlJustPressed(1,74) and vSERVER.Deliver() then

@@ -4,6 +4,6 @@
 Config = {
 	BankTaxWithdraw = 1.0,
 	BankTaxTransfer = 1.0,
-	MedicPlanDuration = 604800,
+	MedicPlanDuration = 2592000,
 	MaxSpecialties = 20
 }

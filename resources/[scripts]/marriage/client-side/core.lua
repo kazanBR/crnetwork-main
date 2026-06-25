@@ -2,8 +2,8 @@
 -- MARRIAGE:ACCEPT
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("marriage:Accept")
-AddEventHandler("marriage:Accept",function(Sex,Name)
-	SendNUIMessage({ Action = "Accept", Payload = { Sex,Name } })
+AddEventHandler("marriage:Accept",function(Name)
+	SendNUIMessage({ Action = "Accept", Payload = Name })
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MARRIAGE:REJECT

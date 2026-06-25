@@ -68,7 +68,7 @@ function Creative.Mount()
 	end
 
 	local function ProcessItem(Slot,v,Prefix,Key,Save)
-		if v.amount <= 0 or not ItemExist(v.item) then
+		if v.amount <= 0 or not exports.vrp:ItemExist(v.item) then
 			if Prefix == "Inventory" then
 				vRP.CleanSlot(Passport,Slot)
 			elseif Prefix == "Chest" then
@@ -86,15 +86,15 @@ function Creative.Mount()
 		if not v.desc then
 			if Item == "vehiclekey" and Split[3] then
 				local Consult = exports.oxmysql:single_async("SELECT * FROM vehicles WHERE Plate = ? LIMIT 1",{ Split[3] })
-				if Consult and VehicleExist(Consult.Vehicle) then
-					v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
+				if Consult and exports.vrp:VehicleExist(Consult.Vehicle) then
+					v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..exports.vrp:VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
 				end
 			elseif Item == "propertys" and Split[2] then
 				local Consult = exports.oxmysql:single_async("SELECT * FROM propertys WHERE Serial = ? LIMIT 1",{ Split[2] })
 				if Consult then
 					v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common>"
 				end
-			elseif ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
+			elseif exports.vrp:ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
 				if Item == "identity" then
 					v.desc = "Passaporte: <rare>"..Dotted(Split[2]).."</rare><br>Nome: <rare>"..vRP.FullName(Split[2]).."</rare><br>Telefone: <rare>"..vRP.Phone(Split[2]).."</rare>"
 				else
@@ -104,14 +104,14 @@ function Creative.Mount()
 		end
 
 		if Split[2] then
-			local Loaded = ItemLoads(v.item)
+			local Loaded = exports.vrp:ItemLoads(v.item)
 			if Loaded then
 				v.charges = parseInt(Split[2] * (100 / Loaded))
 			end
 
-			if ItemDurability(v.item) then
+			if exports.vrp:ItemDurability(v.item) then
 				v.durability = parseInt(os.time() - Split[2])
-				v.days = ItemDurability(v.item)
+				v.days = exports.vrp:ItemDurability(v.item)
 			end
 		end
 
@@ -137,7 +137,7 @@ function Creative.Mount()
 		end
 	end
 
-	return Primary,Secondary,vRP.GetWeight(Passport),Open[Passport] and Open[Passport].Weight or 0
+	return Primary,Secondary,vRP.GetWeight(Passport),Open[Passport] and Open[Passport].Weight or 0,vRP.InventorySlots(Passport)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- UPDATE
@@ -174,7 +174,7 @@ function Creative.Store(Item,Slot,Amount,Target)
 	local Model = Open[Passport].Model
 	local Weight  = Open[Passport].Weight
 
-	if (Store[Model] and not Store[Model][Split]) or (Blocked[Split] and Store[Model] and not Store[Model][Split]) or (Blocked[Split] and not Store[Model]) then
+	if (Store[Model] and not Store[Model][Split]) or (Blocked[Split] and Store[Model] and not Store[Model][Split]) or (Blocked[Split] and not Store[Model]) or exports.vrp:ItemLocked(Split) then
 		TriggerClientEvent("Notify",source,"Aviso","Armazenamento proibido.","amarelo",5000)
 		TriggerClientEvent("inventory:Update",source)
 
@@ -183,7 +183,7 @@ function Creative.Store(Item,Slot,Amount,Target)
 
 	if Split == "diagram" then
 		local NewWeight = Weight + (10 * Amount)
-		local MaxWeight = VehicleWeight(Model) * 5
+		local MaxWeight = exports.vrp:VehicleWeight(Model) * 5
 
 		if NewWeight <= MaxWeight and vRP.TakeItem(Passport,Item,Amount) then
 			vRP.Update("vehicles/UpdateWeight",{ Passport = Open[Passport].Passport, Vehicle  = Model, Multiplier = Amount })
@@ -232,7 +232,7 @@ RegisterServerEvent("trunkchest:openTrunk")
 AddEventHandler("trunkchest:openTrunk",function(Entity)
 	local source = source
 	local Plate,Model = Entity[1],Entity[2]
-	if not Plate or not Model or not VehicleExist(Model) then
+	if not Plate or not Model or not exports.vrp:VehicleExist(Model) then
 		return false
 	end
 
@@ -257,13 +257,13 @@ AddEventHandler("trunkchest:openTrunk",function(Entity)
 	end
 
 	local Consult = vRP.SelectVehicle(OtherPassport,Model)
-	local Weight = Consult and Consult.Weight or VehicleWeight(Model)
+	local Weight = Consult and Consult.Weight or exports.vrp:VehicleWeight(Model)
 	if Passport ~= OtherPassport and not vRP.Request(OtherSource,"Porta-Malas","Permitir que o mesmo seja aberto por <b>"..vRP.FullName(Passport).."</b>?") then
 		return false
 	end
 
 	Open[Passport] = { Model = Model, Weight = Weight, Passport = OtherPassport, Data = ("Trunkchest:%s:%s"):format(OtherPassport,Model) }
-	TriggerClientEvent("trunkchest:Open",source)
+	TriggerClientEvent("trunkchest:Open",source,Entity[3])
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DISCONNECT

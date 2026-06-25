@@ -42,20 +42,18 @@ function Creative.Payment(Route,Selected)
 		local Valuation = Amount + Amount * (0.05 * Level)
 		local GainExperience = 1
 
-		if PartyBonus and PartyBonus.Active and exports.party:DoesExist(Passport,PartyBonus.Members) then
-			Valuation = Valuation + (Valuation * (PartyBonus.Multiplier / 100))
+		if exports.party:DoesExist(Passport,4) then
+			Valuation = Valuation + (Valuation * 0.1)
 		end
 
 		if exports.inventory:Buffs("Dexterity",Passport) then
 			Valuation = Valuation + (Valuation * 0.1)
 		end
 
-		for GroupName,GroupData in pairs(Groups) do
-			if GroupData.Multiplier and GroupData.Multiplier.Work then
-				if vRP.HasGroup(Passport,GroupName) then
-					Valuation = Valuation + (Valuation * (GroupData.Multiplier.Work / 100))
-					GainExperience = GainExperience + 1
-				end
+		for Permission,Multiplier in pairs({ Ouro = 0.10, Prata = 0.075, Bronze = 0.05 }) do
+			if vRP.HasService(Passport,Permission) then
+				Valuation = Valuation + (Valuation * Multiplier)
+				GainExperience = GainExperience + 1
 			end
 		end
 

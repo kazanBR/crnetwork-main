@@ -25,9 +25,19 @@ end)
 -- MOUNT
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Mount",function(Data,Callback)
-	local Primary,PrimaryWeight = vSERVER.Mount(Opened)
+	local Primary,PrimaryWeight,PrimarySlots = vSERVER.Mount(Opened)
 	if Primary then
-		Callback({ Primary = Primary, Secondary = ItemList[Opened], PrimaryMaxWeight = PrimaryWeight, SecondarySlots = math.max(CountTable(ItemList[Opened]),25) })
+		Callback({
+			Primary = {
+				Data = Primary,
+				MaxWeight = PrimaryWeight,
+				Slots = PrimarySlots or Theme.inventory.slots.default
+			},
+			Secondary = {
+				Data = ItemList[Opened],
+				Slots = math.max(CountTable(ItemList[Opened]),25)
+			}
+		})
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -35,7 +45,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Take",function(Data,Callback)
 	if MumbleIsConnected() then
-		vSERVER.Take(Data["item"],Data["amount"],Data["target"],Opened)
+		vSERVER.Take(Data.Item,Data.Amount,Data.Target,Opened)
 	end
 
 	Callback("Ok")
@@ -45,7 +55,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Store",function(Data,Callback)
 	if MumbleIsConnected() then
-		vSERVER.Store(Data["item"],Data["amount"],Data["target"],Opened)
+		vSERVER.Store(Data.Item,Data.Amount,Data.Target,Opened)
 	end
 
 	Callback("Ok")

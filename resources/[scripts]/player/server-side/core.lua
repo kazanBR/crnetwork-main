@@ -23,6 +23,7 @@ AddEventHandler("player:Survival",function()
 		vRP.UpgradeThirst(Passport,100)
 		vRP.UpgradeHunger(Passport,100)
 		vRP.DowngradeStress(Passport,100)
+		exports.propertys:Survival(Passport,source)
 		TriggerEvent("inventory:CarryDetach",source,Passport)
 		exports.discord:Embed("Airport","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[COORDS]:** "..vRP.GetEntityCoords(source))
 	end

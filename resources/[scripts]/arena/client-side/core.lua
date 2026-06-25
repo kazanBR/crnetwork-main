@@ -6,11 +6,6 @@ local Tunnel = module("vrp","lib/Tunnel")
 -- CONNECTION
 -----------------------------------------------------------------------------------------------------------------------------------------
 Creative = {}
-Tunnel.bindInterface("player",Creative)
------------------------------------------------------------------------------------------------------------------------------------------
--- CONNECTION
------------------------------------------------------------------------------------------------------------------------------------------
-Creative = {}
 vSERVER = Tunnel.getInterface("arena")
 Tunnel.bindInterface("arena",Creative)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -20,6 +15,7 @@ local Exit = nil
 local Arena = "0"
 local Guarded = nil
 local KillStreek = 0
+local FeedCooldown = GetGameTimer()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- THREADPEDLIST
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -44,12 +40,13 @@ CreateThread(function()
 		else
 			if #(Coords - Init["Coords"]["xyz"]) <= 100 then
 				if not Guarded and LoadModel(Init["Model"]) then
-					Guarded = CreatePed(4,Init["Model"],Init["Coords"]["x"],Init["Coords"]["y"],Init["Coords"]["z"] - 1,Init["Coords"]["w"],false,false)
-					SetPedArmour(Guarded,99)
+					Guarded = CreatePed(26,Init["Model"],Init["Coords"]["x"],Init["Coords"]["y"],Init["Coords"]["z"] - 1,Init["Coords"]["w"],false,false)
+
 					SetEntityInvincible(Guarded,true)
 					FreezeEntityPosition(Guarded,true)
+					DecorSetBool(Guarded,"CREATIVE_PED",true)
+					SetEntityAsMissionEntity(Guarded,true,true)
 					SetBlockingOfNonTemporaryEvents(Guarded,true)
-					SetModelAsNoLongerNeeded(Init["Model"])
 
 					if LoadAnim("anim@heists@heist_corona@single_team") then
 						TaskPlayAnim(Guarded,"anim@heists@heist_corona@single_team","single_team_loop_boss",8.0,8.0,-1,1,0,0,0,0)
@@ -110,7 +107,6 @@ AddEventHandler("arena:Enter",function(Number)
 		SendNUIMessage({ Action = "Show" })
 		LocalPlayer["state"]:set("Arena",true,true)
 		LocalPlayer["state"]:set("Route",Zones[Number]["Route"],true)
-		TriggerEvent("inventory:CleanWeapons")
 
 		local Respawn = math.random(#Zones[Number]["Respawn"])
 		SetEntityCoords(Ped,Zones[Number]["Respawn"][Respawn])
@@ -126,9 +122,9 @@ AddEventHandler("arena:Exit",function()
 			exports.survival:Revive(200)
 		end
 
-		SendNUIMessage({ Action = "Hide" })
 		LocalPlayer["state"]:set("Arena",false,true)
-		TriggerEvent("inventory:CleanWeapons")
+		TriggerEvent("inventory:CleanWeapons",true)
+		SendNUIMessage({ Action = "Hide" })
 		SetEntityCoords(Ped,Exit)
 		KillStreek = 0
 		Arena = "0"
@@ -165,21 +161,25 @@ end)
 -- GAMEEVENTTRIGGERED
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("gameEventTriggered",function(Name,Message)
-	if Name == "CEventNetworkEntityDamage" and LocalPlayer["state"]["Arena"] then
-		local Ped = PlayerPedId()
-		local Route = LocalPlayer["state"]["Route"]
-		local Victim,Attacker = Message[1],Message[2]
-		local Network = NetworkGetPlayerIndexFromPed(Attacker)
+	if Event ~= "CEventNetworkEntityDamage" or not LocalPlayer.state.Arena or LocalPlayer.state.Death then
+		return false
+	end
 
-		if IsPedAPlayer(Victim) and GetEntityHealth(Victim) <= 100 then
-			if Ped == Attacker then
-				SendNUIMessage({ Action = "Players", Players = GlobalState["Arena:"..Route], Streek = KillStreek + 1 })
-				KillStreek = KillStreek + 1
-			end
+	local Ped = PlayerPedId()
+	local Route = LocalPlayer.state.Route
+	local Victim,Attacker = Message[1],Message[2]
+	local Network = NetworkGetPlayerIndexFromPed(Attacker)
 
-			if Ped == Victim then
-				TriggerServerEvent("arena:Death",GetPlayerServerId(Network),Route)
-			end
+	if IsPedAPlayer(Victim) and Victim ~= Attacker and GetEntityHealth(Victim) <= 100 and FeedCooldown < CurrentTimer then
+		FeedCooldown = CurrentTimer + 1000
+
+		if Ped == Attacker then
+			SendNUIMessage({ Action = "Players", Players = GlobalState["Arena:"..Route], Streek = KillStreek + 1 })
+			KillStreek = KillStreek + 1
+		end
+
+		if Ped == Victim then
+			TriggerServerEvent("arena:Death",GetPlayerServerId(Network),Route)
 		end
 	end
 end)

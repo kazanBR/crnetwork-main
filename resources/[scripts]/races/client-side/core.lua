@@ -14,15 +14,20 @@ vSERVER = Tunnel.getInterface("races")
 local Object = {}
 local Position = 0
 local Markers = {}
-local Mode = false
 local Checkpoint = 1
-local InitSeconds = 0
 local Selected = false
 local Progressing = false
-local ExplodeTimers = false
+local CircuitThread = false
+local DisplayRanking = false
 local Seconds = GetGameTimer()
-local ExplodeCooldown = GetGameTimer()
+local InitSeconds = GetGameTimer()
 local PositionCooldown = GetGameTimer()
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ISRACEVALID
+-----------------------------------------------------------------------------------------------------------------------------------------
+function IsRaceValid()
+	return LocalPlayer.state.Races and Selected and Routes and Routes[Selected]
+end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- THREADRACES
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -36,132 +41,118 @@ CreateThread(function()
 		local Ped = PlayerPedId()
 		local Coords = GetEntityCoords(Ped)
 		local Vehicle = GetVehiclePedIsUsing(Ped)
-
-		if LocalPlayer.state.Races and LocalPlayer.state.Route == 0 and Mode and Selected then
+		if LocalPlayer.state.Races and LocalPlayer.state.Route == 0 and Selected then
 			TimeDistance = 0
 
-			local RaceActive = Races[Mode]
-			local GlobalCheck = RaceActive and (not RaceActive.Global or GlobalState["Races:"..Mode..":"..Selected])
-
-			if RaceActive and GlobalCheck then
+			local RouteData = Routes[Selected]
+			if GlobalState["Races:"..Selected] and RouteData and RouteData.Coords and RouteData.Coords[Checkpoint] then
 				Seconds = GetGameTimer() - InitSeconds
-				local CheckpointData = Routes[Selected].Coords[Checkpoint]
+				local CheckpointData = RouteData.Coords[Checkpoint]
 				local Distance = #(Coords - CheckpointData.Center)
 
 				DrawTextRacing(CheckpointData.Center.x,CheckpointData.Center.y,CheckpointData.Center.z,Distance - CheckpointData.Distance)
 
 				if Distance <= (CheckpointData.Distance + 1.0) then
-					if Checkpoint >= #Routes[Selected].Coords then
+					if Checkpoint >= #RouteData.Coords then
 						FinishRace(Vehicle)
 					else
-						NextCheckpoint()
+						NextCheckpoint(Distance)
 					end
 				end
 			else
-				if #(Coords - Routes[Selected].Init) > 100 then
-					CancelRace(Vehicle)
+				if Selected and RouteData and #(Coords - RouteData.Init) > 100 then
+					StopCircuit()
 				elseif IsControlJustPressed(1,38) then
-					vSERVER.GlobalState(Mode,Selected)
+					vSERVER.GlobalState(Selected)
 				end
 			end
 		elseif IsEligibleToStart(Ped,Vehicle) then
-			local InitCoords = Routes[Selected].Init
-			local Distance = #(Coords - InitCoords.xyz)
+			local RouteData = Routes[Selected]
+			if RouteData then
+				local InitCoords = RouteData.Init
+				local Distance = #(Coords - InitCoords.xyz)
 
-			if Distance <= 25 then
-				DrawMarker(23,InitCoords.x,InitCoords.y,InitCoords.z - 0.35,0,0,0,0,0,0,10.0,10.0,10.0,88,101,242,175,false,false,0,false)
-				TimeDistance = 0
+				if Distance <= 25 then
+					DrawMarker(23,InitCoords.x,InitCoords.y,InitCoords.z - 0.35,0,0,0,0,0,0,10.0,10.0,10.0,88,101,242,175,false,false,0,false)
+					TimeDistance = 0
 
-				if Distance <= 5 and IsControlJustPressed(1,38) and vSERVER.Runners(Mode,Selected) then
-					if StartRace(Vehicle) then
-						InitCircuit()
+					if Distance <= 5 and IsControlJustPressed(1,38) and vSERVER.Runners(Selected) then
+						if StartRace(Vehicle) then
+							InitCircuit()
+						end
 					end
 				end
 			end
 		end
 
-		Wait(TimeDistance)
+		Wait(TimeDistance > 0 and TimeDistance or 1)
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- FINISHRACE
 -----------------------------------------------------------------------------------------------------------------------------------------
 function FinishRace(Vehicle)
+	DisplayRanking = true
 	PlaySoundFrontend(-1,"RACE_PLACED","HUD_AWARDS",true)
-	vSERVER.Finish(Mode,Selected,Seconds,Position)
-	SendNUIMessage({ Action = "Close" })
-	CleanObjects()
-	CleanMarker()
-
-	Checkpoint = 1
-	InitSeconds = 0
-	Progressing = false
-	ExplodeTimers = false
 
 	SetLocalPlayerAsGhost(false)
-	SetNetworkVehicleAsGhost(Vehicle,false)
-	LocalPlayer.state:set("Races",false,false)
+	if Vehicle and DoesEntityExist(Vehicle) then
+		SetNetworkVehicleAsGhost(Vehicle,false)
+		Vehicle = GetEntityArchetypeName(Vehicle)
+	end
+
+	vSERVER.Finish(Selected,Seconds,Vehicle)
 
 	SendNUIMessage({
 		Action = "Results",
-		Payload = vSERVER.Ranking(Mode,Selected,ResultFinish)
+		Payload = vSERVER.Ranking(Selected,ResultFinish,true)
 	})
 
-	Selected,Mode = false,false
-
-	SetTimeout(SecondsResult,function()
+	SetTimeout(ResultFinish * 1000,function()
 		SendNUIMessage({ Action = "Close" })
+		DisplayRanking = false
 	end)
+
+	StopCircuit(true)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- NEXTCHECKPOINT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function NextCheckpoint()
+function NextCheckpoint(Distance)
 	if DoesBlipExist(Markers[Checkpoint]) then
 		RemoveBlip(Markers[Checkpoint])
 		Markers[Checkpoint] = nil
 	end
 
 	Checkpoint = Checkpoint + 1
+	vSERVER.UpdatePosition(Selected,Checkpoint,Distance)
 	PlaySoundFrontend(-1,"ATM_WINDOW","HUD_FRONTEND_DEFAULT_SOUNDSET",true)
-	SetBlipRoute(Markers[Checkpoint],true)
-	CreatedTyres()
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- CANCELRACE
------------------------------------------------------------------------------------------------------------------------------------------
-function CancelRace(Vehicle)
-	if Vehicle and DoesEntityExist(Vehicle) then
-		SetNetworkVehicleAsGhost(Vehicle,false)
+
+	if Markers[Checkpoint] then
+		SetBlipRoute(Markers[Checkpoint],true)
 	end
 
-	SetLocalPlayerAsGhost(false)
-	StopCircuit()
+	CreatedTyres()
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ISELIGIBLETOSTART
 -----------------------------------------------------------------------------------------------------------------------------------------
 function IsEligibleToStart(Ped,Vehicle)
-	return IsPedInAnyVehicle(Ped) and not IsPedInAnyHeli(Ped) and not IsPedInAnyBoat(Ped) and not IsPedInAnyPlane(Ped) and GetPedInVehicleSeat(Vehicle,-1) == Ped and Mode and Selected and Routes[Selected]
+	return IsPedInAnyVehicle(Ped) and not IsPedInAnyHeli(Ped) and not IsPedInAnyBoat(Ped) and not IsPedInAnyPlane(Ped) and GetPedInVehicleSeat(Vehicle,-1) == Ped and Selected and Routes[Selected]
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- STARTRACE
 -----------------------------------------------------------------------------------------------------------------------------------------
 function StartRace(Vehicle)
-	if Progressing or not Races[Mode] or not vSERVER.Start(Mode,Selected) then
+	if Progressing or not vSERVER.Start(Selected) then
 		return false
 	end
 
-	if Races[Mode].Explode then
-		ExplodeTimers = Routes[Selected].Time
-		ExplodeCooldown = GetGameTimer() + 1000
+	if not Vehicle or not DoesEntityExist(Vehicle) or not IsVehicleDriveable(Vehicle,false) then
+		return false
 	end
 
-	if Races[Mode].Global then
-		SendNUIMessage({ Action = "Message", Payload = { "E","Pressione","para iniciar a corrida" } })
-	else
-		Progressing = true
-	end
+	TriggerEvent("hoverfy:Show",{ Key = "E", Title = "Pressione", Legend = "para iniciar a corrida" })
 
 	Checkpoint = 1
 	SetLocalPlayerAsGhost(true)
@@ -176,14 +167,24 @@ end
 -- INITCIRCUIT
 -----------------------------------------------------------------------------------------------------------------------------------------
 function InitCircuit()
-	local CoordsList = Routes[Selected].Coords
+	if CircuitThread then
+		return false
+	end
+
+	local RouteData = Routes[Selected]
+	if not RouteData or not RouteData.Coords then
+		return false
+	end
+
+	local CoordsList = RouteData.Coords
 	local TotalCoords = #CoordsList
 	local Lasted = TotalCoords - 1
 
-	for Index,v in ipairs(CoordsList) do
+	for Index = 1,TotalCoords do
+		local v = CoordsList[Index]
 		local IsCheckpoint = Index <= Lasted
-		local Blip = AddBlipForCoord(v.Center)
 
+		local Blip = AddBlipForCoord(v.Center)
 		SetBlipSprite(Blip,IsCheckpoint and 1 or 38)
 		SetBlipScale(Blip,IsCheckpoint and 0.85 or 0.75)
 		SetBlipColour(Blip,ColourMarker)
@@ -196,37 +197,41 @@ function InitCircuit()
 		Markers[Index] = Blip
 	end
 
+	CircuitThread = true
 	CreateThread(function()
-		while true do
-			if not (LocalPlayer.state.Races and Mode and Races[Mode] and Selected and Routes[Selected]) then
+		while CircuitThread do
+			if not IsRaceValid() then
 				break
 			end
 
 			local Ped = PlayerPedId()
-			local CurrentTime = GetGameTimer()
-			local Coords = GetEntityCoords(Ped)
 			local Vehicle = GetVehiclePedIsUsing(Ped)
-
-			local CheckpointData = Routes[Selected].Coords[Checkpoint]
-			local Distance = #(Coords - CheckpointData.Center)
-
-			if CurrentTime >= PositionCooldown then
-				PositionCooldown = CurrentTime + 1000
-				vSERVER.UpdatePosition(Mode,Selected,Checkpoint,Distance)
-			end
-
-			if Progressing and Races[Mode].Explode and ExplodeTimers and CurrentTime >= ExplodeCooldown then
-				ExplodeTimers = ExplodeTimers - 1
-				ExplodeCooldown = CurrentTime + 1000
-			end
-
-			if not Vehicle or not DoesEntityExist(Vehicle) or not IsPedInAnyVehicle(Ped) or GetPedInVehicleSeat(Vehicle,-1) ~= Ped or (ExplodeTimers and ExplodeTimers <= 0) then
-				CancelRace(Vehicle)
+			if not Vehicle or not DoesEntityExist(Vehicle) then
 				break
 			end
 
-			Wait(500)
+			if GetPedInVehicleSeat(Vehicle,-1) ~= Ped then
+				break
+			end
+
+			local CheckpointData = CoordsList[Checkpoint]
+			if not CheckpointData then
+				break
+			end
+
+			local Coords = GetEntityCoords(Ped)
+			local CurrentTimer = GetGameTimer()
+			local Distance = #(Coords - CheckpointData.Center)
+			if CurrentTimer >= PositionCooldown then
+				PositionCooldown = CurrentTimer + 1000
+				vSERVER.UpdatePosition(Selected,Checkpoint,Distance)
+			end
+
+			Wait(250)
 		end
+
+		CircuitThread = false
+		StopCircuit()
 	end)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -234,13 +239,14 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 function DrawTextRacing(x,y,z,Text)
 	SetDrawOrigin(x,y,z + 5)
-	DrawSprite("Textures","Races",0.0,0.0,0.02,0.03 * GetAspectRatio(false),0.0,255,255,255,255)
+	DrawSprite("Textures","Races",0.0,0.0,0.022,0.034 * GetAspectRatio(false),0.0,214,150,0,255)
 
 	SetTextFont(4)
+	SetTextOutline()
 	SetTextCentre(true)
 	SetTextScale(0.35,0.35)
 	SetTextColour(255,255,255,255)
-	SetTextDropshadow(4,0,0,0,200)
+
 	BeginTextCommandDisplayText("STRING")
 	AddTextComponentSubstringPlayerName(string.format("%.1f m",Text))
 	EndTextCommandDisplayText(0.0,0.0)
@@ -253,8 +259,17 @@ end
 function CreatedTyres()
 	CleanObjects()
 
-	local Coords = Routes[Selected].Coords[Checkpoint]
-	local Prop = Checkpoint >= #Routes[Selected].Coords and PropFlags or PropTyre
+	local Route = Routes[Selected]
+	if not Route or not Route.Coords then
+		return false
+	end
+
+	local Coords = Route.Coords[Checkpoint]
+	if not Coords then
+		return false
+	end
+
+	local Prop = Checkpoint >= #Route.Coords and PropFlags or PropTyre
 
 	Object.Left = CreateObjectNoOffset(Prop,Coords.Left.x,Coords.Left.y,Coords.Left.z,false,false,false)
 	Object.Right = CreateObjectNoOffset(Prop,Coords.Right.x,Coords.Right.y,Coords.Right.z,false,false,false)
@@ -292,79 +307,110 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- STOPCIRCUIT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function StopCircuit()
+function StopCircuit(Finish)
+	local Ped = PlayerPedId()
+	local Vehicle = GetVehiclePedIsUsing(Ped)
+	if Vehicle and DoesEntityExist(Vehicle) then
+		SetNetworkVehicleAsGhost(Vehicle,false)
+	end
+
+	if not Finish and Progressing and LocalPlayer.state.Races and not DisplayRanking then
+		vSERVER.Cancel()
+	end
+
+	if not DisplayRanking then
+		SendNUIMessage({ Action = "Close" })
+	end
+
 	LocalPlayer.state:set("Races",false,false)
-	SendNUIMessage({ Action = "Close" })
-	vSERVER.Cancel()
+	TriggerEvent("hoverfy:Hide")
 	CleanObjects()
 	CleanMarker()
-
-	if ExplodeTimers and Progressing then
-		SetTimeout(SecondsExplode,function()
-			local Ped = PlayerPedId()
-			local Vehicle = GetLastDrivenVehicle()
-
-			if DoesEntityExist(Vehicle) then
-				NetworkExplodeVehicle(Vehicle,true,false,true)
-			else
-				ApplyDamageToPed(Ped,200,false)
-			end
-		end)
-	end
 
 	Object = {}
 	Markers = {}
 	Position = 0
-	Mode = false
 	Checkpoint = 1
 	InitSeconds = 0
 	Selected = false
 	Progressing = false
-	ExplodeTimers = false
-	Seconds = GetGameTimer()
-	ExplodeCooldown = GetGameTimer()
-	PositionCooldown = GetGameTimer()
+	CircuitThread = false
+
+	SetLocalPlayerAsGhost(false)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- UPDATEPOSITION
+-- RACES:UPDATE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.UpdatePosition(Positioner,Runners)
-	Position = Positioner
-	SendNUIMessage({ Action = "Racing", Payload = { Position,#Runners,Runners,(not Races[Mode].Global and Seconds or (Progressing and Seconds or 0)),ExplodeTimers,"1/1",Checkpoint.."/"..Routes[Selected].Checkpoints } })
-end
+RegisterNetEvent("races:Update")
+AddEventHandler("races:Update",function(PositionActual,Runners)
+	if not Runners or not Selected then
+		return
+	end
+
+	local Route = Routes[Selected]
+	if not Route then
+		return
+	end
+
+	Position = PositionActual
+
+	local Coords = Route.Coords
+	local Timer = (Progressing and Seconds and (Seconds / 1000)) or 0
+
+	SendNUIMessage({
+		Action = "Racing",
+		Payload = {
+			Runners = Runners,
+			Position = PositionActual,
+			Stats = {
+				Time = Timer,
+				Checkpoint = {
+					Current = Checkpoint or 0,
+					Total = Coords and #Coords or 0
+				}
+			}
+		}
+	})
+end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- RACES:START
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("races:Start")
-AddEventHandler("races:Start",function(Modes,Selecteds)
-	if Mode ~= Modes or Selected ~= Selecteds then
+AddEventHandler("races:Start",function(Selectedz)
+	if Selected ~= Selectedz then
 		return false
 	end
 
 	local Ped = PlayerPedId()
 	if not IsPedInAnyVehicle(Ped) then
-		CancelRace()
-		return true
+		StopCircuit()
+		return false
+	end
+
+	local RouteData = Routes[Selected]
+	if not RouteData or not RouteData.Positions then
+		return false
 	end
 
 	local Vehicle = GetVehiclePedIsUsing(Ped)
-	local StartPosition = Routes[Selected].Positions[Position]
-
+	local StartPosition = RouteData.Positions[Position]
 	if not StartPosition then
-		CancelRace()
-		return true
+		StopCircuit()
+		return false
 	end
 
 	SendNUIMessage({ Action = "StartCountdown", Payload = SecondsInit })
-	SendNUIMessage({ Action = "Message", Payload = false })
-	SetEntityCoords(Vehicle,StartPosition.xyz)
+	SetEntityCoordsNoOffset(Vehicle,StartPosition.xyz)
 	SetEntityHeading(Vehicle,StartPosition.w)
+	SetVehicleOnGroundProperly(Vehicle)
 	FreezeEntityPosition(Vehicle,true)
+	TriggerEvent("hoverfy:Hide")
 
 	SetTimeout((SecondsInit + 1) * 1000,function()
 		Progressing = true
 		Seconds = GetGameTimer()
 		InitSeconds = GetGameTimer()
+		PositionCooldown = GetGameTimer()
 		FreezeEntityPosition(Vehicle,false)
 		SendNUIMessage({ Action = "StopCountdown" })
 	end)
@@ -374,14 +420,25 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("races:Open")
 AddEventHandler("races:Open",function()
-	if not LocalPlayer.state.Races then
-		local Experience = vSERVER.Information()
-
-		SetNuiFocus(true,true)
-		TransitionToBlurred(1000)
-		TriggerEvent("hud:Active",false)
-		SendNUIMessage({ Action = "Open", Payload = { Races,{ Name = LocalPlayer.state.Name, Passport = LocalPlayer.state.Passport },Experience,RankingTablet } })
+	if LocalPlayer.state.Races then
+		return false
 	end
+
+	SetNuiFocus(true,true)
+	TransitionToBlurred(1000)
+	TriggerEvent("hud:Active",false)
+	SendNUIMessage({
+		Action = "Open",
+		Payload = {
+			Player = {
+				Name = LocalPlayer.state.Name,
+				Passport = LocalPlayer.state.Passport
+			},
+			Routes = Routes,
+			Experience = vSERVER.Information(),
+			MaxRanking = RankingTablet
+		}
+	})
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CLOSE
@@ -397,11 +454,11 @@ end)
 -- RUN
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Run",function(Data,Callback)
-	Mode = Data.Mode
 	Selected = Data.Route
 
-	if Selected and Routes[Selected] and Routes[Selected].Init then
-		SetNewWaypoint(Routes[Selected].Init.x,Routes[Selected].Init.y)
+	local RouteData = Routes[Selected]
+	if RouteData and RouteData.Init then
+		SetNewWaypoint(RouteData.Init.x,RouteData.Init.y)
 	end
 
 	SetNuiFocus(false,false)
@@ -414,7 +471,7 @@ end)
 -- RANKING
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Ranking",function(Data,Callback)
-	Callback(vSERVER.Ranking(Data.Mode,Data.Route,RankingTablet))
+	Callback(vSERVER.Ranking(Data.Route,RankingTablet))
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- RANKINGGLOBAL
@@ -423,10 +480,10 @@ RegisterNUICallback("RankingGlobal",function(Data,Callback)
 	Callback(vSERVER.RankingGlobal())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- VEHICLES
+-- MARKET
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Vehicles",function(Data,Callback)
-	Callback(vSERVER.VehicleShop())
+RegisterNUICallback("Market",function(Data,Callback)
+	Callback(vSERVER.Market())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- RENTALVEHICLE
@@ -439,5 +496,23 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("races:Notify")
 AddEventHandler("races:Notify",function(Title,Message,Type)
-	SendNUIMessage({ Action = "Notify", Payload = { Title,Message,Type } })
+	SendNUIMessage({
+		Action = "Notify",
+		Payload = {
+			Title = Title,
+			Message = Message,
+			Type = Type
+		}
+	})
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- RACES:ITEM
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNetEvent("races:Item")
+AddEventHandler("races:Item",function()
+	if not Selected then
+		return false
+	end
+
+	StopCircuit()
 end)

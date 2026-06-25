@@ -40,7 +40,7 @@ function Creative.Mount(Name)
 		local Primary = {}
 		local Inv = vRP.Inventory(Passport)
 		for Slot,v in pairs(Inv) do
-			if v.amount <= 0 or not ItemExist(v.item) then
+			if v.amount <= 0 or not exports.vrp:ItemExist(v.item) then
 				vRP.CleanSlot(Passport,Slot)
 			else
 				v.key = v.item
@@ -51,15 +51,15 @@ function Creative.Mount(Name)
 				if not v.desc then
 					if Item == "vehiclekey" and Split[3] then
 						local Consult = exports.oxmysql:single_async("SELECT * FROM vehicles WHERE Plate = ? LIMIT 1",{ Split[3] })
-						if Consult and VehicleExist(Consult.Vehicle) then
-							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
+						if Consult and exports.vrp:VehicleExist(Consult.Vehicle) then
+							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common><br>Modelo: <common>"..exports.vrp:VehicleName(Consult.Vehicle).."</common><br>Placa: <common>"..Split[3].."</common>"
 						end
 					elseif Item == "propertys" and Split[2] then
 						local Consult = exports.oxmysql:single_async("SELECT * FROM propertys WHERE Serial = ? LIMIT 1",{ Split[2] })
 						if Consult then
 							v.desc = "Proprietário: <common>"..vRP.FullName(Consult.Passport).."</common>"
 						end
-					elseif ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
+					elseif exports.vrp:ItemNamed(Item) and Split[2] and vRP.Identity(Split[2]) then
 						if Item == "identity" then
 							v.desc = "Passaporte: <rare>"..Dotted(Split[2]).."</rare><br>Nome: <rare>"..vRP.FullName(Split[2]).."</rare><br>Telefone: <rare>"..vRP.Phone(Split[2]).."</rare>"
 						else
@@ -69,14 +69,14 @@ function Creative.Mount(Name)
 				end
 
 				if Split[2] then
-					local Loaded = ItemLoads(v.item)
+					local Loaded = exports.vrp:ItemLoads(v.item)
 					if Loaded then
 						v.charges = parseInt(Split[2] * (100 / Loaded))
 					end
 
-					if ItemDurability(v.item) then
+					if exports.vrp:ItemDurability(v.item) then
 						v.durability = parseInt(os.time() - Split[2])
-						v.days = ItemDurability(v.item)
+						v.days = exports.vrp:ItemDurability(v.item)
 					end
 				end
 
@@ -84,7 +84,7 @@ function Creative.Mount(Name)
 			end
 		end
 
-		return Primary,vRP.GetWeight(Passport)
+		return Primary,vRP.GetWeight(Passport),vRP.InventorySlots(Passport)
 	end
 end
 ---------------------------------------------------------------------------------------------------------------------------------
@@ -96,7 +96,7 @@ function Creative.Take(Item,Amount,Target,Name)
 	local Amount = parseInt(Amount,true)
 	local Passport = vRP.Passport(source)
 	if Passport and Item and Target and List[Name] and List[Name]["Type"] and List[Name]["List"] and List[Name]["List"][Item] then
-		if Amount > 1 and (ItemUnique(Item) or ItemLoads(Item)) then
+		if Amount > 1 and (exports.vrp:ItemUnique(Item) or exports.vrp:ItemLoads(Item)) then
 			Amount = 1
 		end
 
@@ -117,7 +117,7 @@ function Creative.Take(Item,Amount,Target,Name)
 				if vRP.TakeItem(Passport,List[Name]["Item"],List[Name]["List"][Item] * Amount) then
 					vRP.GenerateItem(Passport,Item,Amount,false,Target)
 				else
-					TriggerClientEvent("inventory:Notify",source,"Atenção","<b>"..ItemName(List[Name]["Item"]).."</b> insuficiente.","vermelho")
+					TriggerClientEvent("inventory:Notify",source,"Atenção","<b>"..exports.vrp:ItemName(List[Name]["Item"]).."</b> insuficiente.","vermelho")
 				end
 			elseif List[Name]["Type"] == "Gemstone" then
 				if vRP.PaymentGems(Passport,List[Name]["List"][Item] * Amount) then

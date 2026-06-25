@@ -20,8 +20,5 @@ files {
 
 shared_scripts {
 	"@vrp/lib/Utils.lua",
-	"@vrp/config/Item.lua",
-	"@vrp/config/Vehicle.lua",
-	"@vrp/config/Global.lua",
-	"@vrp/config/Drops.lua"
+	"@vrp/config/Global.lua"
 }

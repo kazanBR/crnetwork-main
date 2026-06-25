@@ -14,11 +14,9 @@ local IsAdmin = false
 -- TICKET:DYNAMIC
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("ticket:Dynamic",function()
-	exports.dynamic:AddMenu("Atendimento","Central de suporte.","support")
-	exports.dynamic:AddButton("Central do Jogador","Abrir a central de suporte.","ticket:Opened",false,"support",false)
-
+	exports.dynamic:AddButton("Atendimento","Abrir a central de suporte.","ticket:Opened",false,false,false)
 	if LocalPlayer.state[Config.Administrator] then
-		exports.dynamic:AddButton("Central Administrativa","Abrir a central de administração.","ticket:Opened",true,"support",false)
+		exports.dynamic:AddButton("Atendimento","Abrir a central de administração.","ticket:Opened",true,false,false)
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -26,7 +24,6 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("ticket:Opened",function(Admin)
 	IsAdmin = Admin
-
 	SetNuiFocus(true,true)
 	TransitionToBlurred(1000)
 	SetCursorLocation(0.5,0.5)
@@ -40,8 +37,35 @@ AddEventHandler("ticket:Opened",function(Admin)
 				Name = LocalPlayer.state.Name,
 				Passport = LocalPlayer.state.Passport
 			},
-			Permissions = vSERVER.Permissions(),
-			Groups = vSERVER.Groups()
+			Permissions = not IsAdmin and {} or {
+				Characters = {
+					View = false,
+					Spectate = false,
+					Revive = false,
+					Kill = false,
+					Freeze = false,
+					Goto = false,
+					Bring = false,
+					Waypoint = false,
+					SendPrivateMessage = false,
+					AddGroup = false,
+					RemoveGroup = false,
+					Screenshot = false,
+					ClearInventory = false,
+					SetPed = false,
+					Bank = {
+						View = false,
+						Add = false,
+						Remove = false
+					},
+					Gemstone = {
+						View = false,
+						Add = false,
+						Remove = false
+					}
+				},
+				Tickets = true
+			}
 		}
 	})
 end)
@@ -151,198 +175,4 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("CreateTicket",function(Data,Callback)
 	Callback(vSERVER.CreateTicket(Data.Subject,Data.Category,Data.Message))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- CHARACTERS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Characters",function(Data,Callback)
-	Callback(vSERVER.Characters())
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- CHARACTER
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Character",function(Data,Callback)
-	Callback(vSERVER.Character(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- SPECTATE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Spectate",function(Data,Callback)
-	Callback(vSERVER.Spectate(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- REVIVE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Revive",function(Data,Callback)
-	Callback(vSERVER.Revive(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- KILL
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Kill",function(Data,Callback)
-	Callback(vSERVER.Kill(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- FREEZE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Freeze",function(Data,Callback)
-	Callback(vSERVER.Freeze(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- GOTO
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Goto",function(Data,Callback)
-	Callback(vSERVER.Goto(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- BRING
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Bring",function(Data,Callback)
-	Callback(vSERVER.Bring(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- WAYPOINT
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Waypoint",function(Data,Callback)
-	Callback(vSERVER.Waypoint(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- SENDPRIVATEMESSAGE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("SendPrivateMessage",function(Data,Callback)
-	Callback(vSERVER.SendPrivateMessage(Data.Passport,Data.Message))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- ADDGROUP
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("AddGroup",function(Data,Callback)
-	Callback(vSERVER.AddGroup(Data.Passport,Data.Group,Data.Hierarchy))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- REMOVEGROUP
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("RemoveGroup",function(Data,Callback)
-	Callback(vSERVER.RemoveGroup(Data.Passport,Data.Group))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- SCREENSHOT
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Screenshot",function(Data,Callback)
-	Callback(vSERVER.Screenshot(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- CLEARINVENTORY
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("ClearInventory",function(Data,Callback)
-	Callback(vSERVER.ClearInventory(Data.Passport))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- SETPED
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("SetPed",function(Data,Callback)
-	Callback(vSERVER.SetPed(Data.Passport,Data.Model))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- BANK
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Bank",function(Data,Callback)
-	Callback(vSERVER.Bank(Data.Passport,Data.Amount,Data.Type))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- GEMSTONE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Gemstone",function(Data,Callback)
-	Callback(vSERVER.Gemstone(Data.Passport,Data.Amount,Data.Type))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- SERVER
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Server",function(Data,Callback)
-	Callback(vSERVER.Server())
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- SETTIME
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("SetTime",function(Data,Callback)
-	Callback(vSERVER.SetTime(Data or {}))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- SETWEATHER
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("SetWeather",function(Data,Callback)
-	Callback(vSERVER.SetWeather(Data or {}))
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- TICKET:FREEZE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("ticket:Freeze")
-AddEventHandler("ticket:Freeze",function(FreezeState)
-	local Ped = PlayerPedId()
-	
-	if FreezeState then
-		FreezeEntityPosition(Ped,true)
-	else
-		FreezeEntityPosition(Ped,false)
-		SetEntityCollision(Ped,true,true)
-		SetEntityInvincible(Ped,false)
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- TICKET:WAYPOINT
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("ticket:Waypoint")
-AddEventHandler("ticket:Waypoint",function(X,Y,IsFirst)
-	if IsFirst then
-		if WaypointBlip and DoesBlipExist(WaypointBlip) then
-			RemoveBlip(WaypointBlip)
-		end
-		
-		WaypointBlip = AddBlipForCoord(X,Y,0.0)
-		SetBlipSprite(WaypointBlip,280)
-		SetBlipColour(WaypointBlip,1)
-		SetBlipScale(WaypointBlip,0.9)
-		SetBlipAsShortRange(WaypointBlip,false)
-		SetBlipDisplay(WaypointBlip,4)
-		ShowHeadingIndicatorOnBlip(WaypointBlip,true)
-		BeginTextCommandSetBlipName("STRING")
-		AddTextComponentString("Jogador Rastreado")
-		EndTextCommandSetBlipName(WaypointBlip)
-	end
-	
-	if WaypointBlip and DoesBlipExist(WaypointBlip) then
-		SetBlipCoords(WaypointBlip,X,Y,0.0)
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- TICKET:STOPWAYPOINT
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("ticket:StopWaypoint")
-AddEventHandler("ticket:StopWaypoint",function()
-	if WaypointBlip and DoesBlipExist(WaypointBlip) then
-		RemoveBlip(WaypointBlip)
-		WaypointBlip = nil
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- TICKET:INITSPECTATE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("ticket:initSpectate")
-AddEventHandler("ticket:initSpectate",function(source)
-	if not NetworkIsInSpectatorMode() then
-		local Pid = GetPlayerFromServerId(source)
-		local Ped = GetPlayerPed(Pid)
-
-		LocalPlayer["state"]:set("Spectate",true,false)
-		NetworkSetInSpectatorMode(true,Ped)
-	end
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- TICKET:RESETSPECTATE
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("ticket:resetSpectate")
-AddEventHandler("ticket:resetSpectate",function()
-    if NetworkIsInSpectatorMode() then
-        NetworkSetInSpectatorMode(false)
-        LocalPlayer["state"]:set("Spectate",false,false)
-    end
 end)

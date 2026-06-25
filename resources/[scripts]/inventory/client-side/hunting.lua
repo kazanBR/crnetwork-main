@@ -53,7 +53,7 @@ AddEventHandler("inventory:Ration",function(Coords)
 
 	if FoundSafe and SpawnPosition then
 		Model = Animals[math.random(#Animals)]
-		if LoadModel("a_c_"..Model,SpawnPosition.x,SpawnPosition.y,SpawnPosition.z) then
+		if LoadModel("a_c_"..Model) then
 			Entity = CreatePed(28,"a_c_"..Model,SpawnPosition.x,SpawnPosition.y,SpawnPosition.z,0.0,true,false)
 
 			SetPedAlertness(Entity,3)

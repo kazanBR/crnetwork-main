@@ -93,52 +93,34 @@ end
 -- VRP:ACTIVE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("vRP:Active")
-AddEventHandler("vRP:Active",function(Passport,Name,Inventory,Creation)
-AddTextEntry("FE_THDR_GTAO",ServerName)
-
+AddEventHandler("vRP:Active",function(Passport,Name,Inventory)
 	local Ped = PlayerPedId()
-	LocalPlayer.state:set("Name",Name,true)
-	LocalPlayer.state:set("Active",true,true)
-	LocalPlayer.state:set("Passport",Passport,true)
-
-	if not Creation then
-		SetEntityVisible(Ped,false)
-	end
 
 	SetLocalPlayerAsGhost(true)
-	SetEntityInvincible(Ped,true)
-	FreezeEntityPosition(Ped,true)
 	NetworkSetFriendlyFireOption(false)
 
 	SetTimeout(5000,function()
-		if not Creation then
-			SetEntityVisible(Ped,true)
-		end
-
 		SetLocalPlayerAsGhost(false)
 		exports.vrp:ReloadCharacter()
-		SetEntityInvincible(Ped,false)
-		FreezeEntityPosition(Ped,false)
 		NetworkSetFriendlyFireOption(true)
 		SetCanAttackFriendly(Ped,true,false)
 		SetPedRelationshipGroupHash(Ped,1862763509)
 		TriggerEvent("InitialCharacterSystemComplete")
 
-		if not Creation then
-			TriggerServerEvent("vRP:WaitCharacters")
-			TriggerEvent("referrals:Open")
-		end
-
 		if Inventory then
 			for Slot,v in pairs(Inventory) do
-				local Animation = ItemAnim(v.item)
-
+				local Animation = exports.vrp:ItemAnim(v.item)
 				if Animation then
 					tvRP.PersistentBlock(v.item,Animation)
 				end
 
+				local Markers = exports.vrp:ItemMarkers(v.item)
+				if Markers then
+					TriggerServerEvent("markers:Enter",Markers)
+				end
+
 				if Slot == "104" then
-					local Skinshop = ItemSkinshop(v.item)
+					local Skinshop = exports.vrp:ItemSkinshop(v.item)
 					if Skinshop then
 						TriggerEvent("skinshop:Backpack",Skinshop)
 					end
@@ -213,10 +195,6 @@ exports("ReloadCharacter",function()
 	ReplaceHudColourWithRgba(116,88,101,242,225)
 	ReplaceHudColourWithRgba(140,88,101,242,150)
 	ReplaceHudColourWithRgba(142,88,101,242,225)
-	local R,G,B = HexToRGB(Theme.main)
-	ReplaceHudColourWithRgba(116,R,G,B,225)
-	ReplaceHudColourWithRgba(140,R,G,B,150)
-	ReplaceHudColourWithRgba(142,R,G,B,225)
 
 	SetAudioFlag("ActivateSwitchWheelAudio",false)
 	SetAudioFlag("AllowAmbientSpeechInSlowMo",false)
@@ -285,7 +263,7 @@ exports("ReloadCharacter",function()
 	SetWeaponDamageModifier("WEAPON_KATANA",0.25)
 	SetWeaponDamageModifier("WEAPON_HAMMER",0.25)
 	SetWeaponDamageModifier("WEAPON_WRENCH",0.25)
-	SetWeaponDamageModifier("WEAPON_UNARMED",0.15)
+	SetWeaponDamageModifier("WEAPON_UNARMED",0.25)
 	SetWeaponDamageModifier("WEAPON_HATCHET",0.25)
 	SetWeaponDamageModifier("WEAPON_CROWBAR",0.25)
 	SetWeaponDamageModifier("WEAPON_MACHETE",0.25)
@@ -298,7 +276,6 @@ exports("ReloadCharacter",function()
 	SetWeaponDamageModifier("WEAPON_NIGHTSTICK",0.35)
 	SetWeaponDamageModifier("WEAPON_SMOKEGRENADE",0.0)
 	SetWeaponDamageModifier("WEAPON_STONE_HATCHET",0.25)
-	SetWeaponDamageModifier("WEAPON_PUMPSHOTGUN_MK2",0.0)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- REMOVEPICKUPS

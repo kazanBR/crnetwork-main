@@ -36,41 +36,41 @@ local Health = 200
 local Thirst = 100
 local ThirstTimer = 0
 local ThirstAmount = 180000
-local ThirstDelay = GetGameTimer()
+local ThirstDelay = GetNetworkTime()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- HUNGER
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Hunger = 100
 local HungerTimer = 0
 local HungerAmount = 180000
-local HungerDelay = GetGameTimer()
+local HungerDelay = GetNetworkTime()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- STRESS
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Stress = 0
-local StressTimer = GetGameTimer()
+local StressTimer = GetNetworkTime()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- WANTED
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Wanted = 0
 local WantedMax = 0
-local WantedTimer = GetGameTimer()
+local WantedTimer = GetNetworkTime()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- REPOSE
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Repose = 0
 local ReposeMax = 0
-local ReposeTimer = GetGameTimer()
+local ReposeTimer = GetNetworkTime()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- LUCK
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Luck = 0
-local LuckTimer = GetGameTimer()
+local LuckTimer = GetNetworkTime()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DEXTERITY
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Dexterity = 0
-local DexterityTimer = GetGameTimer()
+local DexterityTimer = GetNetworkTime()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- THREADTIMER
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -152,68 +152,68 @@ CreateThread(function()
 				end
 			end
 
-			if Luck > 0 and LuckTimer <= GetGameTimer() then
+			if Luck > 0 and LuckTimer <= GetNetworkTime() then
 				Luck = Luck - 1
-				LuckTimer = GetGameTimer() + 1000
+				LuckTimer = GetNetworkTime() + 1000
 
 				SendNUIMessage({ Action = "Luck", Payload = Luck })
 			end
 
-			if Dexterity > 0 and DexterityTimer <= GetGameTimer() then
+			if Dexterity > 0 and DexterityTimer <= GetNetworkTime() then
 				Dexterity = Dexterity - 1
-				DexterityTimer = GetGameTimer() + 1000
+				DexterityTimer = GetNetworkTime() + 1000
 
 				SendNUIMessage({ Action = "Dexterity", Payload = Dexterity })
 			end
 
-			if Wanted > 0 and WantedTimer <= GetGameTimer() then
+			if Wanted > 0 and WantedTimer <= GetNetworkTime() then
 				Wanted = Wanted - 1
-				WantedTimer = GetGameTimer() + 1000
+				WantedTimer = GetNetworkTime() + 1000
 
 				SendNUIMessage({ Action = "Wanted", Payload = { Wanted,WantedMax } })
 			end
 
-			if Repose > 0 and ReposeTimer <= GetGameTimer() then
+			if Repose > 0 and ReposeTimer <= GetNetworkTime() then
 				Repose = Repose - 1
-				ReposeTimer = GetGameTimer() + 1000
+				ReposeTimer = GetNetworkTime() + 1000
 
 				SendNUIMessage({ Action = "Repose", Payload = { Repose,ReposeMax } })
 			end
 
 			if not LocalPlayer.state.Banned and not LocalPlayer.state.Prison and GetEntityHealth(Ped) > 100 then
-				if Hunger <= 10 and HungerTimer <= GetGameTimer() then
+				if Hunger <= 10 and HungerTimer <= GetNetworkTime() then
 					ApplyDamageToPed(Ped,1,false)
-					HungerTimer = GetGameTimer() + 60000
+					HungerTimer = GetNetworkTime() + 60000
 					TriggerEvent("Notify","Alimentação","Sofrendo com a <b>fome</b>.","fome",2500)
 				end
 
-				if Thirst <= 10 and ThirstTimer <= GetGameTimer() then
+				if Thirst <= 10 and ThirstTimer <= GetNetworkTime() then
 					ApplyDamageToPed(Ped,1,false)
-					ThirstTimer = GetGameTimer() + 60000
+					ThirstTimer = GetNetworkTime() + 60000
 					TriggerEvent("Notify","Hidratação","Sofrendo com a <b>sede</b>.","sede",2500)
 				end
 
-				if Stress ~= 999 and Stress >= 50 and StressTimer <= GetGameTimer() then
+				if Stress ~= 999 and Stress >= 50 and StressTimer <= GetNetworkTime() then
 					AnimpostfxPlay("MenuMGIn")
 					SetTimeout(1000,function()
 						AnimpostfxStop("MenuMGIn")
 					end)
 
-					StressTimer = GetGameTimer() + 30000
+					StressTimer = GetNetworkTime() + 30000
 				end
 
-				if Hunger > 0 and HungerDelay <= GetGameTimer() then
+				if Hunger > 0 and HungerDelay <= GetNetworkTime() then
 					Hunger = Hunger - 1
 					vRPS.DowngradeHunger()
-					HungerDelay = GetGameTimer() + HungerAmount
+					HungerDelay = GetNetworkTime() + HungerAmount
 
 					SendNUIMessage({ Action = "Hunger", Payload = Hunger })
 				end
 
-				if Thirst > 0 and ThirstDelay <= GetGameTimer() then
+				if Thirst > 0 and ThirstDelay <= GetNetworkTime() then
 					Thirst = Thirst - 1
 					vRPS.DowngradeThirst()
-					ThirstDelay = GetGameTimer() + ThirstAmount
+					ThirstDelay = GetNetworkTime() + ThirstAmount
 
 					SendNUIMessage({ Action = "Thirst", Payload = Thirst })
 				end
@@ -437,8 +437,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- HUD:REMOVEGEMSTONE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("hud:RemoveGemstone")
-AddEventHandler("hud:RemoveGemstone",function(Number)
+RegisterNetEvent("hud:RemoveGemstone",function(Number)
 	Gemstone = Gemstone - Number
 
 	if Gemstone < 0 then
@@ -462,8 +461,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- HUD:HOOD
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("hud:Hood")
-AddEventHandler("hud:Hood",function()
+RegisterNetEvent("hud:Hood",function()
 	if Hood then
 		DoScreenFadeIn(2500)
 		Hood = false
@@ -475,8 +473,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DOMINATION:UPDATE
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("domination:Update")
-AddEventHandler("domination:Update",function(Data,Max)
+RegisterNetEvent("domination:Update",function(Data,Max)
 	SendNUIMessage({ Action = "Domination", Payload = { Data = Data, Max = Max } })
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -488,7 +485,12 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- DOMINATION:KILLFEED
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("domination:KillFeed")
-AddEventHandler("domination:KillFeed",function(Attacker,Victim)
+RegisterNetEvent("domination:KillFeed",function(Attacker,Victim)
 	SendNUIMessage({ Action = "Killfeed", Payload = { Killer = Attacker, Victim = Victim } })
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- HUD:DISPLAYEXPERIENCE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNetEvent("hud:DisplayExperience",function(Type,Amount)
+	SendNUIMessage({ Action = Type, Payload = Amount })
 end)

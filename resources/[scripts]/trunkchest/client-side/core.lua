@@ -26,20 +26,45 @@ end)
 -- TRUNK
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("trunkchest:Open")
-AddEventHandler("trunkchest:Open",function()
-	Opened = true
+AddEventHandler("trunkchest:Open",function(Vehicle)
+	if not DoesEntityExist(Vehicle) then
+		return false
+	end
+
+	Opened = Vehicle
+
 	TriggerEvent("inventory:Open",{
 		Type = "Chest",
-		Resource = "trunkchest",
-		Right = "Porta-Malas"
+		Right = "Porta-Malas",
+		Resource = "trunkchest"
 	})
+
+	CreateThread(function()
+		while Opened do
+			if not DoesEntityExist(Opened) then
+				TriggerEvent("inventory:Close")
+				break
+			end
+
+			local Ped = PlayerPedId()
+			local Coords = GetEntityCoords(Ped)
+			local OtherCoords = GetEntityCoords(Opened)
+
+			if #(Coords - OtherCoords) > 10 then
+				TriggerEvent("inventory:Close")
+				break
+			end
+
+			Wait(1000)
+		end
+	end)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- TAKE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Take",function(Data,Callback)
 	if MumbleIsConnected() then
-		vSERVER.Take(Data["slot"],Data["amount"],Data["target"])
+		vSERVER.Take(Data.Slot,Data.Amount,Data.Target)
 	end
 
 	Callback("Ok")
@@ -49,7 +74,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Store",function(Data,Callback)
 	if MumbleIsConnected() then
-		vSERVER.Store(Data["item"],Data["slot"],Data["amount"],Data["target"])
+		vSERVER.Store(Data.Item,Data.Slot,Data.Amount,Data.Target)
 	end
 
 	Callback("Ok")
@@ -59,7 +84,7 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Update",function(Data,Callback)
 	if MumbleIsConnected() then
-		vSERVER.Update(Data["slot"],Data["target"],Data["amount"])
+		vSERVER.Update(Data.Slot,Data.Target,Data.Amount)
 	end
 
 	Callback("Ok")
@@ -68,8 +93,19 @@ end)
 -- MOUNT
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Mount",function(Data,Callback)
-	local Primary,Secondary,PrimaryWeight,SecondaryWeight = vSERVER.Mount()
+	local Primary,Secondary,PrimaryWeight,SecondaryWeight,PrimarySlots = vSERVER.Mount()
 	if Primary then
-		Callback({ Primary = Primary, Secondary = Secondary, PrimaryMaxWeight = PrimaryWeight, SecondaryMaxWeight = SecondaryWeight, SecondarySlots = math.max(CountTable(Secondary),25) })
+		Callback({
+			Primary = {
+				Data = Primary,
+				MaxWeight = PrimaryWeight,
+				Slots = PrimarySlots or Theme.inventory.slots.default
+			},
+			Secondary = {
+				Data = Secondary,
+				MaxWeight = SecondaryWeight,
+				Slots = math.max(CountTable(Secondary),25)
+			}
+		})
 	end
 end)

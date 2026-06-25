@@ -5,8 +5,8 @@ SERVER = IsDuplicityVersion()
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- LEVELS
 -----------------------------------------------------------------------------------------------------------------------------------------
-local Levels = { 0,270,580,940,1350,1820,2360,2980,3690,4500,5440,6520,7760,9180,10810,12690,14850,17330,20180,23450,27210,31540,36510,42230,48810,56370,65060,75060,86550,99999 }
-local LevelsPainel = { 0,270,580,940,1350,1820,2360,2980,3690,4500,5440,6520,7760,9180,10810,12690,14850,17330,20180,23450,27210,31540,36510,42230,48810,56370,65060,75060,86550,99999 }
+Levels = { 0,270,580,940,1350,1820,2360,2980,3690,4500,5440,6520,7760,9180,10810,12690,14850,17330,20180,23450,27210,31540,36510,42230,48810,56370,65060,75060,86550,99999 }
+LevelsPainel = { 0,270,580,940,1350,1820,2360,2980,3690,4500,5440,6520,7760,9180,10810,12690,14850,17330,20180,23450,27210,31540,36510,42230,48810,56370,65060,75060,86550,99999 }
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CLASSCATEGORY
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -176,6 +176,17 @@ function parseInt(Number,Force)
 	return math.floor(Number)
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- PARSECEIL
+-----------------------------------------------------------------------------------------------------------------------------------------
+function parseCeil(Number,Force)
+	Number = tonumber(Number) or 0
+	if Force and Number <= 0 then
+		Number = 1
+	end
+
+	return math.ceil(Number)
+end
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- SANITIZESTRING
 -----------------------------------------------------------------------------------------------------------------------------------------
 function sanitizeString(String,Characteres)
@@ -253,6 +264,8 @@ end
 -- COMPLETETIMERS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function CompleteTimers(Seconds,Simple)
+	local Message = {}
+
 	local Days = math.floor(Seconds / 86400)
 	Seconds = Seconds % 86400
 
@@ -263,22 +276,26 @@ function CompleteTimers(Seconds,Simple)
 	Seconds = Seconds % 60
 
 	local function Plural(Value,Singular,Plural)
-		return Value <= 1 and Singular or Plural
+		return Value == 1 and Singular or Plural
 	end
 
 	if Days > 0 then
-		if Hours > 0 and not Simple then
-			return string.format("%d %s, %d %s e %d %s",Days,Plural(Days,"Dia","Dias"),Hours,Plural(Hours,"Hora","Horas"),Minutes,Plural(Minutes,"Minuto","Minutos"))
-		else
-			return string.format("%d %s e %d %s",Days,Plural(Days,"Dia","Dias"),Hours,Plural(Hours,"Hora","Horas"))
-		end
-	elseif Hours > 0 then
-		return string.format("%d %s e %d %s",Hours,Plural(Hours,"Hora","Horas"),Minutes,Plural(Minutes,"Minuto","Minutos"))
-	elseif Minutes > 0 then
-		return string.format("%d %s e %d %s",Minutes,Plural(Minutes,"Minuto","Minutos"),Seconds,Plural(Seconds,"Segundo","Segundos"))
-	else
-		return string.format("%d %s",Seconds,Plural(Seconds,"Segundo","Segundos"))
+		Message[#Message + 1] = string.format("%d %s",Days,Plural(Days,"Dia","Dias"))
 	end
+
+	if Hours > 0 then
+		Message[#Message + 1] = string.format("%d %s",Hours,Plural(Hours,"Hora","Horas"))
+	end
+
+	if Minutes > 0 then
+		Message[#Message + 1] = string.format("%d %s",Minutes,Plural(Minutes,"Minuto","Minutos"))
+	end
+
+	if Seconds > 0 or #Message == 0 then
+		Message[#Message + 1] = string.format("%d %s",Seconds,Plural(Seconds,"Segundo","Segundos"))
+	end
+
+	return table.concat(Message,", ")
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- BONES
@@ -370,7 +387,7 @@ end
 -- RANDPERCENTAGE
 -----------------------------------------------------------------------------------------------------------------------------------------
 function RandPercentage(Table)
-	if type(Table) ~= "table" or #Table == 0 then
+	if type(Table) ~= "table" or next(Table) == nil then
 		return false
 	end
 
@@ -383,16 +400,16 @@ function RandPercentage(Table)
 		return false
 	end
 
-	local Randomize = math.random(Multiplier)
+	local Randomize = math.random() * Multiplier
 	for Number = 1,#Table do
 		local Entry = Table[Number]
 		Randomize = Randomize - (Entry.Chance or 0)
 
-		if Entry.Min and Entry.Max then
-			Entry.Valuation = math.random(Entry.Min,Entry.Max)
-		end
-
 		if Randomize <= 0 then
+			if Entry.Min and Entry.Max then
+				Entry.Valuation = math.random(Entry.Min,Entry.Max)
+			end
+
 			return Entry
 		end
 	end
@@ -448,15 +465,4 @@ function ConvertStringToTable(String)
 	end
 
 	return Result
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- HEXTORGB
------------------------------------------------------------------------------------------------------------------------------------------
-function HexToRGB(Hex)
-    Hex = Hex:gsub("#","")
-    if #Hex == 3 then
-        Hex = Hex:sub(1,1)..Hex:sub(1,1)..Hex:sub(2,2)..Hex:sub(2,2)..Hex:sub(3,3)..Hex:sub(3,3)
-    end
-
-    return tonumber(Hex:sub(1,2),16), tonumber(Hex:sub(3,4),16),tonumber(Hex:sub(5,6),16)
 end

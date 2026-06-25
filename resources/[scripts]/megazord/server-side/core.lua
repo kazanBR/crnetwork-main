@@ -12,7 +12,7 @@ Tunnel.bindInterface("megazord",Creative)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
-GlobalState["Resource"] = {}
+GlobalState.Resource = {}
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- WARNING
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -20,10 +20,10 @@ function Creative.Warning(Message,Banned)
 	local source = source
 	local Passport = vRP.Passport(source)
 	if Passport and Message and not vRP.HasService(Passport,PermBypass) then
-		exports.discord:Embed("Hackers","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MOTIVO]:** "..Message.."\n**[DATA & HORA]:** "..os.date("%d/%m/%Y").." às "..os.date("%H:%M"),source)
+		exports.discord:Embed("Hackers","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MOTIVO]:** "..Message,source)
 
 		if Banned then
-			vRP.SetBanned(Passport,-1,"Permanente",Message)
+			vRP.SetBanned(Passport,-1,"Hacker")
 		end
 	end
 end
@@ -31,25 +31,25 @@ end
 -- THREADRESOURCES
 -----------------------------------------------------------------------------------------------------------------------------------------
 CreateThread(function()
-	local ResourceList = {}
-	for Number = 0,(GetNumResources() - 1) do
-		ResourceList[GetResourceByFindIndex(Number)] = true
+	local List = {}
+	for Number = 0,GetNumResources() - 1 do
+		List[GetResourceByFindIndex(Number)] = true
 	end
 
-	GlobalState["Resource"] = ResourceList
+	GlobalState.Resource = List
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- EXPLOSIONEVENT
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("explosionEvent",function(source,Data)
 	local source = source
-	local ExplosionType = tonumber(Data["explosionType"])
+	local ExplosionType = tonumber(Data.explosionType)
 	if Explodes[ExplosionType] then
 		CancelEvent()
 
 		local Passport = vRP.Passport(source)
 		if Passport and not vRP.HasService(Passport,PermBypass) then
-			exports.discord:Embed("Hackers","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MOTIVO]:** "..Explodes[ExplosionType].."\n**[DATA & HORA]:** "..os.date("%d/%m/%Y").." às "..os.date("%H:%M"),source)
+			exports.discord:Embed("Hackers","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MOTIVO]:** "..Explodes[ExplosionType],source)
 		end
 	end
 end)
@@ -62,10 +62,6 @@ AddEventHandler("entityCreating",function(Entity)
 			CancelEvent()
 
 			return
-		end
-
-		if GetEntityType(Entity) == 2 then
-			SetVehicleDoorsLocked(Entity,2)
 		end
 	else
 		CancelEvent()
@@ -80,8 +76,8 @@ for Number = 1,#HackerEvents do
 		local source = source
 		local Passport = vRP.Passport(source)
 		if Passport and not vRP.HasService(Passport,PermBypass) then
-			exports.discord:Embed("Hackers","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MOTIVO]:** Hacker Events\n**[DATA & HORA]:** "..os.date("%d/%m/%Y").." às "..os.date("%H:%M"),source)
-			vRP.SetBanned(Passport,-1,"Permanente","Hacker")
+			exports.discord:Embed("Hackers","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MOTIVO]:** Hacker Events",source)
+			vRP.SetBanned(Passport,-1,"Hacker")
 		end
 	end)
 end
@@ -95,8 +91,8 @@ AddEventHandler("ptFxEvent",function(source,Data)
 		local source = source
 		local Passport = vRP.Passport(source)
 		if Passport and not vRP.HasService(Passport,PermBypass) then
-			exports.discord:Embed("Hackers","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MOTIVO]:** Particles/Assets Block\n**[DATA & HORA]:** "..os.date("%d/%m/%Y").." às "..os.date("%H:%M"),source)
-			vRP.SetBanned(Passport,-1,"Permanente","Hacker")
+			exports.discord:Embed("Hackers","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MOTIVO]:** Particles/Assets Block",source)
+			vRP.SetBanned(Passport,-1,"Hacker")
 		end
 	end
 end)

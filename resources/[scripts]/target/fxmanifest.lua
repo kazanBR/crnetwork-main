@@ -9,7 +9,6 @@ dependencies {
 ui_page "web-side/index.html"
 
 client_scripts {
-	"@vrp/lib/Utils.lua",
 	"@PolyZone/client.lua",
 	"@PolyZone/BoxZone.lua",
 	"@vrp/config/Native.lua",
@@ -20,7 +19,6 @@ client_scripts {
 }
 
 server_scripts {
-	"@vrp/lib/Utils.lua",
 	"server-side/*"
 }
 
@@ -29,9 +27,7 @@ files {
 }
 
 shared_scripts {
-	"@vrp/config/Item.lua",
-	"@vrp/config/Vehicle.lua",
+	"@vrp/lib/Utils.lua",
 	"@vrp/config/Global.lua",
-	"@vrp/config/Drops.lua",
 	"shared-side/*"
 }

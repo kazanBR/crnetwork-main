@@ -16,7 +16,7 @@ CreateThread(function()
 
 						if IsControlJustPressed(1,38) and not exports.hud:Wanted() and not exports["lb-phone"]:IsOpen() then
 							SetNuiFocus(true,true)
-							SendNUIMessage({ Action = "Open", Payload = { Number,Table } })
+							SendNUIMessage({ Action = "Open", Payload = { Id = Number, Floors = Table } })
 						end
 					end
 				end
@@ -27,18 +27,18 @@ CreateThread(function()
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- CLICK
+-- SELECT
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Click",function(Data,Callback)
+RegisterNUICallback("Select",function(Data,Callback)
+	local Floor = Data.Floor
+	local Selected = Data.Id
 	local Ped = PlayerPedId()
-	local Floor = Data["Floor"]
-	local Selected = Data["Elevator"]
 
 	if Config[Selected] and Config[Selected][Floor] then
 		DoScreenFadeOut(0)
 		SetNuiFocus(false,false)
 		TriggerEvent("hud:Active",false)
-		SetEntityCoords(Ped,Config[Selected][Floor]["Coords"])
+		SetEntityCoordsNoOffset(Ped,Config[Selected][Floor].Coords)
 
 		SetTimeout(2500,function()
 			TriggerEvent("hud:Active",true)

@@ -4,18 +4,14 @@ game "gta5"
 client_scripts {
 	"@vrp/config/Native.lua",
 	"@PolyZone/client.lua",
-	"@vrp/lib/Utils.lua",
 	"client-side/*"
 }
 
 server_scripts {
-	"@vrp/lib/Utils.lua",
 	"server-side/*"
 }
 
 shared_scripts {
-	"@vrp/config/Item.lua",
-	"@vrp/config/Vehicle.lua",
-	"@vrp/config/Global.lua",
-	"@vrp/config/Drops.lua"
+	"@vrp/lib/Utils.lua",
+	"@vrp/config/Global.lua"
 }

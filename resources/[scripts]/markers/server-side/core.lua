@@ -58,10 +58,20 @@ exports("Enter",function(source,Permission,Level)
 	TriggerClientEvent("markers:Full",source,Players)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- MARKERS:ENTER
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterServerEvent("markers:Enter")
+AddEventHandler("markers:Enter",function(Permission)
+	local source = source
+	if Permission then
+		exports.markers:Enter(source,Permission)
+	end
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- EXIT
 -----------------------------------------------------------------------------------------------------------------------------------------
-exports("Exit",function(source)
-	if source and Players[source] then
+exports("Exit",function(source,Permission)
+	if source and Players[source] and (not Permission or Players[source].Permission == Permission) then
 		Players[source] = nil
 
 		for TargetSource in pairs(Players) do

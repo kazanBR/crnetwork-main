@@ -8,12 +8,10 @@ client_scripts {
 }
 
 server_scripts {
-	"@vrp/config/Vehicle.lua",
 	"server-side/*"
 }
 
 shared_scripts {
-	"@vrp/config/Item.lua",
 	"@vrp/lib/Utils.lua",
 	"shared-side/*"
 }

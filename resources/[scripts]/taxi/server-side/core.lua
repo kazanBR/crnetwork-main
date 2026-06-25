@@ -18,14 +18,14 @@ local Attention = {}
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- PAYMENT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Payment(Selected)
+function Creative.Payment(Locate,Selected)
 	local source = source
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] and Locations[Selected] then
+	if Passport and not Active[Passport] and Locations[Locate] and Locations[Locate][Selected] then
 		Active[Passport] = true
 
 		local Coords = vRP.GetEntityCoords(source)
-		if not Selected or not vRPC.LastVehicle(source,"taxi") or #(Coords - Locations[Selected]["Vehicle"]) > 5 then
+		if not vRPC.LastVehicle(source,"taxi") or #(Coords - Locations[Locate][Selected].Vehicle) > 5 then
 			exports.discord:Embed("Hackers","**[PASSAPORTE]:** "..Passport.."\n**[FUNÇÃO]:** Payment do Taxista",source)
 
 			Attention[Passport] = (Attention[Passport] or 0) + 1

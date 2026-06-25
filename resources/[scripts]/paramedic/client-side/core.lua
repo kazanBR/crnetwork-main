@@ -12,52 +12,93 @@ Tunnel.bindInterface("paramedic",Creative)
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Damaged = {}
 local Bleedings = 0
-local Injuried = GetGameTimer()
-local BloodTimers = GetGameTimer()
+local InjuryCooldown = 0
+local NextBloodDamage = 0
+local BloodEffect = false
+local BloodEffectEnd = 0
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- EXPLOSIVEWEAPONS
+-----------------------------------------------------------------------------------------------------------------------------------------
+local ExplosiveWeapons = {
+	[126349499] = true,
+	[1064738331] = true,
+	[85055149] = true,
+	[-135142818] = true
+}
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GAMEEVENTTRIGGERED
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("gameEventTriggered",function(Event,Message)
-	if Event ~= "CEventNetworkEntityDamage" or PlayerPedId() ~= Message[1] or LocalPlayer.state.Arena then
+	if Event ~= "CEventNetworkEntityDamage" or LocalPlayer.state.Arena then
 		return false
 	end
 
-	local Ped = Message[1]
-	local Damage = Message[7]
-	local Health = GetEntityHealth(Ped) > 100
-	local Explosive = (Damage == 126349499 or Damage == 1064738331 or Damage == 85055149 or Damage == -135142818)
-
-	if Explosive and Health then
-		SetPedToRagdoll(Ped,2500,2500,0,0,0,0)
-
+	local Ped = PlayerPedId()
+	if Ped ~= Message[1] then
 		return false
 	end
 
-	if GetGameTimer() >= Injuried and not IsPedInAnyVehicle(Ped) and Health then
-		Injuried = GetGameTimer() + 1000
-
-		local Hit,Mark = GetPedLastDamageBone(Ped)
-		if Hit and not Damaged[Mark] and Mark ~= 0 then
-			Bleedings = math.min(Bleedings + 1,5)
-			ClearPedBloodDamage(Ped)
-			Damaged[Mark] = true
-		end
+	local Health = GetEntityHealth(Ped)
+	if Health <= 100 then
+		return false
 	end
+
+	local DamageWeapon = Message[7]
+	if ExplosiveWeapons[DamageWeapon] then
+		SetPedToRagdoll(Ped,2500,2500,0,false,false,false)
+		return false
+	end
+
+	local CurrentTimer = GetNetworkTime()
+	if CurrentTimer < InjuryCooldown then
+		return false
+	end
+
+	InjuryCooldown = CurrentTimer + 1000
+
+	local Hit,BoneId = GetPedLastDamageBone(Ped)
+	if not Hit or BoneId == 0 or Damaged[BoneId] then
+		return false
+	end
+
+	Damaged[BoneId] = true
+	Bleedings = math.min(Bleedings + 1,5)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- THREADBLOODTICK
 -----------------------------------------------------------------------------------------------------------------------------------------
 CreateThread(function()
 	while true do
-		Wait(1000)
+		local TimeDistance = 1000
+		local CurrentTimer = GetNetworkTime()
 
-		local Ped = PlayerPedId()
-		if not LocalPlayer.state.Arena and Bleedings >= 2 and GetGameTimer() >= BloodTimers and GetEntityHealth(Ped) > 100 then
-			TriggerEvent("Notify","Sangramento","Ferimentos encontrados.","sangue",5000)
-			BloodTimers = GetGameTimer() + 30000
-			ApplyDamageToPed(Ped,1,false)
-			ClearPedBloodDamage(Ped)
+		if not LocalPlayer.state.Arena then
+			local Ped = PlayerPedId()
+			if Bleedings >= 2 and GetEntityHealth(Ped) > 100 then
+				if CurrentTimer >= NextBloodDamage then
+					BloodEffect = true
+					BloodEffectEnd = CurrentTimer + 1000
+					NextBloodDamage = CurrentTimer + 15000
+
+					ApplyDamageToPed(Ped,1,false)
+				end
+			end
 		end
+
+		if BloodEffect then
+			if CurrentTimer >= BloodEffectEnd then
+				BloodEffect = false
+			else
+				local Duration = 1000
+				local Progress = (CurrentTimer - (BloodEffectEnd - Duration)) / Duration
+				local Alpha = math.floor(math.sin(Progress * math.pi) * 100)
+
+				DrawRect(0.5,0.5,1.0,1.0,255,0,0,Alpha)
+				TimeDistance = 0
+			end
+		end
+
+		Wait(TimeDistance)
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -67,8 +108,11 @@ RegisterNetEvent("paramedic:Reset")
 AddEventHandler("paramedic:Reset",function()
 	Damaged = {}
 	Bleedings = 0
-	Injuried = GetGameTimer()
-	BloodTimers = GetGameTimer()
+	InjuryCooldown = 0
+	NextBloodDamage = 0
+	BloodEffect = false
+	BloodEffectEnd = 0
+
 	ClearPedBloodDamage(PlayerPedId())
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -81,16 +125,18 @@ end
 -- BANDAGE
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Creative.Bandage()
-	for Number in pairs(Damaged) do
-		local Humane = Bone(Number)
+	for BoneId in pairs(Damaged) do
+		local Humane = Bone(BoneId)
 
 		TriggerEvent("sounds:Private","bandage",0.5)
 		TriggerEvent("Notify","Atenção","Passou ataduras no(a) <b>"..Humane.."</b>.","amarelo",10000)
 
-		Bleedings = Bleedings - 1
-		Damaged[Number] = nil
+		Damaged[BoneId] = nil
+		Bleedings = math.max(Bleedings - 1,0)
 
-		ClearPedBloodDamage(PlayerPedId())
+		if Bleedings <= 0 then
+			ClearPedBloodDamage(PlayerPedId())
+		end
 
 		return Humane
 	end
@@ -98,25 +144,19 @@ function Creative.Bandage()
 	return ""
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- OXYCONTIN
------------------------------------------------------------------------------------------------------------------------------------------
-function Creative.Oxycontin()
-	Damaged = {}
-end
------------------------------------------------------------------------------------------------------------------------------------------
 -- PARAMEDIC:INJURIES
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("paramedic:Injuries",function()
 	if next(Damaged) == nil then
 		TriggerEvent("Notify","Aviso","Nenhum ferimento encontrado.","amarelo",5000)
-
 		return false
 	end
 
 	local Index = 1
 	local Injuries = {}
-	for Number in pairs(Damaged) do
-		table.insert(Injuries,string.format("<b>%d</b>: %s<br>",Index,Bone(Number)))
+
+	for BoneId in pairs(Damaged) do
+		Injuries[#Injuries + 1] = string.format("<b>%d</b>: %s<br>",Index,Bone(BoneId))
 		Index = Index + 1
 	end
 

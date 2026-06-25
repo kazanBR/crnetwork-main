@@ -30,7 +30,7 @@ CreateThread(function()
 				local Speed = GetEntitySpeed(Front) * 3.6
 				local Plate = GetVehicleNumberPlateText(Front)
 
-				SendNUIMessage({ radar = "top", plate = Plate, Model = VehicleName(Model), speed = Speed })
+				SendNUIMessage({ radar = "top", plate = Plate, Model = exports.vrp:VehicleName(Model), speed = Speed })
 			end
 
 			local VehicleBack = GetOffsetFromEntityInWorldCoords(Vehicle,0.0,-105.0,0.0)
@@ -42,7 +42,7 @@ CreateThread(function()
 				local Speed = GetEntitySpeed(Back) * 3.6
 				local Plate = GetVehicleNumberPlateText(Back)
 
-				SendNUIMessage({ radar = "bot", plate = Plate, Model = VehicleName(Model), speed = Speed })
+				SendNUIMessage({ radar = "bot", plate = Plate, Model = exports.vrp:VehicleName(Model), speed = Speed })
 			end
 		end
 

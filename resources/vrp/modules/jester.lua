@@ -46,11 +46,9 @@ function vRP.ClearInventory(Passport,Ignore)
 
 	if not Ignore then
 		local Weight = 50
-		for GroupName,GroupData in pairs(Groups) do
-			if GroupData.Multiplier and GroupData.Multiplier.Weight then
-				if vRP.HasGroup(Passport,GroupName) then
-					Weight = Weight - GroupData.Multiplier.Weight
-				end
+		for Permission,Multiplier in pairs({ Ouro = 25, Prata = 15, Bronze = 5 }) do
+			if vRP.HasService(Passport,Permission) then
+				Weight = Weight - Multiplier
 			end
 		end
 

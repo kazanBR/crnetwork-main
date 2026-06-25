@@ -7,7 +7,7 @@ function Creative.Swimming()
 	if Passport then
 		local Inventory = vRP.Inventory(Passport)
 		for Slot,v in pairs(Inventory) do
-			local Name = ItemLostWater(v["item"])
+			local Name = exports.vrp:ItemLostWater(v["item"])
 			if Name and vRP.TakeItem(Passport,v["item"],v["amount"],false,Slot) and type(Name) == "string" then
 				vRP.GenerateItem(Passport,Name,v["amount"])
 			end

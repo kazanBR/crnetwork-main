@@ -57,7 +57,7 @@ AddEventHandler("chat:ServerMessage",function(Mode,Message)
 
 	if Mode == "Ação" then
 		TriggerClientEvent("chat:ClientMessage",-1,"Anônimo",Messenger,Mode)
-		exports["discord"]:Embed("Chat","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MENSAGEM]:** "..Messenger..".")
+		exports.discord:Embed("Chat","**[SOURCE]:** "..source.."\n**[PASSAPORTE]:** "..Passport.."\n**[MENSAGEM]:** "..Messenger..".")
 
 		return false
 	end

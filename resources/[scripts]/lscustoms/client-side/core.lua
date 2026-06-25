@@ -23,18 +23,26 @@ local Information = {}
 function Open(Vehicle,Logo)
 	Information["Vehicle"] = Vehicle
 
-	SetVehicleModKit(Information["Vehicle"],0)
-	FreezeEntityPosition(Information["Vehicle"],true)
-	SetVehicleOnGroundProperly(Information["Vehicle"])
+	SetVehicleModKit(Vehicle,0)
+	SetVehicleOnGroundProperly(Vehicle)
+	FreezeEntityPosition(Vehicle,true)
 
-	Wheel(Information["Vehicle"])
-	Respray(Information["Vehicle"])
-	WindowTint(Information["Vehicle"])
-	PlateHolder(Information["Vehicle"])
-	Xenons(Information["Vehicle"])
-	Turbo(Information["Vehicle"])
-	Neons(Information["Vehicle"])
-	VehicleExtras(Information["Vehicle"])
+	Wheel(Vehicle)
+	Respray(Vehicle)
+	WindowTint(Vehicle)
+	PlateHolder(Vehicle)
+	Xenons(Vehicle)
+	Turbo(Vehicle)
+	Neons(Vehicle)
+	VehicleExtras(Vehicle)
+
+	Opened = true
+	Focus = true
+
+	SetNuiFocus(true,true)
+	SetNuiFocusKeepInput(false)
+	SetCursorLocation(0.5,0.5)
+	TriggerEvent("hud:Active",false)
 
 	local Ignore = {
 		["Wheels"] = true,
@@ -67,7 +75,7 @@ function Open(Vehicle,Logo)
 					else
 						if Mod:match("Upgrade") then
 							local Model = vRP.VehicleName()
-							local VehiclePrice = VehiclePrice(Model)
+							local VehiclePrice = exports.vrp:VehiclePrice(Model)
 
 							Values[Mod] = {
 								parseInt(VehiclePrice * 0.01),
@@ -93,14 +101,9 @@ function Open(Vehicle,Logo)
 		end
 	end
 
-	Focus = true
-	Opened = true
-	SetNuiFocus(Focus,Focus)
-	SetCursorLocation(0.5,0.5)
-	TriggerEvent("hud:Active",false)
-	SendNUIMessage({ Action = "Open", Payload = { Logo,Initial } })
 	Information["Model"] = GetEntityArchetypeName(Information["Vehicle"])
 	Information["Plate"] = GetVehicleNumberPlateText(Information["Vehicle"])
+	SendNUIMessage({ Action = "Open", Payload = { Logo = Logo, Customs = Initial } })
 	TriggerServerEvent("lscustoms:Network",NetworkGetNetworkIdFromEntity(Information["Vehicle"]),Information["Plate"])
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -632,17 +635,23 @@ end)
 -- SAVE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Save",function(Data,Callback)
+	if not Opened then
+		return false
+	end
+
 	if not vSERVER.Save(Information["Model"],Information["Plate"],Initial) then
 		Apply(Information["Vehicle"],Initial,"Installed")
 	end
 
-	Focus = false
-	Opened = false
-	SetNuiFocus(Focus,Focus)
+	SetNuiFocus(false,false)
+	SetNuiFocusKeepInput(false)
 	TriggerEvent("hud:Active",true)
 	TriggerServerEvent("lscustoms:Network")
 	FreezeEntityPosition(Information["Vehicle"],false)
+
 	Information = {}
+	Opened = false
+	Focus = false
 	Initial = {}
 
 	Callback("Ok")
@@ -651,23 +660,29 @@ end)
 -- CLOSE
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Close",function(Data,Callback)
+	if not Opened then
+		return false
+	end
+
 	Apply(Information["Vehicle"],Initial,"Installed")
 
-	Focus = false
-	Opened = false
-	SetNuiFocus(Focus,Focus)
+	SetNuiFocus(false,false)
+	SetNuiFocusKeepInput(false)
 	TriggerEvent("hud:Active",true)
 	TriggerServerEvent("lscustoms:Network")
 	FreezeEntityPosition(Information["Vehicle"],false)
+
 	Information = {}
+	Opened = false
+	Focus = false
 	Initial = {}
 
 	Callback("Ok")
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
--- SPACE
+-- CAMERA
 -----------------------------------------------------------------------------------------------------------------------------------------
-RegisterNUICallback("Space",function(Data,Callback)
+RegisterNUICallback("Camera",function(Data,Callback)
 	SetNuiFocusKeepInput(Focus)
 	Focus = not Focus
 
@@ -680,19 +695,21 @@ CreateThread(function()
 	while true do
 		local TimeDistance = 999
 		local Ped = PlayerPedId()
-		if not Opened and IsPedInAnyVehicle(Ped) then
-			local Vehicle = GetVehiclePedIsUsing(Ped)
-			if GetPedInVehicleSeat(Vehicle,-1) == Ped then
-				local Coords = GetEntityCoords(Ped)
+		if not Opened then
+			if IsPedInAnyVehicle(Ped) then
+				local Vehicle = GetVehiclePedIsUsing(Ped)
+				if GetPedInVehicleSeat(Vehicle,-1) == Ped then
+					local Coords = GetEntityCoords(Ped)
 
-				for Index,v in pairs(Locations) do
-					if #(Coords - v["Coords"]["xyz"]) <= 2.5 then
-						TimeDistance = 1
+					for Index,v in pairs(Locations) do
+						if #(Coords - v["Coords"]["xyz"]) <= 2.5 then
+							TimeDistance = 1
 
-						if IsControlJustPressed(1,38) and vSERVER.Permission(Index) then
-							SetEntityCoords(Vehicle,v["Coords"]["xyz"])
-							SetEntityHeading(Vehicle,v["Coords"]["w"])
-							Open(Vehicle,v["Logo"])
+							if IsControlJustPressed(1,38) and vSERVER.Permission(Index) then
+								SetEntityCoordsNoOffset(Vehicle,v["Coords"]["xyz"])
+								SetEntityHeading(Vehicle,v["Coords"]["w"])
+								Open(Vehicle,v["Logo"])
+							end
 						end
 					end
 				end
@@ -714,8 +731,8 @@ AddEventHandler("lscustoms:Open",function()
 		local Vehicle = GetVehiclePedIsUsing(Ped)
 
 		if GetPedInVehicleSeat(Vehicle,-1) == Ped then
+			SetEntityCoordsNoOffset(Vehicle,Coords)
 			SetEntityHeading(Vehicle,Heading)
-			SetEntityCoords(Vehicle,Coords)
 			Open(Vehicle,"lscustoms.png")
 		end
 	end

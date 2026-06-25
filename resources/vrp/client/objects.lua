@@ -11,9 +11,11 @@ local Switch = false
 function tvRP.SprayExist(Distance)
 	local Ped = PlayerPedId()
 	local Coords = GetEntityCoords(Ped)
+	local MaxDistance = (Distance or 250.0) ^ 2
 
 	for _,Spray in pairs(Sprays) do
-		if #(Coords - GetBlipCoords(Spray.Blip)) <= (Distance or 250) then
+		local Dist = Coords - Spray.Coords
+		if (Dist.x * Dist.x + Dist.y * Dist.y + Dist.z * Dist.z) <= MaxDistance then
 			return Spray.Permission
 		end
 	end
@@ -23,68 +25,24 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- OBJECTS:TABLE
 -----------------------------------------------------------------------------------------------------------------------------------------
-local ObjectsBlips = {}
-
 RegisterNetEvent("objects:Table")
 AddEventHandler("objects:Table",function(Data)
 	Objects = Data or {}
-end)
------------------------------------------------------------------------------------------------------------------------------------------
--- OBJECTS:BLIPS
------------------------------------------------------------------------------------------------------------------------------------------
-RegisterNetEvent("objects:Blips")
-AddEventHandler("objects:Blips",function()
-	local Colors = {
-		LootMedics = 76,
-		LootWeapons = 52,
-		LootSupplies = 56,
-		LootLegendary = 81
-	}
 
-	if next(ObjectsBlips) ~= nil then
-		for Number,Blip in pairs(ObjectsBlips) do
-			if DoesBlipExist(Blip) then
-				RemoveBlip(Blip)
-			end
+	for Number,Object in pairs(Objects) do
+		if Object.Mode == "Sprays" and not Sprays[Number] then
+			local x,y,z = table.unpack(Object.Coords)
+			local Blip = AddBlipForRadius(x,y,z,250.0)
 
-			if Sprays and Sprays[Number] then
-				Sprays[Number].Blip = nil
-			end
+			SetBlipColour(Blip,Object.Color)
+			SetBlipAlpha(Blip,150)
+
+			Sprays[Number] = {
+				Blip = Blip,
+				Coords = vec3(x,y,z),
+				Permission = Object.Permission
+			}
 		end
-
-		ObjectsBlips = {}
-		TriggerEvent("Notify","Caixas","Marcações desativadas.","default",10000)
-	else
-		for Number,Data in pairs(Objects) do
-			local Mode = Data.Mode
-			if not Mode then
-				goto continue
-			end
-
-			local x,y,z = Data.Coords[1],Data.Coords[2],Data.Coords[3]
-
-			local Color = Colors[Mode]
-			if Color then
-				local Blip = AddBlipForRadius(x,y,z,25.0)
-				SetBlipAlpha(Blip,200)
-				SetBlipColour(Blip,Color)
-				ObjectsBlips[Number] = Blip
-			elseif Mode == "Sprays" then
-				Sprays[Number] = Sprays[Number] or {}
-				local Blip = AddBlipForRadius(x,y,z,250.0)
-
-				SetBlipColour(Blip,Data.Color)
-				SetBlipAlpha(Blip,150)
-
-				Sprays[Number].Blip = Blip
-				Sprays[Number].Permission = Data.Permission
-				ObjectsBlips[Number] = Blip
-			end
-
-			::continue::
-		end
-
-		TriggerEvent("Notify","Caixas","Marcações ativadas.","default",10000)
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -98,36 +56,35 @@ AddEventHandler("objects:Adicionar",function(Number,Data)
 
 	Objects[Number] = Data
 
-	if Data.Mode ~= "Sprays" then
+	if Data.Mode ~= "Sprays" or Sprays[Number] then
 		return false
 	end
 
-	Sprays[Number] = Sprays[Number] or {}
-
-	local x,y,z = Data.Coords[1],Data.Coords[2],Data.Coords[3]
+	local x,y,z = table.unpack(Data.Coords)
 	local Blip = AddBlipForRadius(x,y,z,250.0)
-
 	SetBlipColour(Blip,Data.Color)
 	SetBlipAlpha(Blip,150)
 
-	Sprays[Number].Blip = Blip
-	Sprays[Number].Permission = Data.Permission
+	Sprays[Number] = {
+		Blip = Blip,
+		Coords = vec3(x,y,z),
+		Permission = Data.Permission
+	}
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- OBJECTS:REMOVER
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNetEvent("objects:Remover")
 AddEventHandler("objects:Remover",function(Number)
+	local Entity = Init[Number]
 	local Data = Objects[Number]
-	local Entitys = Init[Number]
-
-	if Entitys then
-		if DoesEntityExist(Entitys) then
-			DeleteEntity(Entitys)
+	if Entity then
+		if DoesEntityExist(Entity) then
+			DeleteEntity(Entity)
 		end
 
 		if Data and Data.Mode then
-			exports.target:RemCircleZone("Objects:"..Number)
+			exports.target:RemCircleZone("Objects:" .. Number)
 		end
 
 		Init[Number] = nil
@@ -147,26 +104,33 @@ AddEventHandler("objects:Remover",function(Number)
 		Sprays[Number] = nil
 	end
 
-	if Data then
-		Objects[Number] = nil
+	Objects[Number] = nil
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- OBJECTS:UPDATE
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterNetEvent("objects:Update")
+AddEventHandler("objects:Update",function(Number,Passport)
+	if Objects[Number] then
+		Objects[Number].Passport = Passport
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- ADDTARGETZONE
 -----------------------------------------------------------------------------------------------------------------------------------------
-function AddTargetZone(Number,Coords,mode,Weight,Options,Size,Box)
+function AddTargetZone(Number,Coords,Weight,Options,Size,Box)
 	if not Coords or not Size or not Options then
 		return false
 	end
 
+	local z = Coords[3]
 	local Zone = "Objects:"..Number
-	local Heading = Coords[4] or 0.0
-	local Params = { name = Zone, heading = Heading }
-	local Center = vec3(Coords[1],Coords[2],Coords[3] + (Weight or 0.0))
+	local Params = { name = Zone, heading = Coords[4] or 0.0 }
+	local Center = vec3(Coords[1],Coords[2],z + (Weight or 0.0))
 
 	if Box then
-		Params.minZ = Coords[3]
-		Params.maxZ = Coords[3] + (Size.maxZ or 1.5)
+		Params.minZ = z
+		Params.maxZ = z + (Size.maxZ or 1.5)
 
 		exports.target:AddBoxZone(Zone,Center,Size.width or 1.0,Size.height or 1.0,Params,Options)
 	else
@@ -239,18 +203,6 @@ function TargetLabel(Number,Coords,Mode,Weight,Item)
 		Chests = {
 			isBox = true,
 			size = { width = 0.65, height = 0.95, maxZ = 0.5 },
-			options = {
-				shop = Number,
-				Distance = 1.75,
-				options = {
-					{ event = "chest:Item", label = "Abrir", tunnel = "products", service = Item },
-					LocalPlayer.state.Admin and { event = "inventory:StoreObjects", label = "Guardar", tunnel = "server" }
-				}
-			}
-		},
-		Personal = {
-			isBox = true,
-			size = { width = 0.6, height = 0.9, maxZ = 0.5 },
 			options = {
 				shop = Number,
 				Distance = 1.75,
@@ -340,58 +292,100 @@ function TargetLabel(Number,Coords,Mode,Weight,Item)
 	}
 
 	if Modes[Mode] then
-		AddTargetZone(Number,Coords,Mode,Weight,Modes[Mode].options,Modes[Mode].size,Modes[Mode].isBox)
+		AddTargetZone(Number,Coords,Weight,Modes[Mode].options,Modes[Mode].size,Modes[Mode].isBox)
 	end
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CREATEANDMANAGEOBJECT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function CreateAndManageObject(Number,v,Coords)
-	if not v or not v.Coords then
+function CreateAndManageObject(Number,Table,Coords)
+	if not Table or not Table.Coords then
 		return false
 	end
 
-	local ObjectCoords = vec3(v.Coords[1], v.Coords[2], v.Coords[3])
-	if #(Coords - ObjectCoords) <= (v.Distance or 100) then
-		if not Init[Number] and LoadModel(v.Object) then
-			local Entitys = CreateObjectNoOffset(v.Object,ObjectCoords.x,ObjectCoords.y,ObjectCoords.z,false,false,false)
-			Init[Number] = Entitys
+	local x = Table.Coords[1]
+	local y = Table.Coords[2]
+	local z = Table.Coords[3]
 
-			SetEntityHeading(Entitys,v.Coords[4])
-			FreezeEntityPosition(Entitys,true)
-			SetEntityLodDist(Entitys,0xFFFF)
+	local Distance = Table.Distance or 100.0
+	local ConsultObject = Init[Number]
+	local Ped = PlayerPedId()
 
-			if not v.Ground then
-				PlaceObjectOnGroundProperly(Entitys)
-			end
+	local dx = Coords.x - x
+	local dy = Coords.y - y
+	local dz = Coords.z - z
 
-			if v.Mode then
-				if v.Mode == "Personal" and v.Passport and v.Passport ~= LocalPlayer.state.Passport then
-					goto Continue
-				end
+	if (dx * dx + dy * dy + dz * dz) > (Distance * Distance) then
+		if ConsultObject then
+			DestroyObject(Number,Table)
+		end
 
-				if v.Mode == "Chests" and v.Permission then
-					local Hierarchy = SplitTwo(v.Permission)
-					local Permission = SplitOne(v.Permission)
+		return false
+	end
 
-					if not LocalPlayer.state[Permission] or LocalPlayer.state[Permission] > parseInt(Hierarchy) then
-						goto Continue
-					end
-				end
-
-				TargetLabel(Number,v.Coords,v.Mode,v.Weight or 0.0,v.Item)
-
-				::Continue::
-			end
-
-			if v.Active == "Spikes" then
-				local MaxOffset = GetOffsetFromEntityInWorldCoords(Entitys,0.0,1.84,0.1)
-				local MinOffset = GetOffsetFromEntityInWorldCoords(Entitys,0.0,-1.84,-0.1)
-				TriggerEvent("spikes:Adicionar",Number,v.Coords,MinOffset,MaxOffset)
+	if ConsultObject then
+		if Table.Line then
+			if HasEntityClearLosToEntity(Ped,ConsultObject,17) then
+				SetEntityDrawOutline(ConsultObject,true)
+			else
+				SetEntityDrawOutline(ConsultObject,false)
 			end
 		end
-	elseif Init[Number] then
-		DestroyObject(Number,v)
+
+		return false
+	end
+
+	if Table.Mode == "Chests" and Table.Permission then
+		local Permission = SplitOne(Table.Permission)
+		local Hierarchy = tonumber(SplitTwo(Table.Permission)) or 0
+
+		local Level = LocalPlayer.state[Permission]
+		if not Level or Level > Hierarchy then
+			return false
+		end
+	end
+
+	if not LoadModel(Table.Object) then
+		return false
+	end
+
+	local Ped = PlayerPedId()
+	local Entitys = CreateObjectNoOffset(Table.Object,x,y,z,false,false,false)
+	if not DoesEntityExist(Entitys) then
+		return false
+	end
+
+	Init[Number] = Entitys
+
+	SetEntityHeading(Entitys,Table.Coords[4] or 0.0)
+	FreezeEntityPosition(Entitys,true)
+	SetEntityLodDist(Entitys,200)
+
+	if Table.Line then
+		SetEntityDrawOutlineShader(0)
+		SetEntityDrawOutlineColor(88,101,242,200)
+		SetEntityDrawOutline(Entitys,false)
+	end
+
+	if IsPedInAnyVehicle(Ped,false) then
+		local Vehicle = GetVehiclePedIsUsing(Ped)
+		if Vehicle ~= 0 and DoesEntityExist(Vehicle) then
+			SetEntityNoCollisionEntity(Vehicle,Entitys,false)
+		end
+	end
+
+	if not Table.Ground then
+		PlaceObjectOnGroundProperly(Entitys)
+	end
+
+	if Table.Mode then
+		TargetLabel(Number,Table.Coords,Table.Mode,Table.Weight or 0.0,Table.Item)
+	end
+
+	if Table.Active == "Spikes" then
+		local MaxOffset = GetOffsetFromEntityInWorldCoords(Entitys,0.0,1.84,0.1)
+		local MinOffset = GetOffsetFromEntityInWorldCoords(Entitys,0.0,-1.84,-0.1)
+		TriggerEvent("spikes:Adicionar",Number,Table.Coords,MinOffset,MaxOffset)
 	end
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -402,6 +396,7 @@ CreateThread(function()
 		local Ped = PlayerPedId()
 		local Coords = GetEntityCoords(Ped)
 		local Route = LocalPlayer.state.Route
+
 		for Number,v in pairs(Objects) do
 			local Bucket = v.Bucket
 			if not Bucket or Bucket == Route then
@@ -418,24 +413,29 @@ end)
 -- DESTROYOBJECT
 -----------------------------------------------------------------------------------------------------------------------------------------
 function DestroyObject(Number,Data)
-	local Entitys = Init[Number]
-	if not Entitys then
+	local ConsultObject = Init[Number]
+	if not ConsultObject then
 		return false
 	end
+
+	Init[Number] = nil
 
 	if Data.Mode then
 		exports.target:RemCircleZone("Objects:"..Number)
 	end
 
-	if DoesEntityExist(Entitys) then
-		DeleteEntity(Entitys)
+	if DoesEntityExist(ConsultObject) then
+		if Data.Line then
+			SetEntityDrawOutline(ConsultObject,false)
+		end
+
+		SetEntityAsMissionEntity(ConsultObject,true,true)
+		DeleteEntity(ConsultObject)
 	end
 
 	if Data.Active == "Spikes" then
 		TriggerEvent("spikes:Remover",Number)
 	end
-
-	Init[Number] = nil
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- OBJECTCONTROLLING
@@ -445,86 +445,96 @@ function tvRP.ObjectControlling(Model,Rotate,Align)
 	local Aplication = false
 	local OtherCoords = false
 
-	if LoadModel(Model) then
-		local Progress = true
-		local Ped = PlayerPedId()
-		local Heading = GetEntityHeading(Ped)
-		local Coords = GetOffsetFromEntityInWorldCoords(Ped,0.0,Align or 1.0,0.0)
-		local NextObject = CreateObjectNoOffset(Model,Coords.x,Coords.y,Coords.z,false,false,false)
-
-		SetEntityAlpha(NextObject,200,false)
-		PlaceObjectOnGroundProperly(NextObject)
-		SetEntityCollision(NextObject,false,false)
-		SetEntityHeading(NextObject,Heading + (Rotate or 0.0))
-
-		local DefaultButtons = {
-			{ "F","Cancelar" },
-			{ "H","Posicionar" },
-			{ "Q","Rotacionar Esquerda" },
-			{ "E","Rotacionar Direita" },
-			{ "Z","Trocar Modo" }
-		}
-
-		local ExtendedButtons = {
-			{ "F","Cancelar" },
-			{ "H","Posicionar" },
-			{ "Q","Rotacionar Esquerda" },
-			{ "E","Rotacionar Direita" },
-			{ "-","Descer" },
-			{ "+","Subir" },
-			{ "↑","Movimentar para Frente" },
-			{ "←","Movimentar para Esquerda" },
-			{ "↓","Movimentar para Baixo" },
-			{ "→","Movimentar para Direita" },
-			{ "Z","Trocar Modo" }
-		}
-
-		TriggerEvent("inventory:Buttons",DefaultButtons)
-
-		while Progress do
-			local controlPressed = GetMovementControls(NextObject)
-			if controlPressed then
-				MoveObject(NextObject,controlPressed)
-			end
-
-			RotateObject(NextObject)
-			DrawGraphOutline(NextObject)
-
-			if not Switch then
-				local Cam = GetGameplayCamCoord()
-				local Handle = StartExpensiveSynchronousShapeTestLosProbe(Cam,GetCoordsFromCam(10.0,Cam),-1,Ped,4)
-				local _,_,Coords = GetShapeTestResult(Handle)
-				SetEntityCoords(NextObject,Coords.x,Coords.y,Coords.z,false,false,false,false)
-			end
-
-			if IsControlJustPressed(0,48) then
-				Switch = not Switch
-				TriggerEvent("inventory:Buttons",Switch and ExtendedButtons or defaultButtons)
-			elseif IsControlJustPressed(1,74) then
-				TriggerEvent("inventory:CloseButtons")
-				Aplication = true
-				Progress = false
-				Switch = false
-			elseif IsControlJustPressed(0,49) then
-				TriggerEvent("inventory:CloseButtons")
-				Aplication = false
-				Progress = false
-				Switch = false
-			end
-
-			Wait(1)
-		end
-
-		if DoesEntityExist(NextObject) then
-			local oCoords = GetEntityCoords(NextObject)
-			local oHeading = GetEntityHeading(NextObject)
-			OtherCoords = { Optimize(oCoords.x),Optimize(oCoords.y),Optimize(oCoords.z),Optimize(oHeading) }
-
-			DeleteEntity(NextObject)
-		end
+	if not LoadModel(Model) then
+		return false,false
 	end
 
-	if not OtherCoords or (OtherCoords and OtherCoords[1] == 0.0 and OtherCoords[2] == 0.0) then
+	local Ped = PlayerPedId()
+	local Heading = GetEntityHeading(Ped)
+	local BaseCoords = GetOffsetFromEntityInWorldCoords(Ped,0.0,Align or 1.0,0.0)
+	local NextObject = CreateObjectNoOffset(Model,BaseCoords.x,BaseCoords.y,BaseCoords.z)
+
+	SetEntityAlpha(NextObject,200,false)
+	SetEntityCollision(NextObject,false,false)
+	SetEntityHeading(NextObject,Heading + (Rotate or 0.0))
+	PlaceObjectOnGroundProperly(NextObject)
+
+	local DefaultButtons = {
+		{ Letter = "F", Text = "Cancelar" },
+		{ Letter = "H", Text = "Posicionar" },
+		{ Letter = "Q", Text = "Rotacionar Esquerda" },
+		{ Letter = "E", Text = "Rotacionar Direita" },
+		{ Letter = "Z", Text = "Trocar Modo" }
+	}
+
+	local ExtendedButtons = {
+		{ Letter = "F", Text = "Cancelar" },
+		{ Letter = "H", Text = "Posicionar" },
+		{ Letter = "Q", Text = "Rotacionar Esquerda" },
+		{ Letter = "E", Text = "Rotacionar Direita" },
+		{ Letter = "-", Text = "Descer" },
+		{ Letter = "+", Text = "Subir" },
+		{ Letter = "↑", Text = "Frente" },
+		{ Letter = "←", Text = "Esquerda" },
+		{ Letter = "↓", Text = "Trás" },
+		{ Letter = "→", Text = "Direita" },
+		{ Letter = "Z", Text = "Trocar Modo" }
+	}
+
+	TriggerEvent("inventory:Buttons",DefaultButtons)
+
+	local Progress = true
+
+	while Progress do
+		local ControlPressed = GetMovementControls(NextObject)
+		if ControlPressed then
+			MoveObject(NextObject,ControlPressed)
+		end
+
+		RotateObject(NextObject)
+		DrawGraphOutline(NextObject)
+
+		if not Switch then
+			local Cam = GetGameplayCamCoord()
+			local Dest = GetCoordsFromCam(10.0,Cam)
+			local Handle = StartExpensiveSynchronousShapeTestLosProbe(Cam.x,Cam.y,Cam.z,Dest.x,Dest.y,Dest.z,-1,Ped,4)
+			local _,Hit,Coords = GetShapeTestResult(Handle)
+			if Hit == 1 then
+				SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
+			end
+		end
+
+		if IsControlJustPressed(0,48) then
+			Switch = not Switch
+			TriggerEvent("inventory:Buttons",Switch and ExtendedButtons or DefaultButtons)
+		elseif IsControlJustPressed(1,74) then
+			TriggerEvent("inventory:CloseButtons")
+			Aplication = true
+			Progress = false
+		elseif IsControlJustPressed(0,49) then
+			TriggerEvent("inventory:CloseButtons")
+			Aplication = false
+			Progress = false
+		end
+
+		Wait(0)
+	end
+
+	if DoesEntityExist(NextObject) then
+		local oCoords = GetEntityCoords(NextObject)
+		local oHeading = GetEntityHeading(NextObject)
+
+		OtherCoords = {
+			Optimize(oCoords.x),
+			Optimize(oCoords.y),
+			Optimize(oCoords.z),
+			Optimize(oHeading)
+		}
+
+		DeleteEntity(NextObject)
+	end
+
+	if not OtherCoords or (OtherCoords[1] == 0.0 and OtherCoords[2] == 0.0) then
 		Aplication = false
 	end
 
@@ -534,61 +544,61 @@ end
 -- GETMOVEMENTCONTROLS
 -----------------------------------------------------------------------------------------------------------------------------------------
 function GetMovementControls(NextObject)
-	local controls = false
+	local Controls = false
 
 	if IsDisabledControlPressed(1,314) then
-		controls = {}
-		controls.zMoveUp = true
+		Controls = {}
+		Controls.zMoveUp = true
 	elseif IsDisabledControlPressed(1,315) then
-		controls = {}
-		controls.zMoveDown = true
+		Controls = {}
+		Controls.zMoveDown = true
 	end
 
 	if IsDisabledControlPressed(1,172) then
-		controls = {}
-		controls.xMoveRight = true
+		Controls = {}
+		Controls.xMoveRight = true
 	elseif IsDisabledControlPressed(1,173) then
-		controls = {}
-		controls.xMoveLeft = true
+		Controls = {}
+		Controls.xMoveLeft = true
 	end
 
 	if IsDisabledControlPressed(1,174) then
-		controls = {}
-		controls.yMoveBackward = true
+		Controls = {}
+		Controls.yMoveBackward = true
 	elseif IsDisabledControlPressed(1,175) then
-		controls = {}
-		controls.yMoveForward = true
+		Controls = {}
+		Controls.yMoveForward = true
 	end
 
-	return controls
+	return Controls
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- MOVEOBJECT
 -----------------------------------------------------------------------------------------------------------------------------------------
-function MoveObject(NextObject,controls)
+function MoveObject(NextObject,Controls)
 	local Coords = GetEntityCoords(NextObject)
 
-	if controls.zMoveUp then
-		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.0,0.0,0.005)
+	if Controls.zMoveUp then
+		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.0,0.0,0.001)
 		SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
-	elseif controls.zMoveDown then
-		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.0,0.0,-0.005)
-		SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
-	end
-
-	if controls.xMoveRight then
-		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.0,0.005,0.0)
-		SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
-	elseif controls.xMoveLeft then
-		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.0,-0.005,0.0)
+	elseif Controls.zMoveDown then
+		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.0,0.0,-0.001)
 		SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
 	end
 
-	if controls.yMoveBackward then
-		Coords = GetOffsetFromEntityInWorldCoords(NextObject,-0.005,0.0,0.0)
+	if Controls.xMoveRight then
+		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.0,0.001,0.0)
 		SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
-	elseif controls.yMoveForward then
-		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.005,0.0,0.0)
+	elseif Controls.xMoveLeft then
+		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.0,-0.001,0.0)
+		SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
+	end
+
+	if Controls.yMoveBackward then
+		Coords = GetOffsetFromEntityInWorldCoords(NextObject,-0.001,0.0,0.0)
+		SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
+	elseif Controls.yMoveForward then
+		Coords = GetOffsetFromEntityInWorldCoords(NextObject,0.001,0.0,0.0)
 		SetEntityCoordsNoOffset(NextObject,Coords.x,Coords.y,Coords.z,false,false,false)
 	end
 end
@@ -597,9 +607,9 @@ end
 -----------------------------------------------------------------------------------------------------------------------------------------
 function RotateObject(NextObject)
 	if IsControlPressed(0,38) then
-		SetEntityHeading(NextObject,GetEntityHeading(NextObject) + 0.25)
+		SetEntityHeading(NextObject,GetEntityHeading(NextObject) + 0.05)
 	elseif IsControlPressed(0,52) then
-		SetEntityHeading(NextObject,GetEntityHeading(NextObject) - 0.25)
+		SetEntityHeading(NextObject,GetEntityHeading(NextObject) - 0.05)
 	end
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -624,20 +634,10 @@ end
 -- GETCOORDSFROMCAM
 -----------------------------------------------------------------------------------------------------------------------------------------
 function GetCoordsFromCam(Distance,Coords)
-    local Rotation = GetGameplayCamRot()
-    local pitch = math.rad(Rotation.x)
-    local yaw = math.rad(Rotation.y)
-    local roll = math.rad(Rotation.z)
+	local Rotation = GetGameplayCamRot()
+	local Pitch = math.rad(Rotation.x)
+	local Roll = math.rad(Rotation.z)
+	local Direction = vec3(-math.sin(Roll) * math.abs(math.cos(Pitch)),math.cos(Roll) * math.abs(math.cos(Pitch)),math.sin(Pitch))
 
-    local direction = vec3(
-        -math.sin(roll) * math.abs(math.cos(pitch)),
-        math.cos(roll) * math.abs(math.cos(pitch)),
-        math.sin(pitch)
-    )
-
-    return vec3(
-        Coords.x + direction.x * Distance,
-        Coords.y + direction.y * Distance,
-        Coords.z + direction.z * Distance
-    )
+	return vec3(Coords.x + Direction.x * Distance,Coords.y + Direction.y * Distance,Coords.z + Direction.z * Distance)
 end

@@ -4,10 +4,12 @@
 Use = {
 	["banned_reduce"] = function(source,Passport,Amount,Slot,Full,Item,Split)
 		local Identity = vRP.Identity(Passport)
-		if Identity and Identity.Banned > Amount and vRP.TakeItem(Passport,Full,Amount,true,Slot) then
-			TriggerClientEvent("inventory:Update",source)
-			vRP.UpdateBanned(Passport,Amount)
+		if not Identity or Identity.Banned < Amount or not vRP.TakeItem(Passport,Full,Amount,true,Slot) then
+			return false
 		end
+
+		TriggerClientEvent("inventory:Update",source)
+		vRP.UpdateBanned(Passport,Amount)
 	end,
 
 	["bandage"] = function(source,Passport,Amount,Slot,Full,Item,Split)
@@ -199,7 +201,10 @@ Use = {
 
 		local Keyboard = vKEYBOARD.Instagram(source,Permissions)
 		if Keyboard and vRP.TakeItem(Passport,Full,1,false,Slot) then
-			exports.barbershop:Add({ Coords = vRP.GetEntityCoords(source), Permission = Keyboard[1] })
+			local Coords = vRP.GetEntityCoords(source)
+			local Heading = vRP.GetEntityHeading(source)
+
+			exports.barbershop:Add({ Coords = vec4(Coords.x,Coords.y,Coords.z,Heading), Permission = Keyboard[1] })
 			TriggerClientEvent("Notify",source,"Sucesso","Barbearia adicionada.","verde",5000)
 		end
 	end,
@@ -242,8 +247,11 @@ Use = {
 		if Split[2] then
 			local Consult = exports.oxmysql:single_async("SELECT Name FROM propertys WHERE Serial = ? LIMIT 1",{ Split[2] })
 			if Consult then
-				vCLIENT.Waypoint(source,exports.propertys:Coords(Consult.Name))
-				TriggerClientEvent("inventory:Notify",source,"Sucesso","Marcação selecionada no mapa.","verde")
+				local Coords = exports.propertys:Coords(Consult.Name)
+				if Coords then
+					vCLIENT.Waypoint(source,Coords)
+					TriggerClientEvent("inventory:Notify",source,"Sucesso","Marcação selecionada no mapa.","verde")
+				end
 			end
 		end
 	end,
@@ -350,6 +358,12 @@ Use = {
 	["medicbag"] = function(source,Passport,Amount,Slot,Full,Item,Split)
 		if Split and Split[3] then
 			TriggerClientEvent("chest:Open",source,"medicbag:"..Split[3],"Item",false,false,true)
+		end
+	end,
+
+	["mechanicbag"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if Split and Split[3] then
+			TriggerClientEvent("chest:Open",source,"mechanicbag:"..Split[3],"Item",false,false,true)
 		end
 	end,
 
@@ -919,46 +933,60 @@ Use = {
 		end
 	end,
 
-	["circuit"] = function(source,Passport,Amount,Slot,Full,Item,Split)
-		if not Player(source).state.Handcuff then
-			local Vehicle,Network,Plate = vRPC.VehicleList(source)
-			if Vehicle and Plate and (Boosting[Plate] and vRP.InsideVehicle(source) and Boosting[Plate].Amount < 10) then
-				if (not Travel[Passport] or #(vRP.GetEntityCoords(source) - Travel[Passport]) >= 100) then
-					TriggerClientEvent("inventory:Close",source)
+	circuit = function(source,Passport)
+		if Player(source).state.Handcuff then
+			return false
+		end
 
-					if vDEVICE.Device(source,30) then
-						if Boosting[Plate].Class >= 4 then
-							exports.markers:Enter(source,"Boosting")
+		local Vehicle,Network,Plate = vRPC.VehicleList(source)
+		if not Vehicle or not Plate then
+			TriggerClientEvent("inventory:Close",source)
+			TriggerClientEvent("boosting:Open",source)
 
-							SetTimeout(60000,function()
-								exports.markers:Exit(source)
-							end)
-						end
+			return false
+		end
 
-						vRP.UpgradeStress(Passport,3)
-						Travel[Passport] = vRP.GetEntityCoords(source)
-						Boosting[Plate].Amount = Boosting[Plate].Amount + 1
+		local Boost = Boosting[Plate]
+		if not Boost or not vRP.InsideVehicle(source) or Boost.Amount >= 10 then
+			TriggerClientEvent("inventory:Close",source)
+			TriggerClientEvent("boosting:Open",source)
 
-						if Boosting[Plate].Amount >= 10 then
-							exports.boosting:Payment(source,Boosting[Plate].Passport)
-							exports.boosting:Remove(Boosting[Plate].Passport,Plate)
-						else
-							TriggerClientEvent("Notify",source,"Boosting [ "..Boosting[Plate].Amount.." / 10 ]","Progresso atualizado com sucesso.","verde",5000)
-						end
-					else
-						Boosting[Plate].Amount = Boosting[Plate].Amount - 3
+			return false
+		end
 
-						if Boosting[Plate].Amount < 0 then
-							Boosting[Plate].Amount = 0
-						end
+		local Coords = vRP.GetEntityCoords(source)
+		if Travel[Passport] and #(Coords - Travel[Passport]) < 100 then
+			return false
+		end
 
-						TriggerClientEvent("Notify",source,"Boosting [ "..Boosting[Plate].Amount.." / 10 ]","Progresso atualizado com sucesso.","amarelo",5000)
-					end
-				end
-			else
-				TriggerClientEvent("inventory:Close",source)
-				TriggerClientEvent("boosting:Open",source)
+		TriggerClientEvent("inventory:Close",source)
+
+		if vDEVICE.Device(source,30) then
+			if Boost.Class >= 4 then
+				exports.markers:Enter(source,"Boosting")
+
+				SetTimeout(60000,function()
+					exports.markers:Exit(source)
+				end)
 			end
+
+			Travel[Passport] = Coords
+			Boost.Amount = Boost.Amount + 1
+
+			if Boost.Amount >= 10 then
+				exports.boosting:Payment(source,Boost.Passport)
+				exports.boosting:Remove(Boost.Passport,Plate)
+			else
+				TriggerClientEvent("Notify",source,"Boosting [ "..Boost.Amount.." / 10 ]","Progresso atualizado com sucesso.","verde",5000)
+			end
+
+		else
+			Boost.Amount = Boost.Amount - 3
+			if Boost.Amount < 0 then
+				Boost.Amount = 0
+			end
+
+			TriggerClientEvent("Notify",source,"Boosting [ "..Boost.Amount.." / 10 ]","Progresso atualizado com sucesso.","amarelo",5000)
 		end
 	end,
 
@@ -989,7 +1017,7 @@ Use = {
 					Name = NotifyTitle,
 					Passport = Passport,
 					Permission = "Policia",
-					Vehicle = VehicleName(Model).." - "..Plate
+					Vehicle = exports.vrp:VehicleName(Model).." - "..Plate
 				})
 			end
 
@@ -1104,7 +1132,7 @@ Use = {
 					Name = NotifyTitle,
 					Passport = Passport,
 					Permission = "Policia",
-					Vehicle = VehicleName(Model).." - "..Plate
+					Vehicle = exports.vrp:VehicleName(Model).." - "..Plate
 				})
 			end
 
@@ -2218,19 +2246,21 @@ Use = {
 	end,
 
 	["pistol_bench"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
+		if vCLIENT.CheckInterior(source) then
+			TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
 		local Hash = "gr_prop_gr_bench_02a"
 		local Application,Coords = vRPC.ObjectControlling(source,Hash)
 		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
-			if vCLIENT.CheckInterior(source) then
-				TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
-				Player(source).state.Buttons = false
-
-				return false
-			end
-
 			if vRP.TakeItem(Passport,Full,1,true,Slot) then
 				repeat
 					Selected = GenerateString("DDLLDDLL")
@@ -2247,19 +2277,21 @@ Use = {
 	end,
 
 	["smg_bench"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
+		if vCLIENT.CheckInterior(source) then
+			TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
 		local Hash = "gr_prop_gr_bench_02b"
 		local Application,Coords = vRPC.ObjectControlling(source,Hash)
 		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
-			if vCLIENT.CheckInterior(source) then
-				TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
-				Player(source).state.Buttons = false
-
-				return false
-			end
-
 			if vRP.TakeItem(Passport,Full,1,true,Slot) then
 				repeat
 					Selected = GenerateString("DDLLDDLL")
@@ -2276,19 +2308,21 @@ Use = {
 	end,
 
 	["rifle_bench"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
+		if vCLIENT.CheckInterior(source) then
+			TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
 		local Hash = "xm3_prop_xm3_bench_04b"
 		local Application,Coords = vRPC.ObjectControlling(source,Hash)
 		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
-			if vCLIENT.CheckInterior(source) then
-				TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
-				Player(source).state.Buttons = false
-
-				return false
-			end
-
 			if vRP.TakeItem(Passport,Full,1,true,Slot) then
 				repeat
 					Selected = GenerateString("DDLLDDLL")
@@ -2305,19 +2339,21 @@ Use = {
 	end,
 
 	["drugs_bench"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
+		if vCLIENT.CheckInterior(source) then
+			TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
 		local Hash = "bkr_prop_weed_table_01b"
 		local Application,Coords = vRPC.ObjectControlling(source,Hash)
 		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
-			if vCLIENT.CheckInterior(source) then
-				TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
-				Player(source).state.Buttons = false
-
-				return false
-			end
-
 			if vRP.TakeItem(Passport,Full,1,true,Slot) then
 				repeat
 					Selected = GenerateString("DDLLDDLL")
@@ -2334,19 +2370,21 @@ Use = {
 	end,
 
 	["blueprint_bench"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
+		if vCLIENT.CheckInterior(source) then
+			TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
 		local Hash = "prop_tool_bench02"
 		local Application,Coords = vRPC.ObjectControlling(source,Hash,90.0)
 		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
-			if vCLIENT.CheckInterior(source) then
-				TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
-				Player(source).state.Buttons = false
-
-				return false
-			end
-
 			if vRP.TakeItem(Passport,Full,1,true,Slot) then
 				repeat
 					Selected = GenerateString("DDLLDDLL")
@@ -2363,19 +2401,21 @@ Use = {
 	end,
 
 	["spikestrips"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
+		if vCLIENT.CheckInterior(source) then
+			TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
 		local Hash = "p_ld_stinger_s"
 		local Application,Coords = vRPC.ObjectControlling(source,Hash,0.0,2.5)
 		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
-			if vCLIENT.CheckInterior(source) then
-				TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
-				Player(source).state.Buttons = false
-
-				return false
-			end
-
 			if vRP.TakeItem(Passport,Full,1,true,Slot) then
 				repeat
 					Selected = GenerateString("DDLLDDLL")
@@ -2456,31 +2496,79 @@ Use = {
 	end,
 
 	["securitycam"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
 		local Hash = "prop_cctv_cam_06a"
 		local Application,Coords = vRPC.ObjectControlling(source,Hash)
-		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
-			local Permissions = {}
-			for Permission,v in pairs(Groups) do
-				if v.SecurityCam then
-					Permissions[#Permissions + 1] = Permission
-				end
+		if not Application or not Coords or vCLIENT.ObjectExists(source,Coords,Hash) then
+			Player(source).state.Buttons = false
+			return false
+		end
+
+		local Permissions = {}
+		local UserGroups = vRP.UserGroups(Passport)
+		for Permission in pairs(UserGroups) do
+			local v = Groups[Permission]
+			if v and v.SecurityCam then
+				Permissions[#Permissions + 1] = Permission
 			end
+		end
 
-			table.sort(Permissions,function(a,b) return a < b end)
+		if not next(Permissions) then
+			Player(source).state.Buttons = false
+			return false
+		end
 
-			local Keyboard = vKEYBOARD.Options(source,"Nome",Permissions)
-			if Keyboard and vRP.TakeItem(Passport,Full,1,true,Slot) then
-				local Name = Keyboard[1]
-				local Permission = Keyboard[2]
+		table.sort(Permissions)
 
+		local Keyboard = vKEYBOARD.Options(source,"Nome",Permissions)
+		if not Keyboard then
+			Player(source).state.Buttons = false
+			return false
+		end
+
+		if not vRP.TakeItem(Passport,Full,1,true,Slot) then
+			Player(source).state.Buttons = false
+			return false
+		end
+
+		local Name = Keyboard[1]
+		local Permission = Keyboard[2]
+
+		repeat
+			Selected = GenerateString("DDLLDDLL")
+		until Selected and not Objects[Selected]
+
+		Objects[Selected] = { Passport = Passport, Name = Name, Permission = Permission, Coords = Coords, Object = Hash, Item = Full, Mode = "Camera", Weight = -0.25, Bucket = GetPlayerRoutingBucket(source), Ground = true }
+		SaveObjects[Selected] = Objects[Selected]
+
+		TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
+
+		Player(source).state.Buttons = false
+	end,
+
+	["watercooler"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
+		Player(source).state.Buttons = true
+		TriggerClientEvent("inventory:Close",source)
+
+		local Hash = "prop_watercooler_dark"
+		local Application,Coords = vRPC.ObjectControlling(source,Hash)
+		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
+			if vRP.TakeItem(Passport,Full,1,true,Slot) then
 				repeat
 					Selected = GenerateString("DDLLDDLL")
 				until Selected and not Objects[Selected]
 
-				Objects[Selected] = { Passport = Passport, Name = Name, Permission = Permission, Coords = Coords, Object = Hash, Item = Full, Mode = "Camera", Weight = -0.25, Bucket = GetPlayerRoutingBucket(source), Ground = true }
+				Objects[Selected] = { Coords = Coords, Passport = Passport, Object = Hash, Item = Full, Mode = "Water", Weight = 0.75, Bucket = GetPlayerRoutingBucket(source) }
 				SaveObjects[Selected] = Objects[Selected]
 
 				TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
@@ -2490,60 +2578,22 @@ Use = {
 		Player(source).state.Buttons = false
 	end,
 
-	["halloween_pumpkin"] = function(source,Passport,Amount,Slot,Full,Item,Split)
-		Player(source).state.Buttons = true
-		TriggerClientEvent("inventory:Close",source)
-
-		local Hash = "tfx-summer_abroba"
-		local Application,Coords = vRPC.ObjectControlling(source,Hash)
-		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) and vRP.TakeItem(Passport,Full,1,true,Slot) then
-			repeat
-				Selected = GenerateString("DDLLDDLL")
-			until Selected and not Objects[Selected]
-
-			Objects[Selected] = { Coords = Coords, Object = Hash, Ground = true, Bucket = GetPlayerRoutingBucket(source) }
-			SaveObjects[Selected] = Objects[Selected]
-
-			TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
-		end
-
-		Player(source).state.Buttons = false
-	end,
-
-	["halloween_ghost"] = function(source,Passport,Amount,Slot,Full,Item,Split)
-		Player(source).state.Buttons = true
-		TriggerClientEvent("inventory:Close",source)
-
-		local Hash = "tfx-summer_ghost"
-		local Application,Coords = vRPC.ObjectControlling(source,Hash)
-		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) and vRP.TakeItem(Passport,Full,1,true,Slot) then
-			repeat
-				Selected = GenerateString("DDLLDDLL")
-			until Selected and not Objects[Selected]
-
-			Objects[Selected] = { Coords = Coords, Object = Hash, Ground = true, Bucket = GetPlayerRoutingBucket(source) }
-			SaveObjects[Selected] = Objects[Selected]
-
-			TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
-		end
-
-		Player(source).state.Buttons = false
-	end,
-
 	["barrier"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
+		if vCLIENT.CheckInterior(source) then
+			TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
 		local Hash = "prop_mp_barrier_02b"
 		local Application,Coords = vRPC.ObjectControlling(source,Hash)
 		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) then
-			if vCLIENT.CheckInterior(source) then
-				TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
-				Player(source).state.Buttons = false
-
-				return false
-			end
-
 			if vRP.TakeItem(Passport,Full,1,true,Slot) then
 				repeat
 					Selected = GenerateString("DDLLDDLL")
@@ -2559,67 +2609,11 @@ Use = {
 		Player(source).state.Buttons = false
 	end,
 
-	["personalp"] = function(source,Passport,Amount,Slot,Full,Item,Split)
-		Player(source).state.Buttons = true
-		TriggerClientEvent("inventory:Close",source)
-
-		local Hash = "m23_1_prop_m31_metalcrate_01a"
-		local Application,Coords = vRPC.ObjectControlling(source,Hash)
-		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) and vRP.TakeItem(Passport,Full,1,true,Slot) then
-			repeat
-				Selected = GenerateString("DDLLDDLL")
-			until Selected and not Objects[Selected]
-
-			Objects[Selected] = { Passport = Passport, Coords = Coords, Object = Hash, Item = Full, Mode = "Personal", Weight = 0.25, Ground = true, Bucket = GetPlayerRoutingBucket(source)  }
-			SaveObjects[Selected] = Objects[Selected]
-
-			TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
-		end
-
-		Player(source).state.Buttons = false
-	end,
-
-	["personalm"] = function(source,Passport,Amount,Slot,Full,Item,Split)
-		Player(source).state.Buttons = true
-		TriggerClientEvent("inventory:Close",source)
-
-		local Hash = "m23_1_prop_m31_metalcrate_01a"
-		local Application,Coords = vRPC.ObjectControlling(source,Hash)
-		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) and vRP.TakeItem(Passport,Full,1,true,Slot) then
-			repeat
-				Selected = GenerateString("DDLLDDLL")
-			until Selected and not Objects[Selected]
-
-			Objects[Selected] = { Passport = Passport, Coords = Coords, Object = Hash, Item = Full, Mode = "Personal", Weight = 0.25, Ground = true, Bucket = GetPlayerRoutingBucket(source)  }
-			SaveObjects[Selected] = Objects[Selected]
-
-			TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
-		end
-
-		Player(source).state.Buttons = false
-	end,
-
-	["personalg"] = function(source,Passport,Amount,Slot,Full,Item,Split)
-		Player(source).state.Buttons = true
-		TriggerClientEvent("inventory:Close",source)
-
-		local Hash = "m23_1_prop_m31_metalcrate_01a"
-		local Application,Coords = vRPC.ObjectControlling(source,Hash)
-		if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) and vRP.TakeItem(Passport,Full,1,true,Slot) then
-			repeat
-				Selected = GenerateString("DDLLDDLL")
-			until Selected and not Objects[Selected]
-
-			Objects[Selected] = { Passport = Passport, Coords = Coords, Object = Hash, Item = Full, Mode = "Personal", Weight = 0.25, Ground = true, Bucket = GetPlayerRoutingBucket(source)  }
-			SaveObjects[Selected] = Objects[Selected]
-
-			TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
-		end
-
-		Player(source).state.Buttons = false
-	end,
-
 	["chestgroupp"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
@@ -2700,6 +2694,10 @@ Use = {
 	end,
 
 	["chestgroupm"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
@@ -2780,6 +2778,10 @@ Use = {
 	end,
 
 	["chestgroupg"] = function(source,Passport,Amount,Slot,Full,Item,Split)
+		if exports.propertys:Inside(Passport) then
+			return false
+		end
+
 		Player(source).state.Buttons = true
 		TriggerClientEvent("inventory:Close",source)
 
@@ -3161,10 +3163,6 @@ Use = {
 							Player(source).state.Buttons = false
 
 							if vRP.TakeItem(Passport,Full,1,true,Slot) then
-								if Model and VehicleMode(Model) == "Work" then
-									Tyre = "All"
-								end
-
 								local Players = vRPC.Players(source)
 								for _,v in pairs(Players) do
 									async(function()
@@ -3376,146 +3374,178 @@ Use = {
 	end
 }
 -----------------------------------------------------------------------------------------------------------------------------------------
--- BLUEPRINTSTART
+-- THREADITENS
 -----------------------------------------------------------------------------------------------------------------------------------------
-for Item,v in pairs(ListItem) do
-	if v.Blueprint then
-		Use["blueprint_"..Item] = function(source,Passport,Amount,Slot,Full)
-			Users.Blueprints[Passport] = Users.Blueprints[Passport] or {}
-
-			if Users.Blueprints[Passport][Item] then
-				TriggerClientEvent("inventory:Notify",source,"Aviso","Já possui este aprendizado.","amarelo")
+CreateThread(function()
+	for NameItem,v in pairs(Sprays) do
+		Use[NameItem] = function(source,Passport,Amount,Slot,Full,Item,Split)
+			if vCLIENT.CheckInterior(source) then
+				TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
 				return false
 			end
 
-			if vRP.TakeItem(Passport,Full,1,true,Slot) then
-				TriggerClientEvent("inventory:Notify",source,"Sucesso","Aprendizado adicionado.","verde")
-				TriggerClientEvent("inventory:Update",source)
-				Users.Blueprints[Passport][Item] = true
-
-				return true
-			end
-		end
-	end
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- VEHICLESSTART
------------------------------------------------------------------------------------------------------------------------------------------
-for Model,v in pairs(VehicleList()) do
-	if v.Item then
-		Use["vehicle_"..Model] = function(source,Passport,Amount,Slot,Full)
-			if vRP.SelectVehicle(Passport,Model) then
-				TriggerClientEvent("inventory:Notify",source,"Aviso","Já possui um <b>"..VehicleName(Model).."</b>.","amarelo")
-				return false
-			end
-
-			local StockLimit = VehicleStock(Model)
-			if StockLimit and vRP.Scalar("vehicles/Count",{ Vehicle = Model }) >= StockLimit then
-				TriggerClientEvent("inventory:Notify",source,"Aviso","Estoque insuficiente.","amarelo")
-				return false
-			end
-
-			if vRP.TakeItem(Passport,Full,1,false,Slot) then
-				local Plate = vRP.GeneratePlate()
-				local Weight = VehicleWeight(Model)
-
-				if type(v.Item) == "number" then
-					vRP.Query("vehicles/rentalVehicles",{ Passport = Passport, Vehicle = Model, Plate = Plate, Days = v.Item, Weight = Weight, Work = 0 })
-				elseif v.Item == "Permanent" then
-					vRP.Query("vehicles/addVehicles",{ Passport = Passport, Vehicle = Model, Plate = Plate, Weight = Weight, Work = 0 })
+			for Index,Info in pairs(SaveObjects) do
+				if Info.Permission and Info.Permission == v[1] and Info.Mode == "Sprays" then
+					TriggerClientEvent("Notify",source,"Atenção","O grupo já possui um spray aplicado.","amarelo",5000)
+					return false
 				end
-
-				TriggerClientEvent("inventory:Notify",source,"Sucesso","Veículo <b>"..VehicleName(Model).."</b> adicionado.","verde")
-				TriggerClientEvent("inventory:Update",source)
 			end
-		end
-	end
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- SPRAYS
------------------------------------------------------------------------------------------------------------------------------------------
-for NameItem,v in pairs(Sprays) do
-	Use[NameItem] = function(source,Passport,Amount,Slot,Full,Item,Split)
-		if vCLIENT.CheckInterior(source) then
-			TriggerClientEvent("Notify",source,"Atenção","Só pode ser posicionado fora de interiores.","amarelo",5000)
-			return false
-		end
 
-		for Index,Info in pairs(SaveObjects) do
-			if Info.Permission and Info.Permission == v[1] and Info.Mode == "Sprays" then
-				TriggerClientEvent("Notify",source,"Atenção","O grupo já possui um spray aplicado.","amarelo",5000)
+			if vRPC.SprayExist(source,500) then
+				TriggerClientEvent("Notify",source,"Atenção","No momento você não pode prosseguir porque outro grupo está dominando a localidade.","amarelo",5000)
 				return false
 			end
-		end
 
-		if vRPC.SprayExist(source,500) then
-			TriggerClientEvent("Notify",source,"Atenção","No momento você não pode prosseguir porque outro grupo está dominando a localidade.","amarelo",5000)
-			return false
-		end
+			TriggerClientEvent("inventory:Close",source)
 
-		TriggerClientEvent("inventory:Close",source)
+			local Application,Coords = vCLIENT.SprayControlling(source,NameItem)
+			if Application and Coords then
+				Active[Passport] = os.time() + 999
+				Player(source).state.Buttons = true
+				TriggerClientEvent("Progress",source,"Agitando",5000)
+				vRPC.CreateObjects(source,"switch@franklin@lamar_tagging_wall","lamar_tagging_wall_loop_lamar","prop_cs_spray_can",1,28422)
 
-		local Application,Coords = vCLIENT.SprayControlling(source,NameItem)
-		if Application and Coords then
-			Active[Passport] = os.time() + 999
-			Player(source).state.Buttons = true
-			TriggerClientEvent("Progress",source,"Agitando",5000)
-			vRPC.CreateObjects(source,"switch@franklin@lamar_tagging_wall","lamar_tagging_wall_loop_lamar","prop_cs_spray_can",1,28422)
+				SetTimeout(5000,function()
+					if Active[Passport] then
+						Active[Passport] = os.time() + 10
+						TriggerClientEvent("Progress",source,"Colocando",10000)
+						TriggerClientEvent("sounds:Private",source,"sprays",0.5)
+						vRPC.CreateObjects(source,"switch@franklin@lamar_tagging_wall","lamar_tagging_exit_loop_lamar","prop_cs_spray_can",1,28422)
 
-			SetTimeout(5000,function()
-				if Active[Passport] then
-					Active[Passport] = os.time() + 10
-					TriggerClientEvent("Progress",source,"Colocando",10000)
-					TriggerClientEvent("sounds:Private",source,"sprays",0.5)
-					vRPC.CreateObjects(source,"switch@franklin@lamar_tagging_wall","lamar_tagging_exit_loop_lamar","prop_cs_spray_can",1,28422)
-
-					CreateThread(function()
-						while Active[Passport] and os.time() < Active[Passport] do
-							Wait(100)
-						end
-
-						if Active[Passport] then
-							vRPC.Destroy(source)
-							Active[Passport] = nil
-
-							if not vRPC.SprayExist(source,500) and vRP.TakeItem(Passport,Full,1,true,Slot) then
-								repeat
-									Selected = GenerateString("DDLLDDLL")
-								until Selected and not Objects[Selected]
-
-								Objects[Selected] = { Coords = Coords, Object = NameItem, Mode = "Sprays", Timer = os.time() + 1800, Ground = true, Color = v[2], Permission = v[1], Bucket = GetPlayerRoutingBucket(source) }
-								exports.discord:Embed("Sprays","**[PASSAPORTE]:** "..Passport.."\n**[Item]:** "..NameItem.."\n**[Coords]:** "..Coords[1]..","..Coords[2]..","..Coords[3])
-								SaveObjects[Selected] = Objects[Selected]
-
-								TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
+						CreateThread(function()
+							while Active[Passport] and os.time() < Active[Passport] do
+								Wait(100)
 							end
-						end
 
+							if Active[Passport] then
+								vRPC.Destroy(source)
+								Active[Passport] = nil
+
+								if not vRPC.SprayExist(source,500) and vRP.TakeItem(Passport,Full,1,true,Slot) then
+									repeat
+										Selected = GenerateString("DDLLDDLL")
+									until Selected and not Objects[Selected]
+
+									Objects[Selected] = { Coords = Coords, Object = NameItem, Mode = "Sprays", Timer = os.time() + 1800, Ground = true, Color = v[2], Permission = v[1], Bucket = GetPlayerRoutingBucket(source) }
+									exports.discord:Embed("Sprays","**[PASSAPORTE]:** "..Passport.."\n**[Item]:** "..NameItem.."\n**[Coords]:** "..Coords[1]..","..Coords[2]..","..Coords[3])
+									SaveObjects[Selected] = Objects[Selected]
+
+									TriggerClientEvent("objects:Adicionar",-1,Selected,Objects[Selected])
+								end
+							end
+
+							Player(source).state.Buttons = false
+						end)
+					else
 						Player(source).state.Buttons = false
-					end)
-				else
-					Player(source).state.Buttons = false
-				end
-			end)
+					end
+				end)
+			end
 		end
 	end
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- CLONES
------------------------------------------------------------------------------------------------------------------------------------------
-for _,v in ipairs(Clones) do
-	for _,w in ipairs(Puritys) do
-		Use[v.Clone.."clone_"..w.Percent] = function(source,Passport,Amount,Slot,Full,Item,Split)
+
+	for Item,v in pairs(exports.vrp:ItemList()) do
+		if v.Blueprint then
+			Use["blueprint_"..Item] = function(source,Passport,Amount,Slot,Full)
+				Users.Blueprints[Passport] = Users.Blueprints[Passport] or {}
+
+				if Users.Blueprints[Passport][Item] then
+					TriggerClientEvent("inventory:Notify",source,"Aviso","Já possui este aprendizado.","amarelo")
+					return false
+				end
+
+				if vRP.TakeItem(Passport,Full,1,true,Slot) then
+					TriggerClientEvent("inventory:Notify",source,"Sucesso","Aprendizado adicionado.","verde")
+					TriggerClientEvent("inventory:Update",source)
+					Users.Blueprints[Passport][Item] = true
+				end
+			end
+		end
+	end
+
+	for Model,v in pairs(exports.vrp:VehicleList()) do
+		if v.Item then
+			Use["vehicle_"..Model] = function(source,Passport,Amount,Slot,Full)
+				if vRP.SelectVehicle(Passport,Model) then
+					TriggerClientEvent("inventory:Notify",source,"Aviso","Já possui um <b>"..exports.vrp:VehicleName(Model).."</b>.","amarelo")
+					return false
+				end
+
+				local StockLimit = exports.vrp:VehicleStock(Model)
+				if StockLimit and vRP.Scalar("vehicles/Count",{ Vehicle = Model }) >= StockLimit then
+					TriggerClientEvent("inventory:Notify",source,"Aviso","Estoque insuficiente.","amarelo")
+					return false
+				end
+
+				if vRP.TakeItem(Passport,Full,1,false,Slot) then
+					local Plate = vRP.GeneratePlate()
+					local Weight = exports.vrp:VehicleWeight(Model)
+
+					if type(v.Item) == "number" then
+						vRP.Query("vehicles/rentalVehicles",{ Passport = Passport, Vehicle = Model, Plate = Plate, Days = v.Item, Weight = Weight, Work = 0 })
+					elseif v.Item == "Permanent" then
+						vRP.Query("vehicles/addVehicles",{ Passport = Passport, Vehicle = Model, Plate = Plate, Weight = Weight, Work = 0 })
+					end
+
+					TriggerClientEvent("inventory:Notify",source,"Sucesso","Veículo <b>"..exports.vrp:VehicleName(Model).."</b> adicionado.","verde")
+					TriggerClientEvent("inventory:Update",source)
+				end
+			end
+		end
+	end
+
+	for _,v in ipairs(exports.vrp:ItemClones()) do
+		for _,w in ipairs(exports.vrp:ItemPuritys()) do
+			Use[v.Clone.."clone_"..w.Percent] = function(source,Passport,Amount,Slot,Full,Item,Split)
+				Player(source).state.Buttons = true
+				TriggerClientEvent("inventory:Close",source)
+
+				local Hash = v.Hash
+				local Application,Coords = vRPC.ObjectControlling(source,Hash)
+				if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) and vRP.TakeItem(Passport,Full,1,true,Slot) then
+					exports.plants:Plants(Hash,Coords,GetPlayerRoutingBucket(source),v.Clone,{ Min = v.Min, Max = v.Max },w.Percent)
+				end
+
+				Player(source).state.Buttons = false
+			end
+		end
+	end
+
+	for _,v in ipairs(exports.vrp:ItemFurniture()) do
+		Use["furniture_"..v.Item] = function(source,Passport,Amount,Slot,Full,Item,Split)
+			local Property = exports.propertys:Inside(Passport)
+			if not Property or Property == "Hotel" then
+				return false
+			end
+
 			Player(source).state.Buttons = true
 			TriggerClientEvent("inventory:Close",source)
 
 			local Hash = v.Hash
 			local Application,Coords = vRPC.ObjectControlling(source,Hash)
-			if Application and Coords and not vCLIENT.ObjectExists(source,Coords,Hash) and vRP.TakeItem(Passport,Full,1,true,Slot) then
-				exports.plants:Plants(Hash,Coords,GetPlayerRoutingBucket(source),v.Clone,{ Min = v.Min, Max = v.Max },w.Percent)
+			if not Application or not Coords then
+				Player(source).state.Buttons = false
+				return false
 			end
 
+			if not vRP.TakeItem(Passport,Full,1,true,Slot) then
+				Player(source).state.Buttons = false
+				return false
+			end
+
+			local Selected
+			local Probjects = vRP.GetSrvData("Probjects:"..Property,true)
+
+			repeat
+				Selected = GenerateString("LDLDDDL")
+			until Selected and not Objects[Selected] and not Probjects[Selected]
+
+			local Data = { Coords = Coords, Object = Hash, Item = Full }
+
+			Probjects[Selected] = Data
+			vRP.SetSrvData("Probjects:"..Property,Probjects,true)
+			TriggerEvent("propertys:Adicionar",Property,Selected,Data)
 			Player(source).state.Buttons = false
 		end
 	end
-end
+end)

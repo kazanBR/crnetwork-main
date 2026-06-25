@@ -56,8 +56,6 @@ AddEventHandler("arena:Death",function(OtherSource,Route)
 		return false
 	end
 
-	exports.oxmysql:insert_async("INSERT INTO deaths_creative (Attacker,Victim,Weapon,Timestamp) VALUES (?,?,?,?)",{ OtherPassport,Passport,"WEAPON_PISTOL",os.time() })
-
 	local Identity = vRP.Identity(Passport)
 	local OtherIdentity = vRP.Identity(OtherPassport)
 	if not (Identity and OtherIdentity) then
@@ -66,8 +64,8 @@ AddEventHandler("arena:Death",function(OtherSource,Route)
 
 	for _,Sources in pairs(vRP.Players()) do
 		async(function()
-			if Player(Sources).state.Arena then
-				TriggerClientEvent("Notify",Sources,false,string.format("%s <b>matou</b> %s",OtherIdentity.Name,Identity.Name),"verde",5000,nil,nil,Route)
+			if Player(Sources).state.Arena and Player(Sources).state.Route == Route then
+				TriggerClientEvent("domination:KillFeed",Sources,OtherIdentity.Name,Identity.Name)
 			end
 		end)
 	end

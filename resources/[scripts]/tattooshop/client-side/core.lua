@@ -1302,7 +1302,7 @@ local Dataset = {
 RegisterNetEvent("tattooshop:Apply")
 AddEventHandler("tattooshop:Apply",function(Table)
 	Tattooshop = Table
-	exports["tattooshop"]:Apply()
+	exports.tattooshop:Apply()
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- APPLY
@@ -1421,7 +1421,7 @@ RegisterNUICallback("Reset",function(Data,Callback)
 	end
 
 	LocalPlayer["state"]:set("Hoverfy",true,false)
-	exports["tattooshop"]:Apply(Lasted)
+	exports.tattooshop:Apply(Lasted)
 	TriggerEvent("hud:Active",true)
 	exports.skinshop:Apply()
 	SetNuiFocus(false,false)

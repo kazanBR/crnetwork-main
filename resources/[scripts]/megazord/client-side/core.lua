@@ -11,6 +11,7 @@ vSERVER = Tunnel.getInterface("megazord")
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Weapon = ""
 local Injected = {}
+local Visible = false
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GAMEEVENTTRIGGERED
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -38,6 +39,15 @@ AddEventHandler("InitialCharacterSystemComplete",function()
 			if IsPedArmed(Ped,7) and not Injected.Weaspawn and Weapon == "" then
 				vSERVER.Warning("Spawn Weapons",true)
 				Injected.Weaspawn = true
+			end
+
+			if LocalPlayer.state.Active and not LocalPlayer.state.Admin and Visible and (not IsEntityVisible(Ped) or GetEntityAlpha(Ped) ~= 255) then
+				vSERVER.Warning("Entity Visible")
+			end
+
+			if not Injected.Lockon and GetLockonDistanceOfCurrentPedWeapon(Ped) > 250.0 then
+				vSERVER.Warning("Lock Player",true)
+				Injected.Lockon = true
 			end
 
 			for _,Texture in pairs(Textures) do
@@ -115,6 +125,15 @@ AddEventHandler("InitialCharacterSystemComplete",function()
 				end
 			end
 
+			if GetProfileSetting(19) == 1 then
+				if not Injected.Disparada then
+					vSERVER.Warning("Modo Disparada")
+					Injected.Disparada = true
+				end
+
+				SetPedToRagdoll(Ped,1000,1000,0,0,0,0)
+			end
+
 			Wait(1000)
 		end
 	end)
@@ -177,4 +196,16 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 AddEventHandler("Weapon",function(Name)
 	Weapon = Name
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
+-- ENTITYVISIBLE
+-----------------------------------------------------------------------------------------------------------------------------------------
+exports("EntityVisible",function(Ped,Status)
+	if Status then
+		SetEntityVisible(Ped,true,true)
+		Visible = true
+	else
+		Visible = false
+		SetEntityVisible(Ped,false,true)
+	end
 end)

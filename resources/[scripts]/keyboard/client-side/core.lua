@@ -2,10 +2,6 @@
 -- VRP
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Tunnel = module("vrp","lib/Tunnel")
-local Proxy = module("vrp","lib/Proxy")
-vRP = Proxy.getInterface("vRP")
-local GarageSpawnVehicles = {}
-local CurrentRotationObject = nil
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- CONNECTION
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -141,17 +137,6 @@ Form.Tertiary = function(First,Second,Third)
 	})
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
--- CODIGO
------------------------------------------------------------------------------------------------------------------------------------------
-Form.Codigo = function(First,Second,Third,Fourth)
-	return Keyboard({
-		{ Mode = "text", Placeholder = First },
-		{ Mode = "text", Placeholder = Second },
-		{ Mode = "text", Placeholder = Third },
-		{ Mode = "text", Placeholder = Fourth }
-	})
-end
------------------------------------------------------------------------------------------------------------------------------------------
 -- QUATERNARY
 -----------------------------------------------------------------------------------------------------------------------------------------
 Form.Quaternary = function(First,Second,Third,Fourth)
@@ -273,30 +258,6 @@ Form.Item = function(First,Second,Third,Fourth,Fifth)
 		{ Mode = "options", Placeholder = "Selecione uma opção", Options = Fourth },
 		{ Mode = "text", Placeholder = Fifth }
 	})
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- BANNED 
------------------------------------------------------------------------------------------------------------------------------------------
-Form.Banned = function(First, Second)
-    return Keyboard({
-        { Mode = "text", Placeholder = First }, 
-        { Mode = "text", Placeholder = Second }  
-    })
-end
------------------------------------------------------------------------------------------------------------------------------------------
--- GARAGES
------------------------------------------------------------------------------------------------------------------------------------------
-Form.Garages = function(First,Second,Third)
-    local Fields = {
-        { Mode = "options", Placeholder = "Selecione o tipo de garagem", Options = First },
-        { Mode = "options", Placeholder = "Selecione a permissão", Options = Second }
-    }
-    
-    if Third then
-        Fields[#Fields + 1] = { Mode = "options", Placeholder = "Selecione o tipo de marcador", Options = Third }
-    end
-    
-    return Keyboard(Fields,"Adicionar Garagem","Configure os parâmetros da garagem")
 end
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- EXPORTS & BINDINGS

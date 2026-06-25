@@ -10,6 +10,7 @@ vSERVER = Tunnel.getInterface("spawn")
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
 local Camera = nil
+local Spawn = false
 local Characters = {}
 local Creation = false
 local Cooldown = GetGameTimer()
@@ -17,6 +18,10 @@ local Cooldown = GetGameTimer()
 -- CONFIG
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Config",function(Data,Callback)
+	if Spawn then
+		return false
+	end
+
 	local Pid = PlayerId()
 	local Model = 1885233650
 	local Ped = PlayerPedId()
@@ -24,20 +29,16 @@ RegisterNUICallback("Config",function(Data,Callback)
 
 	RequestModel(Model)
 	while not HasModelLoaded(Model) do
-		Wait(50)
+		Wait(100)
 	end
 
 	SetPlayerModel(Pid,Model)
 	SetModelAsNoLongerNeeded(Model)
 
 	local Ped = PlayerPedId()
-	SetEntityCoords(Ped,242.77,-392.07,45.3,false,false,false)
+	SetEntityCoords(Ped,242.77,-392.07,45.3,false,false,false,false)
 	SetEntityHeading(Ped,337.33)
-
-	if IsEntityVisible(Ped) then
-		SetEntityVisible(Ped,false)
-	end
-
+	SetEntityVisible(Ped,false)
 	NetworkSetFriendlyFireOption(false)
 	FreezeEntityPosition(Ped,true)
 	SetEntityInvincible(Ped,true)
@@ -47,10 +48,11 @@ RegisterNUICallback("Config",function(Data,Callback)
 	DoScreenFadeIn(0)
 
 	Camera = CreateCam("DEFAULT_SCRIPTED_CAMERA",true)
-	RenderScriptCams(true,false,0,false,false)
 	SetCamCoord(Camera,243.55,-389.67,46.25)
 	SetCamRot(Camera,0.0,0.0,157.0,2)
 	SetCamActive(Camera,true)
+
+	RenderScriptCams(true,false,0,true,true)
 
 	Characters = Table.Characters
 	if #Characters > 0 then
@@ -60,6 +62,7 @@ RegisterNUICallback("Config",function(Data,Callback)
 	ShutdownLoadingScreen()
 	ShutdownLoadingScreenNui()
 	SetNuiFocus(true,true)
+	Spawn = true
 
 	Callback(Table)
 end)
@@ -67,12 +70,15 @@ end)
 -- CHARACTERCHOSEN
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("CharacterChosen",function(Data,Callback)
-	if Cooldown < GetGameTimer() then
-		Cooldown = GetGameTimer() + 1000
+	if Cooldown > GetGameTimer() then
+		Callback(false)
+		return
+	end
 
-		if vSERVER.CharacterChosen(Data.Passport) then
-			SendNUIMessage({ Action = "Close" })
-		end
+	Cooldown = GetGameTimer() + 1500
+
+	if vSERVER.CharacterChosen(Data.Passport) then
+		SendNUIMessage({ Action = "Close" })
 	end
 
 	Callback("Ok")
@@ -87,10 +93,9 @@ end)
 -- SWITCHCHARACTER
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("SwitchCharacter",function(Data,Callback)
-	for _,v in pairs(Characters) do
-		if v.Passport == Data.Passport then
-			Customization(v,true)
-
+	for _,Character in pairs(Characters) do
+		if Character.Passport == Data.Passport then
+			Customization(Character,true)
 			break
 		end
 	end
@@ -121,7 +126,7 @@ AddEventHandler("spawn:Finish",function(Coords,Created)
 		SendNUIMessage({ Action = "Location", Payload = Locate })
 	else
 		if DoesCamExist(Camera) then
-			RenderScriptCams(false,false,0,false,false)
+			RenderScriptCams(false,false,0,true,true)
 			DestroyCam(Camera,false)
 			Camera = nil
 		end
@@ -136,13 +141,13 @@ AddEventHandler("spawn:Finish",function(Coords,Created)
 			SetTimeout(5000,function()
 				SetEntityVisible(Ped,true)
 				SetEntityInvincible(Ped,false)
-				TriggerEvent("hud:Active",true)
 				FreezeEntityPosition(Ped,false)
-				TriggerServerEvent("vRP:WaitCharacters")
 
 				Wait(1000)
 
 				LocalPlayer.state:set("Active",true,true)
+				TriggerServerEvent("vRP:WaitCharacters")
+				TriggerEvent("hud:Active",true)
 			end)
 		end
 	end
@@ -152,14 +157,12 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Spawn",function(Data,Callback)
 	if DoesCamExist(Camera) then
-		RenderScriptCams(false,false,0,false,false)
+		RenderScriptCams(false,false,0,true,true)
 		DestroyCam(Camera,false)
 		Camera = nil
 	end
 
 	SendNUIMessage({ Action = "Close" })
-	TriggerEvent("hud:Active",true)
-	TriggerEvent("referrals:Open")
 	SetNuiFocus(false,false)
 
 	if not Creation then
@@ -169,12 +172,17 @@ RegisterNUICallback("Spawn",function(Data,Callback)
 			SetEntityVisible(Ped,true)
 			SetEntityInvincible(Ped,false)
 			FreezeEntityPosition(Ped,false)
-			TriggerServerEvent("vRP:WaitCharacters")
 
 			Wait(1000)
 
 			LocalPlayer.state:set("Active",true,true)
+			TriggerServerEvent("vRP:WaitCharacters")
+			TriggerEvent("hud:Active",true)
+			TriggerEvent("referrals:Open")
 		end)
+	else
+		TriggerEvent("referrals:Open")
+		TriggerEvent("hud:Active",true)
 	end
 
 	Callback("Ok")
@@ -184,11 +192,17 @@ end)
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterNUICallback("Chosen",function(Data,Callback)
 	local Index = Data.Index
-	local Ped = PlayerPedId()
-	local Coords = Locate[Index].Coords
+	local Selected = Locate[Index]
+	if not Selected then
+		Callback(false)
+		return false
+	end
 
-	SetEntityCoords(Ped,Coords.x,Coords.y,Coords.z - 0.75)
-	SetCamCoord(Camera,Coords.x,Coords.y,Coords.z + 1)
+	local Ped = PlayerPedId()
+	local Coords = Selected.Coords
+
+	SetEntityCoords(Ped,Coords.x,Coords.y,Coords.z - 0.75,false,false,false,false)
+	SetCamCoord(Camera,Coords.x,Coords.y,Coords.z + 1.0)
 	SetCamRot(Camera,0.0,0.0,0.0,2)
 
 	Callback("Ok")
@@ -197,21 +211,21 @@ end)
 -- CUSTOMIZATION
 -----------------------------------------------------------------------------------------------------------------------------------------
 function Customization(Table,Check)
-	local Pid = PlayerId()
-	local Ped = PlayerPedId()
 	local Model = GetHashKey(Table.Skin)
 
 	RequestModel(Model)
 	while not HasModelLoaded(Model) do
-		Wait(50)
+		Wait(100)
 	end
 
+	local Pid = PlayerId()
+	local Ped = PlayerPedId()
 	if not Check or GetEntityModel(Ped) ~= Model then
 		SetPlayerModel(Pid,Model)
 		SetModelAsNoLongerNeeded(Model)
 	end
 
-	local Ped = PlayerPedId()
+	Ped = PlayerPedId()
 
 	exports.skinshop:Apply(Table.Clothes,Ped)
 	exports.barbershop:Apply(Table.Barber,Ped)
@@ -226,7 +240,7 @@ function Customization(Table,Check)
 	end
 
 	local Anim = Anims[math.random(#Anims)]
-	if LoadAnim(Anim.Dict) then
+	if Anim and LoadAnim(Anim.Dict) then
 		TaskPlayAnim(Ped,Anim.Dict,Anim.Name,8.0,8.0,-1,1,1,0,0,0)
 	end
 end

@@ -5,14 +5,19 @@ LetterSpeed = 5
 HackerDuration = 5
 InativeMinutes = 30
 LetterDuration = 60
-HackerItem = "tablet_hacker"
+HackerItem = "bandage"
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- VARIABLES
 -----------------------------------------------------------------------------------------------------------------------------------------
 Locations = {
 	{
 		Distance = 2.5,
+		Permission = "LSPD",
 		Coords = vec3(-801.72,-1091.84,11.09)
+	},{
+		Distance = 2.5,
+		Permission = "Ballas",
+		Coords = vec3(-811.35,-1079.35,11.35)
 	},{
 		Hacker = true,
 		Distance = 2.5,

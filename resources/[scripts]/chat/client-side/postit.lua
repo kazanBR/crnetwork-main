@@ -34,7 +34,7 @@ AddEventHandler("chat:postit_new",function(Admin)
 
 				if IsControlJustPressed(1,38) then
 					if Admin then
-						exports["keyboard"]:Copy("Cordenadas",string.format("%.2f,%.2f,%.2f",Coords.x,Coords.y,Coords.z))
+						exports.keyboard:Copy("Cordenadas",string.format("%.2f,%.2f,%.2f",Coords.x,Coords.y,Coords.z))
 					else
 						vSERVER.Add(Coords)
 					end

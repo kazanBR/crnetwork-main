@@ -73,7 +73,7 @@ AddEventHandler("plants:Informations",function(Number)
 		return false
 	end
 
-	local FruitName = ItemName(Information[3])
+	local FruitName = exports.vrp:ItemName(Information[3])
 	local Purity = tonumber(Information[5]) or 0
 	local Water = math.floor((tonumber(Information[4]) or 0) * 100)
 

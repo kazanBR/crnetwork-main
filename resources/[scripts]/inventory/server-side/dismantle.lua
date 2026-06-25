@@ -4,6 +4,7 @@
 Travel = {}
 Boosting = {}
 Dismantle = {}
+local Dismantled = {}
 -----------------------------------------------------------------------------------------------------------------------------------------
 -- GENERATEPLATE
 -----------------------------------------------------------------------------------------------------------------------------------------
@@ -83,7 +84,7 @@ function Creative.CreateVehicle(Model,Coords)
 			Passport = Passport,
 			Permission = "Policia",
 			Name = "Desmanche de Veículo",
-			Vehicle = VehicleName(Model).." - "..Plate,
+			Vehicle = exports.vrp:VehicleName(Model).." - "..Plate,
 			Coords = Coords,
 			Code = 31,
 			Color = 44
@@ -101,17 +102,26 @@ RegisterServerEvent("inventory:Dismantle")
 AddEventHandler("inventory:Dismantle",function(Entity)
 	local source = source
 	local Passport = vRP.Passport(source)
-	if not Passport then
+	if not Passport or Active[Passport] then
 		return false
 	end
 
+	local Plate = Entity[1]
+	local Model = Entity[2]
 	local Network = Entity[4]
-	local Plate,Model = Entity[1],Entity[2]
 	local UserVehicle = vRP.PassportPlate(Plate)
-	if Active[Passport] or not VehicleExist(Model) or (not UserVehicle and not Dismantle[Plate]) then
+
+	if Dismantled[Plate] then
+		TriggerClientEvent("Notify",source,"Atenção","Esse veículo já está sendo desmanchado.","amarelo",5000)
 		return false
 	end
 
+	if not exports.vrp:VehicleExist(Model) or exports.vrp:VehicleMode(Model) == "Work" or (not UserVehicle and not Dismantle[Plate]) then
+		TriggerClientEvent("Notify",source,"Atenção","Esse carro não pode ser desmanchado","amarelo",5000)
+		return false
+	end
+
+	Dismantled[Plate] = Passport
 	Active[Passport] = os.time() + 30
 	Player(source).state.Buttons = true
 	TriggerClientEvent("Progress",source,"Desmanchando",30000)
@@ -125,13 +135,12 @@ AddEventHandler("inventory:Dismantle",function(Entity)
 		vRPC.Destroy(source)
 		Player(source).state.Buttons = false
 
-		if not Active[Passport] then
-			return false
-		end
+		if not Active[Passport] or (Dismantled[Plate] and Dismantled[Plate] ~= Passport) or (not UserVehicle and not Dismantle[Plate]) or (UserVehicle and not exports.garages:Spawn(Plate)) then
+			if Dismantled[Plate] and Dismantled[Plate] == Passport then
+				Dismantled[Plate] = nil
+			end
 
-		Active[Passport] = nil
-
-		if (not UserVehicle and not Dismantle[Plate]) or (UserVehicle and not exports.garages:Spawn(Plate)) then
+			Active[Passport] = nil
 			return false
 		end
 
@@ -140,8 +149,9 @@ AddEventHandler("inventory:Dismantle",function(Entity)
 
 		local GainExperience = 3
 		local _,Level = vRP.GetExperience(Passport,"Dismantle")
-		local Amount = VehiclePrice(Model) * (UserVehicle and 0.05 or 0.025)
-		local Valuation = Amount + (Amount * (0.025 * Level))
+		local Amount = exports.vrp:VehiclePrice(Model) * (UserVehicle and 0.07 or 0.04)
+		local Bonus = (Level > 21 and 0.06) or (Level > 10 and 0.03) or 0.02
+		local Valuation = Amount + (Amount * (Bonus * Level))
 
 		if exports.inventory:Buffs("Dexterity",Passport) then
 			Valuation = Valuation * 1.1
@@ -166,6 +176,9 @@ AddEventHandler("inventory:Dismantle",function(Entity)
 		vRP.BattlepassPoints(Passport,GainExperience)
 		vRP.PutExperience(Passport,"Dismantle",GainExperience)
 		vRP.GenerateItem(Passport,"ironfilings",Valuation * Members,true)
+
+		Dismantled[Plate] = nil
+		Active[Passport] = nil
 	end)
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------

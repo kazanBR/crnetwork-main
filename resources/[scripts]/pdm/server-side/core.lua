@@ -20,19 +20,19 @@ function Creative.Buy(Model)
 	local Return = false
 	local source = source
 	local Passport = vRP.Passport(source)
-	if Passport and not Active[Passport] and Model and VehicleExist(Model) then
+	if Passport and not Active[Passport] and Model and exports.vrp:VehicleExist(Model) then
 		Active[Passport] = true
 
 		if vRP.SelectVehicle(Passport,Model) then
-			TriggerClientEvent("Notify",source,"Aviso","Já possui um <b>"..VehicleName(Model).."</b>.","amarelo",5000)
+			TriggerClientEvent("Notify",source,"Aviso","Já possui um <b>"..exports.vrp:VehicleName(Model).."</b>.","amarelo",5000)
 		else
-			local VehicleStock = VehicleStock(Model)
+			local VehicleStock = exports.vrp:VehicleStock(Model)
 			if VehicleStock and vRP.Scalar("vehicles/Count",{ Vehicle = Model }) >= VehicleStock then
 				TriggerClientEvent("Notify",source,"Aviso","Estoque insuficiente.","amarelo",5000)
 			else
-				if VehicleMode(Model) == "Rental" then
+				if exports.vrp:VehicleMode(Model) == "Rental" then
 					local Discount = 1.0
-					local VehicleGemstone = VehicleGemstone(Model)
+					local VehicleGemstone = exports.vrp:VehicleGemstone(Model)
 					for Permission,Multiplier in pairs({ Ouro = 0.70, Prata = 0.80, Bronze = 0.90 }) do
 						if vRP.HasService(Passport,Permission) then
 							Discount = math.min(Discount,Multiplier)
@@ -41,19 +41,19 @@ function Creative.Buy(Model)
 
 					local PaymentValue = VehicleGemstone * Discount
 					if PaymentValue > 0 and vRP.PaymentGems(Passport,PaymentValue) then
-						vRP.Query("vehicles/rentalVehicles",{ Passport = Passport, Vehicle = Model, Plate = vRP.GeneratePlate(), Days = 30, Weight = VehicleWeight(Model), Work = 0 })
+						vRP.Query("vehicles/rentalVehicles",{ Passport = Passport, Vehicle = Model, Plate = vRP.GeneratePlate(), Days = 30, Weight = exports.vrp:VehicleWeight(Model), Work = 0 })
 						exports.discord:Embed("Pdm","**[PASSAPORTE]:** "..Passport.."\n**[COMPROU]:** "..Model.."\n**[VALOR]:** "..Dotted(PaymentValue).." Diamantes")
-						TriggerClientEvent("Notify",source,"Sucesso","Aluguel do veículo <b>"..VehicleName(Model).."</b> concluído.","verde",5000)
+						TriggerClientEvent("Notify",source,"Sucesso","Aluguel do veículo <b>"..exports.vrp:VehicleName(Model).."</b> concluído.","verde",5000)
 						Return = true
 					else
 						TriggerClientEvent("Notify",source,"Aviso","Diamante insuficiente.","amarelo",5000)
 					end
-				elseif VehicleClass(Model) ~= "Races" and not exports.bank:CheckTaxes(Passport) and not exports.bank:CheckFines(Passport) then
-					local VehiclePrice = VehiclePrice(Model)
+				elseif exports.vrp:VehicleClass(Model) ~= "Races" and not exports.bank:CheckTaxes(Passport) and not exports.bank:CheckFines(Passport) then
+					local VehiclePrice = exports.vrp:VehiclePrice(Model)
 					if VehiclePrice and vRP.PaymentFull(Passport,VehiclePrice) then
-						vRP.Query("vehicles/addVehicles",{ Passport = Passport, Vehicle = Model, Plate = vRP.GeneratePlate(), Weight = VehicleWeight(Model), Work = 0 })
+						vRP.Query("vehicles/addVehicles",{ Passport = Passport, Vehicle = Model, Plate = vRP.GeneratePlate(), Weight = exports.vrp:VehicleWeight(Model), Work = 0 })
 						exports.discord:Embed("Pdm","**[PASSAPORTE]:** "..Passport.."\n**[COMPROU]:** "..Model.."\n**[VALOR]:** "..Currency..Dotted(VehiclePrice))
-						exports.bank:AddTaxes(Passport,"Concessionária",VehiclePrice,"Compra do veículo "..VehicleName(Model)..".")
+						exports.bank:AddTaxes(Passport,"Concessionária",VehiclePrice,"Compra do veículo "..exports.vrp:VehicleName(Model)..".")
 						TriggerClientEvent("Notify",source,"Sucesso","Compra concluída.","verde",5000)
 						Return = true
 					else

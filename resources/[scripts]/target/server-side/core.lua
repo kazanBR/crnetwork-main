@@ -175,7 +175,7 @@ AddEventHandler("target:Blackout",function()
 	local Item = "encryptedkey"
 	local ConsultItem = vRP.ConsultItem(Passport,Item)
 	if not ConsultItem then
-		TriggerClientEvent("Notify",source,"Atenção","Você precisa de <b>1x "..ItemName(Item).."</b>.","amarelo",5000)
+		TriggerClientEvent("Notify",source,"Atenção","Você precisa de <b>1x "..exports.vrp:ItemName(Item).."</b>.","amarelo",5000)
 		return false
 	end
 

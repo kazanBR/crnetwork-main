@@ -6,12 +6,10 @@ ui_page "web-side/index.html"
 
 client_scripts {
 	"@vrp/config/Native.lua",
-	"@vrp/lib/Utils.lua",
 	"client-side/*"
 }
 
 server_scripts {
-	"@vrp/lib/Utils.lua",
 	"server-side/*"
 }
 
@@ -20,5 +18,6 @@ files {
 }
 
 shared_scripts {
+	"@vrp/lib/Utils.lua",
 	"@vrp/config/Global.lua"
 }
