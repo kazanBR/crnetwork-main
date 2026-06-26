@@ -1191,6 +1191,40 @@ RegisterCommand("kick",function(source,Message)
 	end
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
+-- BAN2
+-----------------------------------------------------------------------------------------------------------------------------------------
+RegisterCommand("ban2",function(source,Message)
+    local Passport = vRP.Passport(source)
+    if Passport and vRP.HasGroup(Passport,"Admin") then
+        local Keyboard = vKEYBOARD.Banned(source,"Passaporte","Motivo")
+        if Keyboard then
+            local OtherPassport = parseInt(Keyboard[1])
+            local Reason = Keyboard[2]
+            local Identity = vRP.Identity(OtherPassport)
+            if Identity and Identity.License then
+                local Account = vRP.Query("accounts/Account",{ License = Identity.License })
+                if Account[1] then
+                    local AccountID = Account[1].id
+                    vRP.Query("accounts/BannedPermanent",{ Account = AccountID, Reason = Reason })
+                    local OtherSource = vRP.Source(OtherPassport)
+                    if OtherSource then
+                        vRP.Kick(OtherSource,"Você foi banido permanentemente: "..Reason)
+                    end
+
+                    TriggerClientEvent("Notify",source,"Sucesso","Banimento PERMANENTE aplicado ao passaporte <b>"..OtherPassport.."</b>.","verde",5000)
+					
+                    exports.discord:Embed("Ban","**[ADMIN]:** "..Passport.."\n**[BANIU]:** "..OtherPassport.."\n**[MODO]:** Permanente".."\n**[RAZÃO]:** "..Reason)
+					
+                else
+                    TriggerClientEvent("Notify",source,"Erro","Conta não encontrada no banco de dados.","vermelho",5000)
+                end
+            else
+                TriggerClientEvent("Notify",source,"Erro","Passaporte inválido ou não encontrado.","vermelho",5000)
+            end
+        end
+    end
+end)
+-----------------------------------------------------------------------------------------------------------------------------------------
 -- BAN
 -----------------------------------------------------------------------------------------------------------------------------------------
 RegisterCommand("ban",function(source,Message)
