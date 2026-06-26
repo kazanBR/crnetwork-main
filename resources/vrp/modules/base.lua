@@ -435,7 +435,7 @@ AddEventHandler("playerConnecting",function(_,__,deferrals)
 				body = {
 					{
 						type = "TextBlock",
-						text = string.format("\n\nVocê não Possui Whitelisted ID: %s", Account[Liberation] or "Erro"),
+						text = string.format("\n\nVocê não Possui Whitelist ID: %s", Account[Liberation] or "Erro"),
 						wrap = true, fontType = "Default", size = "Medium", weight = "Lighter"
 					}
 				},
