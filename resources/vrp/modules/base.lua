@@ -375,53 +375,81 @@ AddEventHandler("playerConnecting",function(_,__,deferrals)
 	deferrals.defer()
 
 	local source = source
-	local License = vRP.Identities(source)
+	local License
+	local Timeout = 0
+
+	while not License and Timeout < 20 do
+		License = vRP.Identities(source)
+		Timeout = Timeout + 1
+		Wait(250)
+	end
+
 	local Platform = (BaseMode == "steam" and "Steam" or "Rockstar")
 
+	local function Present(Card,Fallback)
+		if deferrals.presentCard then
+			deferrals.presentCard(Card,function() deferrals.done() end)
+		else
+			deferrals.done(Fallback)
+		end
+	end
+
+	local function Generate(Body,Actions)
+		return json.encode({ ["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json", type = "AdaptiveCard", version = "1.5", body = Body, actions = Actions })
+	end
+
 	if not License then
-		return deferrals.update("Não foi possível efetuar conexão com a "..Platform..".")
+		deferrals.done("\n\nNão foi possível efetuar conexão com a "..Platform..".")
+		return false
 	end
 
-	if type(Maintenance) == "table" and not Maintenance[License] then
-		return deferrals.update("Estamos realizando manutenções programadas para aplicar melhorias e correções no servidor.\nFique de olho no nosso Discord para acompanhar atualizações e o horário de retorno.\nAgradecemos pela paciência e compreensão.")
-	end
-
-	local Account = vRP.Account(License)
-	if not Account then
-		vRP.Query("accounts/NewAccount",{ License = License, Token = vRP.GenerateToken() })
-		deferrals.update("Adicionando informações primárias ao banco de dados.")
-		Account = vRP.Account(License)
-	end
+	local Account = vRP.Account(License) or ( vRP.Query("accounts/NewAccount", { License = License, Token = vRP.GenerateToken() }) and vRP.Account(License) )
 
 	if not Account then
-		return deferrals.update("Não foi possível encontrar suas informações ao banco de dados.")
+		deferrals.done("\n\nErro ao carregar sua conta.")
+		return false
+	end
+
+	if Maintenance then
+		if not Maintenance[License] then
+			deferrals.done("\n\nO servidor encontra-se em manutenção.\nPara mais informações, acesse: "..ServerLink)
+			return false
+		end
 	end
 
 	local Banned = vRP.Banned(source,Account)
-	if Banned then
-		if Banned[1] == "Other" then
-			deferrals.update("Banido ( "..Banned[2].." )\nInformamos que o motivo do seu banimento é por questões unilaterais, onde outra pessoa da sua rede ou computador comprometeu sua conexão devido a uma punição.")
-		else
-			deferrals.update("Banimento Permanente\nMotivo: "..(Account.Reason or "Banimento administrativo"))
-		end
-
+	if Banned and Account.Banned == -1 then
+		local Duration = "Permanente"
+		local Reason = Banned[1] == "Other" and (Banned[2] or "Banimento") or (Account.Reason or "Banimento administrativo")
+		
+		Present(Generate({{ type = "Image", url = ServerAvatar or "", size = "Medium", style = "Person" }, { type = "RichTextBlock", inlines = {{ type = "TextRun", text = "Consequência: ", size = "Medium", weight = "Bolder" },{ type = "TextRun", text = "Banido", size = "Medium", weight = "Lighter" }} }, { type = "RichTextBlock", inlines = {{ type = "TextRun", text = "Tempo: ", size = "Medium", weight = "Bolder" },{ type = "TextRun", text = Duration, size = "Medium", weight = "Lighter" }} }, { type = "RichTextBlock", inlines = {{ type = "TextRun", text = "Motivo: ", size = "Medium", weight = "Bolder" },{ type = "TextRun", text = Reason, size = "Medium", weight = "Lighter" }} }}),Banned[1] == "Other" and ("\n\nBanido | "..Banned[2]) or ("\n\n<b>Consequência:</b> Banido\n<b>Tempo:</b> "..Duration.."\n<b>Motivo:</b> "..Reason))
 		return false
 	end
 
 	if Whitelisted then
-		if Account.Whitelist then
-			deferrals.update("Registrando sua conexão ao banco de dados.")
-			vRP.Update("accounts/LastLogin",{ License = License })
+		if not Account.Whitelist then
+			local Card = {
+				type = "AdaptiveCard",
+				["$schema"] = "http://adaptivecards.io/schemas/adaptive-card.json",
+				version = "1.5",
+				body = {
+					{
+						type = "TextBlock",
+						text = string.format("\n\nVocê não Possui Whitelisted ID: %s", Account[Liberation] or "Erro"),
+						wrap = true, fontType = "Default", size = "Medium", weight = "Lighter"
+					}
+				},
+				actions = {
+					{ type = "Action.OpenUrl", title = "Clique para abrir o Discord", url = ServerLink }
+				}
+			}
 
-			return deferrals.done()
+			deferrals.presentCard(Card, function() deferrals.done() end)
+			return false
 		end
-
-		return deferrals.update("Efetue sua liberação através do discord enviando: "..Account[Liberation].."\nAcesse através do link: "..ServerLink)
 	end
 
-	deferrals.update("Registrando sua conexão ao banco de dados.")
-	vRP.Update("accounts/LastLogin",{ License = License })
-
+	vRP.Query("accounts/LastLogin",{ License = License })
 	deferrals.done()
 end)
 -----------------------------------------------------------------------------------------------------------------------------------------
