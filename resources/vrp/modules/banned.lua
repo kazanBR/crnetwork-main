@@ -39,11 +39,15 @@ function vRP.Banned(source,Account)
 		CheckAndInsert(GetPlayerToken(source,Number))
 	end
 
-	local IsBanned = Account.Banned and Account.Banned == -1
-	vRP.Update("hwid/All",{ Account = Account.id, Banned = IsBanned and 1 or 0 })
+	if Account.Banned == -1 or Account.Banned > 0 then
+		vRP.Update("hwid/All",{ Account = Account.id, Banned = 1 })
+		Return = Return or "User"
+	else
+		vRP.Update("hwid/All",{ Account = Account.id, Banned = 0 })
 
-	if not IsBanned and Return == "User" then
-		Return = false
+		if Return == "User" then
+			Return = false
+		end
 	end
 
 	return Return
