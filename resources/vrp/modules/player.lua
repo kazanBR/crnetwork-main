@@ -645,22 +645,26 @@ AddEventHandler("vRP:WaitCharacters",function()
 		return false
 	end
 
-	exports.vrp:Bucket(source,"Exit")
-
 	local Character = Characters[source]
 	if not Character then
 		return false
 	end
 
-	if Character.Banned > 0 then
+	if Character.Banned and Character.Banned > 0 then
 		Player(source).state.Banned = true
+		exports.vrp:Bucket(source,"Enter",Banned.Route)
+		TriggerClientEvent("Notify",source,ServerName,"Restam "..parseInt(Character.Banned).." minutos de reclusão.","server",10000)
 		vRP.LeaveServiceBanned(Passport,source)
 
 		if Banned.Mute then
 			TriggerClientEvent("pma-voice:Mute",source,true)
 		end
-	elseif Character.Prison > 0 then
-		Player(source).state.Prison = true
+	else
+		exports.vrp:Bucket(source,"Exit")
+
+		if Character.Prison and Character.Prison > 0 then
+			Player(source).state.Prison = true
+		end
 	end
 
 	TriggerEvent("vRP:ReloadWeapons",source,Passport)

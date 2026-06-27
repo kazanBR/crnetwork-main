@@ -10,6 +10,9 @@ function vRP.Banned(source,Account)
 	local Tokens = GetNumPlayerTokens(source)
 	local Identities = GetPlayerIdentifiers(source)
 
+	local IsBanned = Account.Banned and Account.Banned == -1
+	vRP.Update("hwid/All",{ Account = Account.id, Banned = IsBanned and 1 or 0 })
+
 	local function CheckAndInsert(Token)
 		if not Token then
 			return false
@@ -39,15 +42,8 @@ function vRP.Banned(source,Account)
 		CheckAndInsert(GetPlayerToken(source,Number))
 	end
 
-	if Account.Banned == -1 or Account.Banned > 0 then
-		vRP.Update("hwid/All",{ Account = Account.id, Banned = 1 })
-		Return = Return or "User"
-	else
-		vRP.Update("hwid/All",{ Account = Account.id, Banned = 0 })
-
-		if Return == "User" then
-			Return = false
-		end
+	if not IsBanned and Return == "User" then
+		Return = false
 	end
 
 	return Return
@@ -82,8 +78,9 @@ function vRP.SetBanned(Passport,Amount,Reason,Admin)
 
 		local Character = source and Characters[source]
 		if Character then
-			TriggerClientEvent("Notify",source,ServerName,("Você foi punido <b>%d minutos</b> de reclusão."):format(Duration),"default",10000)
+			TriggerClientEvent("Notify",source,ServerName,("Você foi punido <b>%d minutos</b> de reclusão."):format(Duration),"server",10000)
 			Character.Banned = (Character.Banned or 0) + Duration
+			Character.BannedTime = os.time()
 			TriggerClientEvent("radio:Disconnect",source)
 			vRP.LeaveServiceBanned(Passport,source)
 			Player(source).state.Banned = true
@@ -112,24 +109,75 @@ function vRP.UpdateBanned(Passport,Amount)
 		return false
 	end
 
-	local Reduce = parseInt(Amount,true)
 	local Account = vRP.AccountOptimize(Passport)
-	if not Account then
+	if not Account or Account.Banned == -1 then
 		return false
 	end
 
 	local source = vRP.Source(Passport)
-	local Character = source and Characters[source] or Account
-	if (Character.Banned or 0) <= 0 then
+	local Character = source and Characters[source] or nil
+	local CurrentTime = os.time()
+	local Current = 0
+	local BannedTime = nil
+	local Updated = false
+
+	if Character and type(Character.Banned) == "number" then
+		if Character.Banned == -1 then
+			return false
+		elseif Character.Banned > 0 then
+			Current = parseInt(Character.Banned)
+			BannedTime = Character.BannedTime
+		end
+	end
+
+	if Current <= 0 then
+		Current = parseInt(Account.Banned or 0)
+		if Current > 0 and Character then
+			if not Character.BannedTime then
+				Character.BannedTime = CurrentTime
+			end
+			Character.Banned = Current
+			BannedTime = Character.BannedTime
+		end
+	end
+
+	if Current <= 0 then
 		return false
 	end
 
-	vRP.Update("accounts/ReduceBanned",{ Account = Account.id, Amount = Reduce })
-	Character.Banned = Character.Banned - Reduce
+	if not BannedTime then
+		BannedTime = CurrentTime
+		if Character then
+			Character.BannedTime = BannedTime
+		end
+	end
 
-	if Character.Banned <= 0 then
+	local ElapsedMinutes = math.floor((CurrentTime - BannedTime) / 60)
+	local TotalReduce = ElapsedMinutes
+
+	if Amount then
+		TotalReduce = TotalReduce + parseInt(Amount)
+	end
+
+	if TotalReduce > 0 then
+		vRP.Update("accounts/ReduceBanned",{ Account = Account.id, Amount = TotalReduce })
+		Current = math.max(0,Current - TotalReduce)
+		Updated = true
+
+		if Character then
+			Character.Banned = Current
+			Character.BannedTime = CurrentTime
+		end
+	end
+
+	if Current <= 0 then
 		vRP.Update("hwid/All",{ Account = Account.id, Banned = 0 })
-		Character.Banned = 0
+		vRP.Update("accounts/RemoveBanned",{ Account = Account.id })
+
+		if Character then
+			Character.Banned = 0
+			Character.BannedTime = nil
+		end
 
 		if source then
 			exports.vrp:Bucket(source,"Exit")
@@ -140,17 +188,21 @@ function vRP.UpdateBanned(Passport,Amount)
 				TriggerClientEvent("pma-voice:Mute",source,false)
 			end
 
-			if Character.Prison and Character.Prison > 0 then
+			if Character and Character.Prison and Character.Prison > 0 then
 				Player(source).state.Prison = true
 			end
 		end
-	else
-		if source then
-			TriggerClientEvent("Notify",source,ServerName,("Restam <b>%d minutos</b> até sua liberação."):format(Character.Banned),"default",5000)
 
-			if GetPlayerRoutingBucket(source) ~= Banned.Route then
-				exports.vrp:Bucket(source,"Enter",Banned.Route)
-			end
+		return true
+	end
+
+	if source then
+		if Updated then
+			TriggerClientEvent("Notify",source,ServerName,("Restam <b>%d minutos</b> até sua liberação."):format(Current),"default",5000)
+		end
+
+		if GetPlayerRoutingBucket(source) ~= Banned.Route then
+			exports.vrp:Bucket(source,"Enter",Banned.Route)
 		end
 	end
 
@@ -179,6 +231,7 @@ function vRP.RemoveBanned(Passport)
 	end
 
 	Character.Banned = 0
+	Character.BannedTime = nil
 	exports.vrp:Bucket(source,"Exit")
 	Player(source).state.Banned = false
 	vRP.Teleport(source,Banned.Leave.x,Banned.Leave.y,Banned.Leave.z)
